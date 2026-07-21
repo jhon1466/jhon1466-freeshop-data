@@ -1,0 +1,16 @@
+# Server
+server/node_modules/
+server/dist/
+
+# Client build output
+client/build/
+client/*.elf
+client/*.nro
+client/*.nacp
+client/*.pfs0
+client/*.nso
+client/*.map
+
+# OS
+.DS_Store
+Thumbs.db

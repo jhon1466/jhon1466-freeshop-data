@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://freeshop.local/schemas/catalog.schema.json",
+  "title": "FreeShop Catalog",
+  "type": "object",
+  "required": ["schemaVersion", "generatedAt", "apps"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "apps": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/appEntry" }
+    }
+  },
+  "definitions": {
+    "appEntry": {
+      "type": "object",
+      "required": [
+        "id",
+        "title",
+        "author",
+        "category",
+        "description",
+        "version",
+        "iconUrl",
+        "downloadUrl",
+        "fileSize",
+        "sha256",
+        "nroFilename"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "Stable unique slug, used as the folder key for downloads/icons and the SD card install folder."
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "author": { "type": "string", "minLength": 1 },
+        "category": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "maxLength": 200 },
+        "longDescription": { "type": "string" },
+        "version": { "type": "string", "minLength": 1 },
+        "iconUrl": { "type": "string", "minLength": 1 },
+        "downloadUrl": { "type": "string", "minLength": 1 },
+        "fileSize": { "type": "integer", "minimum": 0 },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "nroFilename": {
+          "type": "string",
+          "pattern": "^[^/\\\\]+\\.nro$"
+        },
+        "homepageUrl": { "type": "string" },
+        "license": { "type": "string" },
+        "source": {
+          "type": "object",
+          "required": ["origin"],
+          "properties": {
+            "origin": { "type": "string", "enum": ["curated", "aggregated"] },
+            "sourceIndex": { "type": "string" },
+            "sourceId": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

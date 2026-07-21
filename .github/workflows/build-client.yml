@@ -1,0 +1,30 @@
+name: Build Switch client
+
+on:
+  push:
+    paths:
+      - "client/**"
+      - ".github/workflows/build-client.yml"
+  pull_request:
+    paths:
+      - "client/**"
+      - ".github/workflows/build-client.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkita64:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build .nro
+        run: make -C client
+
+      - name: Upload .nro artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: freeshop-client
+          path: client/freeshop-client.nro
