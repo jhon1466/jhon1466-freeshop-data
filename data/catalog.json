@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-22T22:00:54.455Z",
+  "generatedAt": "2026-07-22T23:25:47.851Z",
   "apps": [
     {
       "id": "2",
@@ -71,6 +71,20 @@
       "filename": "Terraria.xci",
       "fileType": "xci",
       "longDescription": "El mundo en tus manos mientras luchas por la supervivencia, exploras en busca de fortuna y excavas para alcanzar la gloria. Baja en las extensiones cavernosas, pon a prueba tu temple en el combate o construye tu propia ciudad."
+    },
+    {
+      "id": "7",
+      "title": "Super Mario Party",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "v1.1.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/7.jpeg",
+      "downloadUrl": "https://download1503.mediafire.com/8e63vhbakuygYTqVCTzNDJe9uoMTs5OMuJyXoISw98qkzMbLtwRy86pdDIRvplCnoiBMn4N_gJ740cUbFGsagKJBngp3OpF49MSiaDFukBs4Kv_Z_q8NRXfipahwOh0zUamMEccaV1CLoqZvdGY1dFUmLCCwgqJunJeW0P27eOKUEmI/2fyiytnzowjcis5/Super+Mario+Party+%5Bv1.1.0%5D.xci",
+      "fileSize": 3106147328,
+      "filename": "Super Mario Party.xci",
+      "fileType": "xci",
+      "longDescription": "El juego de mesa original sube el listón con elementos de estrategia más profunda, como dados específicos para cada personaje.\nTambién cuenta con nuevas formas de jugar, incluidos minijuegos manejados con los Joy-Con y nuevos modos para disfrutar con la familia y amigos.\nDisfruta de nuevos modos, nuevos minijuegos y de la dinámica de juego original sobre el tablero donde, cuando y con quien quieras."
     }
   ]
 }
