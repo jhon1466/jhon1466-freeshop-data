@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-22T21:10:23.100Z",
+  "generatedAt": "2026-07-22T21:12:32.044Z",
   "apps": [
     {
       "id": "2",
@@ -15,6 +15,21 @@
       "filename": "The Legend of Zelda Skyward Sword HD.nsp",
       "fileType": "nsp",
       "longDescription": "En el relato más antiguo de la línea temporal de Zelda, Link debe viajar desde un mundo que se halla por encima de las nubes hasta tierras desconocidas en busca de su amiga de la infancia, Zelda. Armado con su fiel espada y su escudo, Link les plantará cara a enemigos formidables, resolverá puzles enrevesados y surcará los cielos a lomos de un inmenso pájaro conocido como pelícaro."
+    },
+    {
+      "id": "test-dlc-check",
+      "title": "Test DLC",
+      "author": "a",
+      "category": "b",
+      "description": "d",
+      "version": "1.0.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/hello-homebrew.jpg",
+      "downloadUrl": "https://example.com/x.nsp",
+      "fileSize": 100,
+      "filename": "x.nsp",
+      "fileType": "nsp",
+      "parentId": "kabuto-park",
+      "contentType": "dlc"
     }
   ]
 }
