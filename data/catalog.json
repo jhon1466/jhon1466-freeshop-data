@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-22T20:23:50.252Z",
+  "generatedAt": "2026-07-22T20:47:23.209Z",
   "apps": [
     {
       "id": "kabuto-park",
@@ -19,6 +19,20 @@
         "origin": "curated"
       },
       "updatedAt": "2026-07-20T00:00:00Z"
+    },
+    {
+      "id": "2",
+      "title": "The Legend of Zelda: Skyward Sword HD",
+      "author": "Unknown",
+      "category": "Games",
+      "description": "",
+      "version": "1.0.1",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/2.jpg",
+      "downloadUrl": "https://download2391.mediafire.com/knlxy18n8uggm7E7i5oawtcAbjosMCzLZZMFGCMUZypw14fyqKKdpehs8yiHPVnZjPys1SX5qO2N1tATwZ7A2NvFedqquXW620gZc9ASNoxShwyHNeWIMQuoioTrWlNT4SRmsa33YkbVeR5oD7894YdSgjGqMTx7nCkSK9PjfAb7eHw/zl5eumnm7kgq5iw/The+Legend+of+Zelda+Skyward+Sword+HD+%5Bv1.0.1%5D.nsp",
+      "fileSize": 7594683608,
+      "filename": "The Legend of Zelda Skyward Sword HD.nsp",
+      "fileType": "nsp",
+      "longDescription": "En el relato más antiguo de la línea temporal de Zelda, Link debe viajar desde un mundo que se halla por encima de las nubes hasta tierras desconocidas en busca de su amiga de la infancia, Zelda. Armado con su fiel espada y su escudo, Link les plantará cara a enemigos formidables, resolverá puzles enrevesados y surcará los cielos a lomos de un inmenso pájaro conocido como pelícaro."
     }
   ]
 }
