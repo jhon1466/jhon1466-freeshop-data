@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-22T21:51:36.897Z",
+  "generatedAt": "2026-07-22T22:00:54.455Z",
   "apps": [
     {
       "id": "2",
@@ -57,6 +57,20 @@
       "filename": "Mario Kart 8 Deluxe.xci",
       "fileType": "xci",
       "longDescription": "¡Acelera a través de las pistas del Reino Champiñón bajo el agua, en el cielo, de cabeza y sin gravedad, y llega a la meta para obtener la victoria! Prepara motores en el modo multijugador local*, en los torneos en línea** del juego, en el modo batalla que ha sido mejorado ¡y más!"
+    },
+    {
+      "id": "6",
+      "title": "Terraria",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "4.5.4",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/6.jpg",
+      "downloadUrl": "https://download1652.mediafire.com/9hzgcpah2yugtDgh6AqMtbr4xrcGXglAgq-B8Bj8mv0FgtV77p9VNEtV4CBRCjepVkGhUCgnJ-EcEzeb6K8KS6oozI601jTLcCh_Ly6eh_14iEjZYey5_yCoq4b2BDDjH1rANLyrXdeM7IW6PBQ6vER3-_JQSOQM8uW4QJOQIHgKp2Q/ffc1l0gh2osomo6/Terraria+%5Bv4.5.4%5D.xci",
+      "fileSize": 513157632,
+      "filename": "Terraria.xci",
+      "fileType": "xci",
+      "longDescription": "El mundo en tus manos mientras luchas por la supervivencia, exploras en busca de fortuna y excavas para alcanzar la gloria. Baja en las extensiones cavernosas, pon a prueba tu temple en el combate o construye tu propia ciudad."
     }
   ]
 }
