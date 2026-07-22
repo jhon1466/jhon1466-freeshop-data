@@ -1,19 +1,5 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-22T00:00:00Z",
-  "apps": [
-    {
-      "id": "test-xci",
-      "title": "Test",
-      "author": "a",
-      "category": "b",
-      "description": "d",
-      "version": "1.0.0",
-      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/hello-homebrew.jpg",
-      "downloadUrl": "https://example.com/x.xci",
-      "fileSize": 100,
-      "filename": "x.xci",
-      "fileType": "xci"
-    }
-  ]
+  "generatedAt": "2026-07-22T20:56:23.705Z",
+  "apps": []
 }
