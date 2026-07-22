@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-22T21:12:33.354Z",
+  "generatedAt": "2026-07-22T21:19:55.999Z",
   "apps": [
     {
       "id": "2",
@@ -15,6 +15,20 @@
       "filename": "The Legend of Zelda Skyward Sword HD.nsp",
       "fileType": "nsp",
       "longDescription": "En el relato más antiguo de la línea temporal de Zelda, Link debe viajar desde un mundo que se halla por encima de las nubes hasta tierras desconocidas en busca de su amiga de la infancia, Zelda. Armado con su fiel espada y su escudo, Link les plantará cara a enemigos formidables, resolverá puzles enrevesados y surcará los cielos a lomos de un inmenso pájaro conocido como pelícaro."
+    },
+    {
+      "id": "3",
+      "title": "Animal Crossing New Horizons",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "3.0.3 + 3 DLCs",
+      "version": "3.0.3 + 3 DLCs",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/3.jpeg",
+      "downloadUrl": "https://download1072.mediafire.com/fd1a2qm0vjfgsoDEYgTUoVsqljH0fkKWBMhPuQbhxGQsoaTnWFdYotsoCVUa7UQ3yu_HzJMCSA2ZbU78RvJ0OWIDRvxFhSBMZxv2G0PALU25nkv-VmzeORi2NptZBk0yEcDteB-zXuVo0KELMREtjuVKCANdAefbfOxGSmHtMu7J_wo/hmzskn5sp8nrn45/Animal+Crossing+New+Horizons+%5Bv3.0.3+%2B+3+DLCs%5D.xci",
+      "fileSize": 11969644544,
+      "filename": "Animal Crossing New Horizons.xci",
+      "fileType": "xci",
+      "longDescription": "¡Una nueva vida sin preocupaciones te espera más allá del horizonte! Baja del avión y aterriza en tu propia isla desierta, donde te aguardan nuevos amigos, descubrimientos y oportunidades. ¡El paraíso lo construyes tú en Animal Crossing: New Horizons para Nintendo Switch !"
     }
   ]
 }
