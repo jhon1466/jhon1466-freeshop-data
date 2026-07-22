@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-22T18:04:18.654Z",
+  "apps": [
+    {
+      "id": "hello-homebrew",
+      "title": "Hello Homebrew",
+      "author": "FreeShop",
+      "category": "Sample",
+      "description": "Placeholder catalog entry used to verify the fetch/list/download/install flow end-to-end.",
+      "longDescription": "This is not a real Switch application. It's a plain text file standing in for a compiled .nro so the server and client can be exercised end-to-end before any real homebrew is added to the catalog. Replace this entry (and the file at server/public/downloads/hello-homebrew/0.1.0/) with a real .nro once you have one.",
+      "version": "0.1.0",
+      "iconUrl": "/icons/hello-homebrew.jpg",
+      "downloadUrl": "/downloads/hello-homebrew/0.1.0/HelloHomebrew.nro",
+      "fileSize": 168,
+      "sha256": "4252d813b8f0fdda54a80588195e0bbaebc2f17bf2e6e2556379ffc69397ae15",
+      "filename": "HelloHomebrew.nro",
+      "fileType": "nro",
+      "homepageUrl": "https://github.com/",
+      "license": "Unlicense",
+      "source": {
+        "origin": "curated"
+      },
+      "updatedAt": "2026-07-20T00:00:00Z"
+    },
+    {
+      "id": "kabuto-park",
+      "title": "Kabuto Park",
+      "author": "Unknown",
+      "category": "Games",
+      "description": "",
+      "version": "1.0.0",
+      "iconUrl": "/icons/kabuto-park.jpg",
+      "downloadUrl": "/downloads/kabuto-park/1.0.0/Kabuto%20Park.nsp",
+      "fileSize": 176889680,
+      "sha256": "3bfb7fb87ba841476878a831d0ad7d5cd536b88e2ffbc893de80ef1be0d80fb1",
+      "filename": "Kabuto Park.nsp",
+      "fileType": "nsp",
+      "source": {
+        "origin": "curated"
+      },
+      "updatedAt": "2026-07-20T00:00:00Z"
+    }
+  ]
+}
