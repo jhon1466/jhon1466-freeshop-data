@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-22T23:25:47.851Z",
+  "generatedAt": "2026-07-22T23:30:53.251Z",
   "apps": [
     {
       "id": "2",
@@ -85,6 +85,20 @@
       "filename": "Super Mario Party.xci",
       "fileType": "xci",
       "longDescription": "El juego de mesa original sube el listón con elementos de estrategia más profunda, como dados específicos para cada personaje.\nTambién cuenta con nuevas formas de jugar, incluidos minijuegos manejados con los Joy-Con y nuevos modos para disfrutar con la familia y amigos.\nDisfruta de nuevos modos, nuevos minijuegos y de la dinámica de juego original sobre el tablero donde, cuando y con quien quieras."
+    },
+    {
+      "id": "8",
+      "title": "Mario Party Superstars",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "v1.1.1",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/8.jpeg",
+      "downloadUrl": "https://download1475.mediafire.com/lal7khtw94jg3WkwiKFne_-fnM9eWxafedNmScF1zlg15YkJUnITgqypDimPO72j-sLW45ChtSWT0UlpRNxOoWHqwdrcyx5UCYNYKY0ccDirXuCk1Prxgk8i4u9hYe3PTDIzttEjh0Gets9IxXhCbE1bcgMArI1ZGJ5tRt6q8XdNeQM/z2d07nzjmvae4w2/Mario+Party+Superstars+%5Bv1.1.1%5D.xci",
+      "fileSize": 3055782400,
+      "filename": "Mario Party Superstars.xci",
+      "fileType": "xci",
+      "longDescription": "La serie Mario Party está de regreso con una colección superestrella de tableros y minijuegos clásicos, exclusivamente para las consolas de la familia Nintendo Switch™. Toma la ventaja en disparatadas partidas con tus amigos y tu familia donde las circunstancias pueden cambiar al lanzar los dados."
     }
   ]
 }
