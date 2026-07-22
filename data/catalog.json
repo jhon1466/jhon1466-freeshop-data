@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-22T18:11:41.844Z",
+  "generatedAt": "2026-07-22T18:41:04.348Z",
   "apps": [
     {
       "id": "hello-homebrew",
@@ -9,7 +9,7 @@
       "category": "Sample",
       "description": "Placeholder catalog entry used to verify the fetch/list/download/install flow end-to-end.",
       "version": "0.1.0",
-      "iconUrl": "/icons/hello-homebrew.jpg",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/hello-homebrew.jpg",
       "downloadUrl": "/downloads/hello-homebrew/0.1.0/HelloHomebrew.nro",
       "fileSize": 168,
       "sha256": "4252d813b8f0fdda54a80588195e0bbaebc2f17bf2e6e2556379ffc69397ae15",
