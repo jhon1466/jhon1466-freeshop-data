@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-22T21:21:39.246Z",
+  "generatedAt": "2026-07-22T21:27:32.596Z",
   "apps": [
     {
       "id": "2",
@@ -29,6 +29,20 @@
       "filename": "Animal Crossing New Horizons.xci",
       "fileType": "xci",
       "longDescription": "¡Una nueva vida sin preocupaciones te espera más allá del horizonte! Baja del avión y aterriza en tu propia isla desierta, donde te aguardan nuevos amigos, descubrimientos y oportunidades. ¡El paraíso lo construyes tú en Animal Crossing: New Horizons para Nintendo Switch !"
+    },
+    {
+      "id": "4",
+      "title": "Super Smash Bros. Ultimate",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "13.0.4 + 99 DLCS",
+      "version": "13.0.4",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/4.jpg",
+      "downloadUrl": "https://download1503.mediafire.com/cwdtif7dmsng5-Q8agUZKx6gq4aSvctOyhhEyXJjwHi8sQZPg7bhSAdVd6_yGqZ-74XhMql39w1w9ftBqv3YnQhpVTzqvfDvZQnlcrRF1gTdcZ1Y57MSpzD4ZqT25NaF9YLiuACoJLtA_SeTtLxcrOdtbNzPvSb9Nw00RU3CUtRTZOI/ibh8trg54jv9ymn/Super+Smash+Bros.+Ultimate+%5B13.0.4+%2B+99+DLCs%5D.xci",
+      "fileSize": 18581921280,
+      "filename": "Super Smash Bros. Ultimate.xci",
+      "fileType": "xci",
+      "longDescription": "¡Un auténtico duelo de titanes de los videojuegos que podrás jugar cuando quieras y donde quieras! Lanza a tus rivales del escenario usando uno de los nuevos personajes como Simon Belmont o King K. Rool que se unen a Inkling, Ridley y a todos los combatientes presentes en la historia de Super Smash Bros. Disfruta de la velocidad mejorada y combate en los nuevos escenarios basados en las series de Castlevania, Super Mario Odyssey y otras."
     }
   ]
 }
