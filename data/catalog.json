@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-22T21:51:19.602Z",
+  "generatedAt": "2026-07-22T21:51:36.897Z",
   "apps": [
     {
       "id": "2",
       "title": "The Legend of Zelda: Skyward Sword HD",
       "author": "Unknown",
-      "category": "Games",
+      "category": "Game",
       "description": "",
       "version": "1.0.1",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/2.jpg",
