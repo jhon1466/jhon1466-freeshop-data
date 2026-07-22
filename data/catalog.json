@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-22T21:27:32.596Z",
+  "generatedAt": "2026-07-22T21:51:19.602Z",
   "apps": [
     {
       "id": "2",
@@ -43,6 +43,20 @@
       "filename": "Super Smash Bros. Ultimate.xci",
       "fileType": "xci",
       "longDescription": "¡Un auténtico duelo de titanes de los videojuegos que podrás jugar cuando quieras y donde quieras! Lanza a tus rivales del escenario usando uno de los nuevos personajes como Simon Belmont o King K. Rool que se unen a Inkling, Ridley y a todos los combatientes presentes en la historia de Super Smash Bros. Disfruta de la velocidad mejorada y combate en los nuevos escenarios basados en las series de Castlevania, Super Mario Odyssey y otras."
+    },
+    {
+      "id": "5",
+      "title": "Mario Kart 8 Deluxe",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "v3.0.5 + DLC",
+      "version": "3.0.5",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/5.jpg",
+      "downloadUrl": "https://download1350.mediafire.com/7jrnbyzrfb3gqOd9PadeCfScHu7xs7ssR0ICzBUbdV_rJ7FlAUt55QV7g-taDDBvNOgTOSxzIkLusCBALkUxVjGqPcjxLRnk8YxSOH3ZKV-byFaIBjx2AEa61T5l4M97RrIFRCPhYqTgiaE0fZV1uKzWbmpQhG0kBprQPQHHFsjSVg4/0a5wlr0h9irtgfv/Mario+Kart+8+Deluxe+%5Bv3.0.5+%2B+DLC%5D.xci",
+      "fileSize": 12068741632,
+      "filename": "Mario Kart 8 Deluxe.xci",
+      "fileType": "xci",
+      "longDescription": "¡Acelera a través de las pistas del Reino Champiñón bajo el agua, en el cielo, de cabeza y sin gravedad, y llega a la meta para obtener la victoria! Prepara motores en el modo multijugador local*, en los torneos en línea** del juego, en el modo batalla que ha sido mejorado ¡y más!"
     }
   ]
 }
