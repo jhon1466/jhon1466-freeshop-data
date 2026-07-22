@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-22T18:45:00.703Z",
+  "generatedAt": "2026-07-22T18:58:27.187Z",
   "apps": [
     {
       "id": "hello-homebrew",
@@ -27,7 +27,7 @@
       "description": "",
       "version": "1.0.0",
       "iconUrl": "/icons/kabuto-park.jpg",
-      "downloadUrl": "/downloads/kabuto-park/1.0.0/Kabuto%20Park.nsp",
+      "downloadUrl": "https://download1077.mediafire.com/79bb9nubofbggOfmYc4P4FUDjcv8jSruNu5LbAMGaxne5EMNOAA0we_CGJbgh-GZ7qbLabwnfD5ekydhgd2vlYCaQwn-QavCp9vlkj0eqJSXfSoLIxPjDRKQVuxquTIk0G2cnx43kR4pWoiPg6PwuXg3arb6HkPb-cuv9oWfjpVeLC0/a832ej2pbevo2jb/Kabuto+Park.nsp",
       "fileSize": 176889680,
       "sha256": "3bfb7fb87ba841476878a831d0ad7d5cd536b88e2ffbc893de80ef1be0d80fb1",
       "filename": "Kabuto Park.nsp",
