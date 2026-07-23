@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-23T20:04:56.513Z",
+  "generatedAt": "2026-07-23T20:06:27.483Z",
   "apps": [
     {
       "id": "3",
@@ -213,6 +213,20 @@
       "fileType": "nsp",
       "parentId": "16",
       "contentType": "update"
+    },
+    {
+      "id": "18",
+      "title": "Max Payne",
+      "author": "Unknown",
+      "category": "Ports Nativos",
+      "description": "",
+      "version": "1.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/18.jpg",
+      "downloadUrl": "https://download1980.mediafire.com/7e74bs9iucbgcCX2a5a1-1WfO3hc1oqDBSDJYkWgvtFfpDzjSy_lX58LhnsiKiIHDm7lhaDirqHrBSoilgeLRv7oPMqppYfL-tjiyA5GnKFLPeSporceozohq0EoptyiTLjxbMJ3yp7zTqjPCYuzCQq0NyC2vXoZ_dD5Pf_58Rjw3iI/qi020lsuref72x9/maxpaynenx.zip",
+      "fileSize": 914947897,
+      "filename": "maxpaynenx.zip",
+      "fileType": "port",
+      "longDescription": "Max Payne, el premiado título, ya está disponible para dispositivos móviles Android.\n\nMax es un fugitivo, un agente encubierto incriminado en un asesinato que no ha cometido, perseguido por policías y mafiosos. Se halla entre la espada y la pared, librando una batalla desesperada. Max Payne es un juego trepidante de gran profundidad narrativa sobre un hombre que ha sido llevado al límite, que lucha por limpiar su nombre mientras intenta descubrir la verdad sobre el asesinato de su familia entre una miríada de giros en la trama."
     }
   ]
 }
