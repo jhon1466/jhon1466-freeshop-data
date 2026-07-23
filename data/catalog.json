@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-23T19:37:36.389Z",
+  "generatedAt": "2026-07-23T20:04:36.862Z",
   "apps": [
     {
       "id": "3",
@@ -213,6 +213,19 @@
       "fileType": "nsp",
       "parentId": "16",
       "contentType": "update"
+    },
+    {
+      "id": "zzztest-port-entry",
+      "title": "Test Port",
+      "author": "test",
+      "category": "Ports Nativos",
+      "description": "temporary validation test",
+      "version": "1.0",
+      "iconUrl": "https://example.com/icon.jpg",
+      "downloadUrl": "/downloads/test.zip",
+      "fileSize": 1000,
+      "filename": "test.zip",
+      "fileType": "port"
     }
   ]
 }
