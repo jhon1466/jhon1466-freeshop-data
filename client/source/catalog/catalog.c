@@ -90,6 +90,8 @@ CatalogResult catalog_fetch(const char *base_url, AppEntry **out_entries, int *o
             e->file_type = APP_FILE_TYPE_NSP;
         } else if (strcmp(file_type_str, "xci") == 0) {
             e->file_type = APP_FILE_TYPE_XCI;
+        } else if (strcmp(file_type_str, "port") == 0) {
+            e->file_type = APP_FILE_TYPE_PORT;
         } else {
             e->file_type = APP_FILE_TYPE_NRO;
         }

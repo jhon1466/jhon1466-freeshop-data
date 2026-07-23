@@ -13,14 +13,18 @@
 #define APP_ENTRY_FILENAME_MAX 128
 
 // "nro": homebrew app, downloaded and installed directly by install_app()
-// into sdmc:/switch/<id>/. "nsp"/"xci": installable title - this project
-// doesn't reimplement NCM/ES title installation, so it downloads the file
-// and hands off to DBI (https://github.com/rashevskyv/dbi) instead, which
-// installs both formats the same way. See install_nsp.h.
+// into sdmc:/switch/<id>/. "nsp"/"xci": installable title, installed
+// natively via NCM/ES/NS (see install_nsp_native.h/install_xci_native.h),
+// with a manual DBI (https://github.com/rashevskyv/dbi) fallback. "port": a
+// homebrew app that isn't a single .nro - it ships as a .zip containing the
+// .nro plus whatever data files/subfolders it needs (e.g. a native port's
+// asset pack) - install_port.h downloads and extracts it into
+// sdmc:/switch/<id>/, same destination convention as a plain "nro".
 typedef enum {
     APP_FILE_TYPE_NRO = 0,
     APP_FILE_TYPE_NSP,
     APP_FILE_TYPE_XCI,
+    APP_FILE_TYPE_PORT,
 } AppFileType;
 
 // Mirrors AppEntry from shared/catalog.schema.json. Fixed-size buffers are

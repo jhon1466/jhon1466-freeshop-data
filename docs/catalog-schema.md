@@ -37,8 +37,8 @@ and show a friendly message instead of crashing on unexpected structure.
 | `downloadUrl` | string | yes | e.g. `/downloads/<id>/<version>/<file>.nro`. Can be same-origin or an external URL. |
 | `fileSize` | integer | yes | Bytes. Used for the progress bar and a pre-download free-space check. |
 | `sha256` | string | no | 64 lowercase hex chars, if present. **Not verified by the Switch client** - for large (multi-GB) game files, hashing the whole download on both the admin panel (which would have to fetch the entire file just to hash it) and again on-console (slow, no hardware crypto acceleration) was more cost than the corruption protection was worth for this project. Leave it out; if you want the extra check anyway, compute it yourself (`sha256sum`) and paste it in - `install/install.c` and `install/install_nsp.c` still verify it when present. |
-| `filename` | string | yes | e.g. `"Moonlight.nro"`, `"SomeForwarder.nsp"`, or `"SomeGame.xci"`. Extension must match `fileType`. |
-| `fileType` | string | no | `"nro"` (default), `"nsp"`, or `"xci"`. `"nro"` is downloaded straight into `sdmc:/switch/<id>/` and launched from hbmenu. `"nsp"`/`"xci"` both install natively (NCAs streamed into NCM content storage, ticket imported, application record pushed) - see [install_nsp_native.h](../client/source/install/install_nsp_native.h)/[install_xci_native.h](../client/source/install/install_xci_native.h); a manual "Instalar vía DBI" fallback is also offered for both, via [install_nsp.h](../client/source/install/install_nsp.h)'s DBI hand-off. |
+| `filename` | string | yes | e.g. `"Moonlight.nro"`, `"SomeForwarder.nsp"`, `"SomeGame.xci"`, or `"SomePort.zip"`. Extension must match `fileType`. |
+| `fileType` | string | no | `"nro"` (default), `"nsp"`, `"xci"`, or `"port"`. `"nro"` is downloaded straight into `sdmc:/switch/<id>/` and launched from hbmenu. `"nsp"`/`"xci"` both install natively (NCAs streamed into NCM content storage, ticket imported, application record pushed) - see [install_nsp_native.h](../client/source/install/install_nsp_native.h)/[install_xci_native.h](../client/source/install/install_xci_native.h); a manual "Instalar vía DBI" fallback is also offered for both, via [install_nsp.h](../client/source/install/install_nsp.h)'s DBI hand-off. `"port"` is for a homebrew app that isn't a single `.nro` - `downloadUrl` points to a `.zip` containing the `.nro` plus whatever data files/subfolders it needs (e.g. a native port's asset pack), which the client extracts into `sdmc:/switch/<id>/` preserving the archive's folder structure - see [install_port.h](../client/source/install/install_port.h)/[zip_extract.h](../client/source/install/zip_extract.h). |
 | `homepageUrl` | string | no | |
 | `license` | string | no | |
 | `parentId` | string | no | If set, this entry is DLC/an update *for* the base game with this id. Hidden from the main list/grid on the Switch client - shown instead in that game's detail screen ("DLC y actualizaciones" section, `Y` to browse, `A` to install one). The target `id` must exist and must not itself have a `parentId` (one level of nesting only) - the admin page enforces both. |
@@ -81,6 +81,23 @@ button) as a manual fallback for both formats - it uses the same downloaded
 file and chain-loads into `sdmc:/switch/DBI/dbi.nro`, so the user needs
 [DBI](https://github.com/rashevskyv/dbi) installed at that path. If DBI is
 missing, the client shows a message instead of chain-loading.
+
+## Adding a port entry
+
+For a homebrew app that ships as a folder (an `.nro` plus data files/
+subfolders it needs - e.g. a native port's asset pack) rather than a single
+file: zip that folder up, set `"fileType": "port"`, `filename` ending in
+`.zip`, and `downloadUrl` pointing at the zip.
+
+The client downloads it to `sdmc:/switch/<id>/<filename>`, then extracts it
+in place - recreating whatever folder structure the archive has - via
+[zip_extract.h](../client/source/install/zip_extract.h), and deletes the zip
+afterward. Both Stored and Deflate compression (what every mainstream zip
+tool produces) are supported; anything else fails with a clear error rather
+than silently skipping files. Zip the port's folder itself (the `.nro`
+directly at the zip's root, alongside its data files/subfolders) rather than
+a wrapper folder containing it, so the layout under `sdmc:/switch/<id>/`
+matches what the port expects.
 
 ## Adding DLC or an update
 

@@ -17,6 +17,7 @@
 #include "install/install_nsp.h"
 #include "install/install_nsp_native.h"
 #include "install/install_xci_native.h"
+#include "install/install_port.h"
 #include "update/self_update.h"
 
 // Fetches each enabled source's catalog and concatenates them into one
@@ -459,6 +460,23 @@ int main(int argc, char **argv) {
                 snprintf(msg, sizeof(msg),
                          "Error de instalación: %s\n\nSi el problema persiste, prueba \"Instalar vía DBI\" (botón X) desde esta misma pantalla.",
                          err_buf);
+                ui_app_show_message(msg);
+            }
+            continue;
+        }
+
+        if (install_target->file_type == APP_FILE_TYPE_PORT) {
+            PortInstallResult pres = install_port(install_target, base_url,
+                                                    install_progress_cb, on_install_phase, &progress_ctx,
+                                                    err_buf, sizeof(err_buf));
+            if (pres == PORT_INSTALL_OK) {
+                snprintf(msg, sizeof(msg), "\"%s\" instalado correctamente.\n\nVuelve al hbmenu para iniciarlo.",
+                         install_target->title);
+                ui_app_show_message(msg);
+            } else if (pres == PORT_INSTALL_ERR_CANCELED) {
+                ui_app_show_message("Descarga cancelada.");
+            } else {
+                snprintf(msg, sizeof(msg), "Error de instalación: %s", err_buf);
                 ui_app_show_message(msg);
             }
             continue;

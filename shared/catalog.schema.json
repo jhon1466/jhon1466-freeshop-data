@@ -56,14 +56,14 @@
         },
         "filename": {
           "type": "string",
-          "pattern": "^[^/\\\\]+\\.(nro|nsp|xci)$",
-          "description": "Filename of the downloaded artifact. Extension must match fileType (.nro for \"nro\", .nsp for \"nsp\", .xci for \"xci\")."
+          "pattern": "^[^/\\\\]+\\.(nro|nsp|xci|zip)$",
+          "description": "Filename of the downloaded artifact. Extension must match fileType (.nro for \"nro\", .nsp for \"nsp\", .xci for \"xci\", .zip for \"port\")."
         },
         "fileType": {
           "type": "string",
-          "enum": ["nro", "nsp", "xci"],
+          "enum": ["nro", "nsp", "xci", "port"],
           "default": "nro",
-          "description": "\"nro\": homebrew app, installed directly into sdmc:/switch/<id>/ and launched from hbmenu. \"nsp\"/\"xci\": installable title, handed off to DBI (https://github.com/rashevskyv/dbi) for NCM/ES installation since that requires CFW-level system services this project doesn't reimplement - DBI installs both formats the same way."
+          "description": "\"nro\": homebrew app, installed directly into sdmc:/switch/<id>/ and launched from hbmenu. \"nsp\"/\"xci\": installable title, installed natively via NCM/ES/NS with a manual DBI (https://github.com/rashevskyv/dbi) fallback. \"port\": a homebrew app that isn't a single .nro - downloadUrl points to a .zip containing the .nro plus whatever data files/subfolders it needs (e.g. a native port's asset pack), extracted into sdmc:/switch/<id>/ preserving its folder structure."
         },
         "homepageUrl": { "type": "string" },
         "license": { "type": "string" },

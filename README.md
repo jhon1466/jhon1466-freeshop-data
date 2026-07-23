@@ -35,7 +35,11 @@ Homebrew Menu.
   [`install_xci_native.h`](client/source/install/install_xci_native.h));
   "Instalar vía DBI" (X button) remains as a manual fallback to
   [DBI](https://github.com/rashevskyv/dbi) for both while this is still
-  being verified across real hardware. `sha256` is verified
+  being verified across real hardware. `.zip`-packaged ports (an `.nro` plus
+  the data files/subfolders it needs) use `fileType: "port"` - the client
+  extracts them into `sdmc:/switch/<id>/` in place (see
+  [`zip_extract.h`](client/source/install/zip_extract.h)/
+  [`install_port.h`](client/source/install/install_port.h)). `sha256` is verified
   when the catalog entry provides one, otherwise skipped (see
   [`docs/catalog-schema.md`](docs/catalog-schema.md)). It always fetches
   fresh on launch, so any edit made in `/admin` is picked up the next time
