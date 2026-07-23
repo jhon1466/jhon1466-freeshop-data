@@ -33,6 +33,41 @@ static void set_curl_error(char *err_buf, size_t err_buf_size, CURLcode code) {
     snprintf(err_buf, err_buf_size, "%s", curl_easy_strerror(code));
 }
 
+// TEMPORARY diagnostic instrumentation for the "some MediaFire links are
+// fast, others are slow, on Switch only (PC is fast for all of them)" issue
+// - appends per-download timing + which server IP actually served it, so two
+// downloads (one fast, one slow) can be compared directly instead of
+// guessing. Remove once diagnosed. See CURLINFO_* docs for each field.
+static void log_transfer_stats(CURL *curl, const char *url) {
+    FILE *fp = fopen("sdmc:/switch/freeshop/download_debug.log", "a");
+    if (!fp) return;
+
+    char *ip = NULL;
+    double namelookup = 0, connect_t = 0, appconnect = 0, starttransfer = 0, total = 0, speed = 0;
+    curl_off_t size = 0;
+    long http_code = 0;
+
+    curl_easy_getinfo(curl, CURLINFO_PRIMARY_IP, &ip);
+    curl_easy_getinfo(curl, CURLINFO_NAMELOOKUP_TIME, &namelookup);
+    curl_easy_getinfo(curl, CURLINFO_CONNECT_TIME, &connect_t);
+    curl_easy_getinfo(curl, CURLINFO_APPCONNECT_TIME, &appconnect);
+    curl_easy_getinfo(curl, CURLINFO_STARTTRANSFER_TIME, &starttransfer);
+    curl_easy_getinfo(curl, CURLINFO_TOTAL_TIME, &total);
+    curl_easy_getinfo(curl, CURLINFO_SPEED_DOWNLOAD, &speed);
+    curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD_T, &size);
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+
+    fprintf(fp,
+            "url=%s\n"
+            "  ip=%s http=%ld size=%lld bytes\n"
+            "  namelookup=%.3fs connect=%.3fs tls_handshake=%.3fs first_byte=%.3fs total=%.3fs\n"
+            "  avg_speed=%.0f B/s (%.2f MB/s)\n\n",
+            url, ip ? ip : "?", http_code, (long long)size,
+            namelookup, connect_t, appconnect, starttransfer, total,
+            speed, speed / (1024.0 * 1024.0));
+    fclose(fp);
+}
+
 HttpResult http_get(const char *url, char **out_buf, size_t *out_len,
                      char *err_buf, size_t err_buf_size) {
     CURL *curl = curl_easy_init();
@@ -176,6 +211,7 @@ HttpResult http_download_to_file(const char *url, const char *dest_path,
                       "TLS-ECDHE-ECDSA-WITH-AES-256-GCM-SHA384");
 
     CURLcode res = curl_easy_perform(curl);
+    log_transfer_stats(curl, url);
     curl_easy_cleanup(curl);
     fclose(fp);
 
