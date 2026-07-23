@@ -3,6 +3,7 @@
 #include "ui_storage.h"
 #include "ui_status.h"
 #include "ui_icons.h"
+#include "ui_prefs.h"
 
 #include <switch.h>
 #include <stdio.h>
@@ -158,6 +159,17 @@ static int build_visible(const AppEntry *entries, int count, const char *categor
         out_visible[n++] = i;
     }
     return n;
+}
+
+// Called right after view_mode/sort_mode/category_filter change - saves
+// immediately rather than batching for some "on exit" point, since B/+/HOME
+// can end the process at any time with no reliable hook to save from then.
+static void save_prefs(ViewMode view_mode, SortMode sort_mode, const char *category_filter) {
+    UiListPrefs prefs;
+    prefs.view_mode = (int)view_mode;
+    prefs.sort_mode = (int)sort_mode;
+    snprintf(prefs.category_filter, sizeof(prefs.category_filter), "%s", category_filter);
+    ui_prefs_save(&prefs);
 }
 
 static const char *empty_state_message(int count, const char *category_filter, const char *search_query) {
@@ -329,6 +341,28 @@ int ui_show_list(AppEntry *entries, int count) {
     static char category_filter[APP_ENTRY_CATEGORY_MAX] = "";
     static char search_query[64] = "";
 
+    // Only on the very first call this process - view_mode/sort_mode/
+    // category_filter are already persisted in-memory (via `static`) across
+    // re-entries from the detail screen, same as selected/scroll_offset.
+    static bool prefs_loaded_once = false;
+    if (!prefs_loaded_once) {
+        prefs_loaded_once = true;
+        UiListPrefs prefs;
+        ui_prefs_load(&prefs);
+        if (prefs.view_mode == VIEW_LIST || prefs.view_mode == VIEW_GRID) {
+            view_mode = (ViewMode)prefs.view_mode;
+        }
+        if (prefs.sort_mode >= 0 && prefs.sort_mode < SORT_MODE_COUNT) {
+            sort_mode = (SortMode)prefs.sort_mode;
+        }
+        snprintf(category_filter, sizeof(category_filter), "%s", prefs.category_filter);
+        // sort_mode otherwise only actually gets applied to `entries` when
+        // the user next presses X - without this, a loaded non-default
+        // sort would sit unapplied (array order untouched) while the
+        // footer already claims it's active.
+        apply_sort(entries, count, sort_mode);
+    }
+
     char categories[MAX_CATEGORIES][APP_ENTRY_CATEGORY_MAX];
     int category_count = collect_categories(entries, count, categories);
 
@@ -376,6 +410,15 @@ int ui_show_list(AppEntry *entries, int count) {
     int sidebar_selected = 0; // 0 = "Todos", i+1 = categories[i]
     int sidebar_scroll = 0;
 
+    // Tracks how long the selection has sat still, to reveal the full,
+    // untruncated title after a 1s dwell (titles get cut short with "..."
+    // in the grid view's narrow cells, and can in the list view too for a
+    // long enough title) - reset whenever `selected` itself changes, not
+    // persisted across re-entries (starts fresh every time this screen
+    // shows again, same as sidebar_open).
+    int dwell_selected = -1;
+    u64 dwell_start_tick = 0;
+
     PadState pad;
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
     padInitializeDefault(&pad);
@@ -399,6 +442,13 @@ int ui_show_list(AppEntry *entries, int count) {
             last_status_tick = now_tick;
         }
 
+        if (selected != dwell_selected) {
+            dwell_selected = selected;
+            dwell_start_tick = now_tick;
+        }
+        bool show_full_title = !sidebar_open && visible_count > 0 &&
+                                armTicksToNs(now_tick - dwell_start_tick) >= 1000000000ULL;
+
         if (sidebar_open) {
             int total_items = category_count + 1;
             if (kDown & HidNpadButton_Down) {
@@ -417,6 +467,7 @@ int ui_show_list(AppEntry *entries, int count) {
                 selected = 0;
                 scroll_offset = 0;
                 sidebar_open = false;
+                save_prefs(view_mode, sort_mode, category_filter);
             }
             if (kDown & HidNpadButton_B) {
                 sidebar_open = false;
@@ -452,6 +503,7 @@ int ui_show_list(AppEntry *entries, int count) {
                 // views - only the per-mode row/scroll math needs resetting.
                 view_mode = (view_mode == VIEW_LIST) ? VIEW_GRID : VIEW_LIST;
                 scroll_offset = 0;
+                save_prefs(view_mode, sort_mode, category_filter);
             }
             if (kDown & HidNpadButton_X) {
                 sort_mode = (SortMode)((sort_mode + 1) % SORT_MODE_COUNT);
@@ -462,6 +514,7 @@ int ui_show_list(AppEntry *entries, int count) {
                 visible_count = build_visible(entries, count, category_filter, search_query, visible);
                 selected = 0;
                 scroll_offset = 0;
+                save_prefs(view_mode, sort_mode, category_filter);
             }
             if (kDown & HidNpadButton_L) {
                 sidebar_open = true;
@@ -584,6 +637,16 @@ int ui_show_list(AppEntry *entries, int count) {
 
         if (sidebar_open) {
             draw_sidebar(categories, category_count, sidebar_selected, sidebar_scroll);
+        }
+
+        // Titles get cut short with "..." to fit the grid's narrow cells
+        // (and could in the list view too, for a long enough one) - after
+        // holding the selection still for 1s, show it in full here instead
+        // of guessing from the truncated version.
+        if (show_full_title) {
+            const AppEntry *dwell_entry = &entries[visible[selected]];
+            ui_draw_rect(LEFT_EDGE, FOOTER_Y - 40, RIGHT_EDGE - LEFT_EDGE, 26, COLOR_PANEL);
+            ui_draw_text(g_font_body, LEFT_EDGE + 10, FOOTER_Y - 36, COLOR_TEXT, dwell_entry->title);
         }
 
         ui_draw_rect(LEFT_EDGE, FOOTER_Y - 10, RIGHT_EDGE - LEFT_EDGE, 1, COLOR_PANEL);

@@ -8,6 +8,7 @@
 
 SelfUpdateCheckResult self_update_check(char *out_new_version, size_t out_version_size,
                                          char *out_asset_url, size_t out_asset_url_size,
+                                         char *out_release_notes, size_t out_release_notes_size,
                                          char *err_buf, size_t err_buf_size) {
     char *buf = NULL;
     size_t len = 0;
@@ -64,6 +65,11 @@ SelfUpdateCheckResult self_update_check(char *out_new_version, size_t out_versio
 
     if (out_new_version) snprintf(out_new_version, out_version_size, "%s", version);
     if (out_asset_url) snprintf(out_asset_url, out_asset_url_size, "%s", asset_url);
+    if (out_release_notes) {
+        const json_t *body_json = json_object_get(root, "body");
+        const char *body = json_is_string(body_json) ? json_string_value(body_json) : "";
+        snprintf(out_release_notes, out_release_notes_size, "%s", body);
+    }
 
     json_decref(root);
     return SELF_UPDATE_AVAILABLE;

@@ -15,10 +15,15 @@ typedef enum {
 // NOT semver-aware, so this only detects "different", not "newer"; don't
 // publish a release with an older version string than what's currently out.
 // On SELF_UPDATE_AVAILABLE, out_new_version (may be NULL) gets the tag's
-// version and out_asset_url (may be NULL) gets the direct download URL of
-// the CLIENT_RELEASE_ASSET_NAME asset attached to that release.
+// version, out_asset_url (may be NULL) gets the direct download URL of the
+// CLIENT_RELEASE_ASSET_NAME asset attached to that release, and
+// out_release_notes (may be NULL) gets that release's own description
+// (GitHub's "body" field - whatever changelog text was written when
+// publishing it), truncated to fit out_release_notes_size - empty string if
+// the release has no description at all.
 SelfUpdateCheckResult self_update_check(char *out_new_version, size_t out_version_size,
                                          char *out_asset_url, size_t out_asset_url_size,
+                                         char *out_release_notes, size_t out_release_notes_size,
                                          char *err_buf, size_t err_buf_size);
 
 typedef enum {

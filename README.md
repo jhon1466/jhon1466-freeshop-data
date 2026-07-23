@@ -48,10 +48,15 @@ Homebrew Menu.
   the client is opened - no extra "update detection" logic needed. `L`
   toggles a categories sidebar (built from whatever `category` values are
   in the catalog) to filter the list/grid; `R` opens the system keyboard to
-  search by title. The install screen shows a live speed/time-remaining
-  estimate. The client itself also self-updates: on
-  launch it checks the data repo's GitHub Releases for a newer version and,
-  if found, asks before downloading and replacing its own `.nro` - see
+  search by title. View mode, sort mode, and the active category filter are
+  saved to `sdmc:/switch/freeshop/prefs.json` and restored on the next
+  launch (see [`ui_prefs.h`](client/source/ui/ui_prefs.h)). Holding the
+  selection still for 1s reveals a title's full, untruncated name (grid
+  cells especially cut long titles short). The install screen shows a live
+  speed/time-remaining estimate. The client itself also self-updates: on
+  launch it checks the data repo's GitHub Releases for a newer version
+  (showing that release's own notes before asking for confirmation) and,
+  if confirmed, downloads and replaces its own `.nro` - see
   [Publishing a client update](#publishing-a-client-update) below.
 
 ## Quick start
@@ -165,6 +170,8 @@ version on every launch (see
    (a leading `v` is optional - stripped before comparing) and attach the
    built `client/freeshop-client.nro` as a release asset named **exactly**
    `freeshop-client.nro` (see `CLIENT_RELEASE_ASSET_NAME` in `config.h`).
+   Whatever you write as that release's description is shown to users in
+   the update confirmation dialog - worth actually filling in.
 
 The version check is a plain string comparison, not semver-aware - it only
 detects "different from what's running", so don't publish a release with an

@@ -300,12 +300,22 @@ int main(int argc, char **argv) {
     // anything is downloaded/replaced.
     char new_version[32];
     char asset_url[512];
+    char release_notes[300];
     if (self_update_check(new_version, sizeof(new_version), asset_url, sizeof(asset_url),
-                           NULL, 0) == SELF_UPDATE_AVAILABLE) {
-        char confirm_msg[256];
-        snprintf(confirm_msg, sizeof(confirm_msg),
-                 "Hay una nueva versión disponible: v%s (actual: v%s).\n\n¿Actualizar ahora?",
-                 new_version, CLIENT_VERSION);
+                           release_notes, sizeof(release_notes), NULL, 0) == SELF_UPDATE_AVAILABLE) {
+        char confirm_msg[512];
+        if (release_notes[0]) {
+            // GitHub's release "body" text - whatever changelog the release
+            // was published with, so the user can see what changed before
+            // agreeing to update.
+            snprintf(confirm_msg, sizeof(confirm_msg),
+                     "Hay una nueva versión disponible: v%s (actual: v%s).\n\n%s\n\n¿Actualizar ahora?",
+                     new_version, CLIENT_VERSION, release_notes);
+        } else {
+            snprintf(confirm_msg, sizeof(confirm_msg),
+                     "Hay una nueva versión disponible: v%s (actual: v%s).\n\n¿Actualizar ahora?",
+                     new_version, CLIENT_VERSION);
+        }
         if (!self_path) {
             snprintf(confirm_msg, sizeof(confirm_msg),
                      "Hay una nueva versión disponible (v%s), pero no se pudo determinar dónde "
