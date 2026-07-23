@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-23T00:44:38.184Z",
+  "generatedAt": "2026-07-23T00:45:20.370Z",
   "apps": [
     {
       "id": "2",
@@ -104,7 +104,7 @@
       "id": "9",
       "title": "DRAGON BALL FighterZ",
       "author": "Unknown",
-      "category": "Games",
+      "category": "Game",
       "description": "Update 1.50 + 35 DLCs",
       "version": "1.50",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/9.jpg",
