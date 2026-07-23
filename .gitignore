@@ -1,6 +1,19 @@
 # Server
 server/node_modules/
 server/dist/
+.env
+server/.env
+
+# Firebase Functions
+functions/node_modules/
+functions/lib/
+functions/.env
+.firebase/
+firebase-debug.log
+*-debug.log
+
+# Generated Firebase Hosting static root (see scripts/sync-hosting-public.js)
+hosting-public/
 
 # Client build output
 client/build/

@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FreeShop Admin</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>FreeShop &mdash; Admin del cat&aacute;logo</h1>
+      <div id="session" hidden>
+        <button id="logout-btn" type="button">Cerrar sesi&oacute;n</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="login-view">
+        <form id="login-form">
+          <h2>Iniciar sesi&oacute;n</h2>
+          <label>
+            Contrase&ntilde;a de administrador
+            <input type="password" id="login-password" required autocomplete="current-password" />
+          </label>
+          <button type="submit">Entrar</button>
+          <p class="error" id="login-error" hidden></p>
+        </form>
+      </section>
+
+      <section id="app-view" hidden>
+        <div class="toolbar">
+          <button id="add-app-btn" type="button">+ A&ntilde;adir app</button>
+          <button id="import-btn" type="button">Importar JSON</button>
+          <button id="export-btn" type="button">Exportar JSON</button>
+          <span id="save-status"></span>
+        </div>
+
+        <table id="apps-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>T&iacute;tulo</th>
+              <th>Versi&oacute;n</th>
+              <th>Categor&iacute;a</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="apps-tbody"></tbody>
+        </table>
+        <p id="empty-state" hidden>No hay apps todav&iacute;a. A&ntilde;ade una o usa "Importar JSON".</p>
+      </section>
+    </main>
+
+    <dialog id="edit-dialog">
+      <form id="edit-form" method="dialog">
+        <h2 id="edit-dialog-title">Editar app</h2>
+
+        <label>id * <input name="id" required pattern="[a-z0-9]+(-[a-z0-9]+)*" /></label>
+        <label>title * <input name="title" required /></label>
+        <label>author * <input name="author" required /></label>
+        <label>
+          category *
+          <input name="category" required list="category-suggestions" autocomplete="off" />
+          <datalist id="category-suggestions"></datalist>
+        </label>
+        <label>description * (&le;200) <textarea name="description" maxlength="200" required></textarea></label>
+        <label>longDescription <textarea name="longDescription"></textarea></label>
+        <label>version * <input name="version" required /></label>
+        <label>iconUrl * <input name="iconUrl" required /></label>
+        <div class="icon-upload-row">
+          <input type="file" id="icon-file-input" accept="image/jpeg,image/png,image/webp" />
+          <button type="button" id="icon-upload-btn">Subir icono a GitHub</button>
+          <span id="icon-upload-status"></span>
+        </div>
+        <label>downloadUrl * <input name="downloadUrl" required /></label>
+        <div class="icon-upload-row">
+          <button type="button" id="checksum-btn">Calcular fileSize desde downloadUrl</button>
+          <span id="checksum-status"></span>
+        </div>
+        <label>fileSize (bytes) * <input name="fileSize" type="number" min="0" required /></label>
+        <label>sha256 (opcional) <input name="sha256" pattern="[a-f0-9]{64}" placeholder="dejar vacío para omitir la verificación" /></label>
+        <label>filename * <input name="filename" required /></label>
+        <label>
+          fileType
+          <select name="fileType">
+            <option value="nro">nro</option>
+            <option value="nsp">nsp</option>
+            <option value="xci">xci</option>
+          </select>
+        </label>
+        <label>
+          parentId (dejar en "ninguno" si es un juego base)
+          <select name="parentId" id="parent-id-select">
+            <option value="">(ninguno - juego base)</option>
+          </select>
+        </label>
+        <label>
+          contentType (solo aplica si tiene parentId)
+          <select name="contentType">
+            <option value="">(sin especificar)</option>
+            <option value="dlc">dlc</option>
+            <option value="update">update</option>
+          </select>
+        </label>
+        <label>homepageUrl <input name="homepageUrl" /></label>
+        <label>license <input name="license" /></label>
+
+        <p class="error" id="edit-error" hidden></p>
+
+        <div class="dialog-actions">
+          <button type="button" id="edit-cancel-btn">Cancelar</button>
+          <button type="button" id="edit-save-btn">Guardar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="import-dialog">
+      <form method="dialog">
+        <h2>Importar JSON</h2>
+        <p>Pega el contenido completo de un documento de cat&aacute;logo (mismo formato que <code>server/data/catalog.json</code>).</p>
+        <textarea id="import-textarea" rows="14"></textarea>
+        <p class="error" id="import-error" hidden></p>
+        <div class="dialog-actions">
+          <button type="button" id="import-cancel-btn">Cancelar</button>
+          <button type="button" id="import-confirm-btn">Reemplazar cat&aacute;logo</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

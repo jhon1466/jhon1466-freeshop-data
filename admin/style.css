@@ -1,0 +1,126 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0 1.5rem 3rem;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 0;
+  border-bottom: 1px solid #8884;
+}
+
+h1 {
+  font-size: 1.25rem;
+}
+
+#login-form,
+#edit-form,
+#import-dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 32rem;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.9rem;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  padding: 0.4rem;
+}
+
+textarea {
+  min-height: 4rem;
+  font-family: monospace;
+}
+
+.error {
+  color: #d32f2f;
+}
+
+.toolbar {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  margin: 1rem 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.5rem;
+  border-bottom: 1px solid #8884;
+}
+
+.row-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+dialog {
+  border: none;
+  border-radius: 8px;
+  padding: 1.5rem;
+  max-width: 40rem;
+  width: 90%;
+}
+
+dialog::backdrop {
+  background: #0008;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: flex-end;
+  margin-top: 0.6rem;
+}
+
+#import-textarea {
+  min-height: 16rem;
+}
+
+.icon-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.icon-upload-row input[type="file"] {
+  flex: 1;
+  padding: 0.2rem;
+}
+
+.status-error {
+  color: #d32f2f;
+  font-weight: 600;
+}
+
+.status-ok {
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+td small {
+  opacity: 0.65;
+}

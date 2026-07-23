@@ -14,9 +14,26 @@
       "downloadUrl": "/downloads/hello-homebrew/0.1.0/HelloHomebrew.nro",
       "fileSize": 168,
       "sha256": "4252d813b8f0fdda54a80588195e0bbaebc2f17bf2e6e2556379ffc69397ae15",
-      "nroFilename": "HelloHomebrew.nro",
+      "filename": "HelloHomebrew.nro",
+      "fileType": "nro",
       "homepageUrl": "https://github.com/",
       "license": "Unlicense",
+      "source": { "origin": "curated" },
+      "updatedAt": "2026-07-20T00:00:00Z"
+    },
+    {
+      "id": "kabuto-park",
+      "title": "Kabuto Park",
+      "author": "Unknown",
+      "category": "Games",
+      "description": "",
+      "version": "1.0.0",
+      "iconUrl": "/icons/kabuto-park.jpg",
+      "downloadUrl": "/downloads/kabuto-park/1.0.0/Kabuto%20Park.nsp",
+      "fileSize": 176889680,
+      "sha256": "3bfb7fb87ba841476878a831d0ad7d5cd536b88e2ffbc893de80ef1be0d80fb1",
+      "filename": "Kabuto Park.nsp",
+      "fileType": "nsp",
       "source": { "origin": "curated" },
       "updatedAt": "2026-07-20T00:00:00Z"
     }

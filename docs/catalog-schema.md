@@ -2,8 +2,12 @@
 
 The catalog is a single JSON document served at `GET /api/apps` and validated
 against [`shared/catalog.schema.json`](../shared/catalog.schema.json) (JSON
-Schema draft-07). The server refuses to start if `server/data/catalog.json`
-doesn't validate.
+Schema draft-07). It lives as `data/catalog.json` in a dedicated public
+GitHub data repo, edited through the admin page at `/admin` (see the root
+[README](../README.md#admin-setup) for one-time setup). The server refuses
+to start if that file doesn't exist or doesn't validate.
+`server/data/catalog.json` is kept only as a historical/seed example of the
+shape - it's no longer read at runtime.
 
 ## Document shape
 
@@ -29,24 +33,57 @@ and show a friendly message instead of crashing on unexpected structure.
 | `description` | string | yes | Short summary (<=200 chars), shown in the list view. |
 | `longDescription` | string | no | Shown on the detail screen. |
 | `version` | string | yes | |
-| `iconUrl` | string | yes | e.g. `/icons/<id>.jpg`. Recommend ~256x256 JPEG, <100KB. This is the catalog-listing icon, distinct from the client's own NACP launcher icon (`client/icon.jpg`). |
+| `iconUrl` | string | yes | Absolute URL, e.g. `https://raw.githubusercontent.com/<owner>/<data-repo>/main/icons/<id>.jpg` - icons are committed to the GitHub data repo (not Firebase Hosting) so they don't count against its storage. Recommend ~256x256, <100KB. **Must be JPEG or PNG** - the Switch client (`client/source/ui/ui_icons.c`) only decodes those two formats for the grid view; WEBP is accepted by the admin upload endpoint for browser convenience but won't render on-console. This is the catalog-listing icon, distinct from the client's own NACP launcher icon (`client/icon.jpg`). |
 | `downloadUrl` | string | yes | e.g. `/downloads/<id>/<version>/<file>.nro`. Can be same-origin or an external URL. |
 | `fileSize` | integer | yes | Bytes. Used for the progress bar and a pre-download free-space check. |
-| `sha256` | string | yes | 64 lowercase hex chars. Verified after download, before the file is moved into place. |
-| `nroFilename` | string | yes | e.g. `"Moonlight.nro"`. |
+| `sha256` | string | no | 64 lowercase hex chars, if present. **Not verified by the Switch client** - for large (multi-GB) game files, hashing the whole download on both the admin panel (which would have to fetch the entire file just to hash it) and again on-console (slow, no hardware crypto acceleration) was more cost than the corruption protection was worth for this project. Leave it out; if you want the extra check anyway, compute it yourself (`sha256sum`) and paste it in - `install/install.c` and `install/install_nsp.c` still verify it when present. |
+| `filename` | string | yes | e.g. `"Moonlight.nro"`, `"SomeForwarder.nsp"`, or `"SomeGame.xci"`. Extension must match `fileType`. |
+| `fileType` | string | no | `"nro"` (default), `"nsp"`, or `"xci"`. `"nro"` is downloaded straight into `sdmc:/switch/<id>/` and launched from hbmenu. `"nsp"`/`"xci"` are downloaded into `sdmc:/switch/DBI/nsp-repo/` and the client chain-loads into [DBI](https://github.com/rashevskyv/dbi) so the user can install it - this project doesn't reimplement NCM/ES title installation itself, and DBI installs both formats from that same folder. See [install_nsp.h](../client/source/install/install_nsp.h). |
 | `homepageUrl` | string | no | |
 | `license` | string | no | |
+| `parentId` | string | no | If set, this entry is DLC/an update *for* the base game with this id. Hidden from the main list/grid on the Switch client - shown instead in that game's detail screen ("DLC y actualizaciones" section, `Y` to browse, `A` to install one). The target `id` must exist and must not itself have a `parentId` (one level of nesting only) - the admin page enforces both. |
+| `contentType` | string | no | `"dlc"` or `"update"`. Only meaningful when `parentId` is set - just the label shown next to this entry in its parent's list (defaults to a generic "DLC" tag if omitted). |
 | `source` | object | no | Reserved for future catalog aggregation: `{"origin":"curated"}` today; `{"origin":"aggregated","sourceIndex":"...","sourceId":"..."}` later. Not read by v1 logic. |
 | `updatedAt` | string | no | ISO 8601. |
 
 Clients should tolerate unknown/missing-optional fields rather than
 rejecting the whole document.
 
-## Adding an app (v1, no admin UI)
+## Adding an app
 
-1. Drop the `.nro` into `server/public/downloads/<id>/<version>/<nroFilename>`.
-2. Drop the listing icon into `server/public/icons/<id>.jpg`.
-3. Add an entry to `server/data/catalog.json` with the matching `fileSize`
-   and `sha256` (`sha256sum path/to/file.nro`).
-4. Run `npm run validate-catalog` from `server/` before restarting the
-   server.
+1. Drop the downloadable file into
+   `server/public/downloads/<id>/<version>/<filename>` (production: commit it
+   under the same path in the GitHub data repo, or host it elsewhere and use
+   an external `downloadUrl`).
+2. Commit the listing icon to `icons/<id>.jpg` in the GitHub data repo (e.g.
+   via the Contents API or GitHub's web UI), and use its
+   `raw.githubusercontent.com` URL as `iconUrl`.
+3. Log into `/admin` and add an entry. Use "Calcular fileSize desde
+   downloadUrl" to fill in `fileSize` automatically (a cheap HEAD request,
+   instant regardless of file size) - `sha256` is optional, leave it blank.
+4. `GET /api/apps` reflects the new entry immediately, no server restart.
+
+## Adding an NSP or XCI entry
+
+Same as above, plus set `"fileType": "nsp"` or `"fileType": "xci"` and give
+`filename` a matching `.nsp`/`.xci` extension. The client cannot install
+either itself (that requires CFW-level NCM/ES services); on install it
+downloads the file to `sdmc:/switch/DBI/nsp-repo/<filename>` and chain-loads
+into `sdmc:/switch/DBI/dbi.nro`, so the user needs
+[DBI](https://github.com/rashevskyv/dbi) installed at that path - DBI
+installs both formats from that same folder. If DBI is missing, the client
+shows a message instead of chain-loading.
+
+## Adding DLC or an update
+
+1. Add the DLC/update itself as a normal catalog entry (same steps as
+   above - it's just another `.nsp`/`.xci` file with its own `id`,
+   `downloadUrl`, etc.).
+2. Set its `parentId` to the base game's `id`, and `contentType` to `"dlc"`
+   or `"update"`. In `/admin`, the "parentId" field is a dropdown of
+   existing base games - pick one instead of typing the id by hand.
+3. It disappears from the main catalog list/grid and instead shows up under
+   the base game's detail screen.
+
+An entry with a `parentId` can't itself be a parent (no nested DLC-of-DLC) -
+the admin page rejects that on save.

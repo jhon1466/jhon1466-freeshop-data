@@ -1,0 +1,28 @@
+{
+  "name": "freeshop-functions",
+  "version": "0.1.0",
+  "description": "Firebase Cloud Function wrapping the FreeShop catalog API (see server/ for the equivalent standalone Express app used in local dev)",
+  "private": true,
+  "main": "lib/index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "deploy": "npm run build && node ../scripts/sync-hosting-public.js && npx firebase-tools deploy --only functions,hosting"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "firebase-functions": "^6.3.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.15",
+    "firebase-tools": "^15.24.0",
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,42 +1,33 @@
-import path from "node:path";
-import express from "express";
-import cors from "cors";
-import { appsRouter } from "./routes/apps";
-import { healthRouter } from "./routes/health";
+import "dotenv/config";
+import { createApp } from "./app";
 import { loadCatalog } from "./lib/catalog";
 
-// Fail fast on boot if the hand-edited catalog.json doesn't match the schema,
-// rather than discovering it later when a Switch client hits /api/apps.
-try {
-  const catalog = loadCatalog();
-  console.log(`Catalog OK: ${catalog.apps.length} app(s) loaded.`);
-} catch (err) {
-  console.error("Refusing to start: catalog.json is invalid.");
-  console.error(err instanceof Error ? err.message : err);
-  process.exit(1);
+async function main() {
+  if (!process.env.ADMIN_PASSWORD) {
+    console.warn(
+      "ADMIN_PASSWORD is not set - /admin will be reachable but all saves will be rejected (401)."
+    );
+  }
+
+  // Warn (don't exit) if the catalog in the GitHub data repo is missing or
+  // invalid: unlike v1's hand-edited local file, the very first deployment
+  // has no catalog yet, and /admin - which is how one gets created - must
+  // stay reachable for that bootstrap to be possible. /api/apps surfaces the
+  // same error per-request via CatalogError instead.
+  try {
+    const catalog = await loadCatalog();
+    console.log(`Catalog OK: ${catalog.apps.length} app(s) loaded.`);
+  } catch (err) {
+    console.warn("Catalog is not available yet (log into /admin to create it):");
+    console.warn(err instanceof Error ? err.message : err);
+  }
+
+  const app = createApp();
+  const PORT = Number(process.env.PORT) || 8080;
+
+  app.listen(PORT, () => {
+    console.log(`FreeShop server listening on http://0.0.0.0:${PORT}`);
+  });
 }
 
-const app = express();
-const PORT = Number(process.env.PORT) || 8080;
-
-app.use(cors());
-
-app.use("/api/apps", appsRouter);
-app.use("/api/health", healthRouter);
-
-app.use(
-  "/icons",
-  express.static(path.resolve(__dirname, "../public/icons"), {
-    maxAge: "1d",
-  })
-);
-app.use(
-  "/downloads",
-  express.static(path.resolve(__dirname, "../public/downloads"), {
-    maxAge: "1d",
-  })
-);
-
-app.listen(PORT, () => {
-  console.log(`FreeShop server listening on http://0.0.0.0:${PORT}`);
-});
+main();

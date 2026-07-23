@@ -1,4 +1,5 @@
 #pragma once
+#include <stdbool.h>
 #include <stddef.h>
 
 typedef enum {
@@ -6,11 +7,14 @@ typedef enum {
     HTTP_ERR_INIT,
     HTTP_ERR_REQUEST,
     HTTP_ERR_FILE,
+    HTTP_ERR_CANCELED, // cb returned false - transfer was aborted, not a real failure.
 } HttpResult;
 
 // Called periodically during http_download_to_file with total/downloaded
-// byte counts so the caller can drive a progress bar. May be NULL.
-typedef void (*HttpProgressCallback)(long dltotal, long dlnow, void *userdata);
+// byte counts so the caller can drive a progress bar. May be NULL (transfer
+// always continues). Return false to abort the transfer (e.g. the user
+// pressed a cancel button) - true to keep going.
+typedef bool (*HttpProgressCallback)(long dltotal, long dlnow, void *userdata);
 
 // GETs `url` into a heap buffer allocated by this function. Caller must
 // free(*out_buf). *out_buf is NUL-terminated for convenience when treating

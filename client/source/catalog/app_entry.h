@@ -12,6 +12,17 @@
 #define APP_ENTRY_SHA256_LEN 64
 #define APP_ENTRY_FILENAME_MAX 128
 
+// "nro": homebrew app, downloaded and installed directly by install_app()
+// into sdmc:/switch/<id>/. "nsp"/"xci": installable title - this project
+// doesn't reimplement NCM/ES title installation, so it downloads the file
+// and hands off to DBI (https://github.com/rashevskyv/dbi) instead, which
+// installs both formats the same way. See install_nsp.h.
+typedef enum {
+    APP_FILE_TYPE_NRO = 0,
+    APP_FILE_TYPE_NSP,
+    APP_FILE_TYPE_XCI,
+} AppFileType;
+
 // Mirrors AppEntry from shared/catalog.schema.json. Fixed-size buffers are
 // used instead of heap-allocated strings so ownership/lifetime never has to
 // be reasoned about beyond the array itself (see catalog_free).
@@ -27,5 +38,20 @@ typedef struct {
     char download_url[APP_ENTRY_URL_MAX];
     long file_size;
     char sha256[APP_ENTRY_SHA256_LEN + 1];
-    char nro_filename[APP_ENTRY_FILENAME_MAX];
+    char filename[APP_ENTRY_FILENAME_MAX];
+    AppFileType file_type;
+    // Empty for a normal/base entry. If set, this is DLC/an update for the
+    // base game with this id - main.c filters entries with a non-empty
+    // parent_id out of the main list/grid, surfacing them instead in that
+    // game's detail screen (see ui_detail.h).
+    char parent_id[APP_ENTRY_ID_MAX];
+    // Only meaningful when parent_id is set - "dlc" or "update", just a
+    // label for this entry in its parent's list. Empty is fine (generic
+    // label shown instead).
+    char content_type[16];
+    // Base URL of the source this entry was fetched from (stamped by
+    // catalog_fetch, not part of the server's JSON) - installs must use
+    // this instead of a single global base URL now that multiple sources
+    // can be merged into one list. See sources.h.
+    char source_base_url[APP_ENTRY_URL_MAX];
 } AppEntry;

@@ -25,7 +25,7 @@ INCLUDES    :=  source
 ICON        :=  icon.jpg
 
 APP_TITLE   := FreeShop
-APP_AUTHOR  := FreeShop
+APP_AUTHOR  := jhon1466
 APP_VERSION := 0.1.0
 
 #---------------------------------------------------------------------------------
@@ -38,15 +38,30 @@ CFLAGS  :=  -g -Wall -O2 -ffunction-sections \
 
 CFLAGS  +=  $(INCLUDE) -D__SWITCH__
 
+# SDL2/SDL2_ttf headers live in subdirectories of the generic portlibs
+# include path that $(INCLUDE) above doesn't add on its own.
+CFLAGS  +=  -I$(DEVKITPRO)/portlibs/switch/include/SDL2 \
+            -I$(DEVKITPRO)/portlibs/switch/include/freetype2 \
+            -I$(DEVKITPRO)/portlibs/switch/include/harfbuzz \
+            -I$(DEVKITPRO)/portlibs/switch/include/libpng16
+
 CXXFLAGS    :=  $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++20
 
 ASFLAGS :=  -g $(ARCH)
 LDFLAGS  =  -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-# Link order matters: switch-curl depends on switch-mbedtls for TLS and
-# switch-zlib for content-encoding; switch-jansson is independent. All are
-# bundled in devkitpro/devkita64.
-LIBS    :=  -lcurl -lmbedtls -lmbedx509 -lmbedcrypto -lz -ljansson -lnx
+# switch-sdl2/switch-sdl2_ttf and their transitive deps (freetype, harfbuzz,
+# libpng, bz2, zlib, mesa's EGL/glapi/drm_nouveau) have circular-ish static
+# link dependencies (e.g. freetype needs zlib's inflate, libpng needs zlib's
+# crc32, harfbuzz needs libm's hypotf) that a plain left-to-right link order
+# can't satisfy - wrapping them in --start-group/--end-group lets the linker
+# re-scan until everything resolves. Verified working in this exact
+# devkitpro/devkita64 image via a standalone smoke test before wiring this
+# into the real project.
+LIBS    :=  -Wl,--start-group -lSDL2_ttf -lSDL2 -lEGL -lstdc++ -lglapi -ldrm_nouveau \
+            -lfreetype -lbz2 -lpng16 -lharfbuzz -lz -lm -lpthread \
+            -lcurl -lmbedtls -lmbedx509 -lmbedcrypto -ljansson -ljpeg \
+            -Wl,--end-group -lnx
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing

@@ -10,11 +10,32 @@ Homebrew Menu.
 - [`shared/catalog.schema.json`](shared/catalog.schema.json) - JSON Schema
   for the catalog document. See [`docs/catalog-schema.md`](docs/catalog-schema.md).
 - [`server/`](server/) - Node.js + Express + TypeScript index server. Serves
-  `GET /api/apps`, `GET /api/apps/:id`, and static icons/downloads. No
-  database for v1 - `server/data/catalog.json` is hand-edited.
-- [`client/`](client/) - devkitPro/libnx C project. Fetches the catalog,
-  shows a console-based list/detail UI, downloads and SHA-256-verifies the
-  selected `.nro`, and writes it to `sdmc:/switch/<id>/`.
+  `GET /api/apps`, `GET /api/apps/:id`, static icons/downloads, and the admin
+  page at `/admin`. Reads the catalog straight from its GitHub data repo
+  (`raw.githubusercontent.com`) on every request - no restart needed after an
+  edit, and no database/read-quota to manage. `server/data/catalog.json` is
+  now just a historical reference/seed example, no longer read at runtime.
+- [`admin/`](admin/) - Build-free static admin page (`/admin`), gated by a
+  single shared admin password. Saves commit the whole catalog document to
+  the GitHub data repo via the Contents API (server-side, using a token that
+  never reaches the browser). See [Admin setup](#admin-setup) below.
+- [`functions/`](functions/) - Firebase Cloud Function used for the hosted
+  production deployment (wraps the same Express app as `server/`, minus the
+  static routes - see [`functions/README.md`](functions/README.md)).
+  [`firebase.json`](firebase.json) has Hosting serve `/admin`, `/icons` and
+  `/downloads` directly and rewrite `/api/**` to this Function.
+- [`client/`](client/) - devkitPro/libnx C project (SDL2-rendered, Tinfoil-
+  styled list and grid views, cover icons). `.nro` entries are downloaded
+  straight into `sdmc:/switch/<id>/`; `.nsp`/`.xci` are downloaded and handed
+  off to [DBI](https://github.com/rashevskyv/dbi) for installation (this
+  project doesn't reimplement NCM/ES). `sha256` is verified when the catalog
+  entry provides one, otherwise skipped (see
+  [`docs/catalog-schema.md`](docs/catalog-schema.md)). It always fetches
+  fresh on launch, so any edit made in `/admin` is picked up the next time
+  the client is opened - no extra "update detection" logic needed. `L`
+  toggles a categories sidebar (built from whatever `category` values are
+  in the catalog) to filter the list/grid; the install screen shows a live
+  speed/time-remaining estimate.
 
 ## Quick start
 
@@ -23,9 +44,15 @@ Homebrew Menu.
 ```
 cd server
 npm install
-npm run validate-catalog   # sanity-check server/data/catalog.json
+cp .env.example .env       # fill in ADMIN_PASSWORD and GITHUB_TOKEN - see Admin setup
+npm run validate-catalog   # sanity-check server/data/catalog.json before importing it
 npm run dev                # http://localhost:8080
 ```
+
+If the catalog doesn't exist yet in the data repo (first run) or fails
+validation, `npm run dev` logs a warning and keeps running - `/admin` stays
+reachable so you can create it (see [Admin setup](#admin-setup)); `/api/apps`
+returns a 500 until then.
 
 ```
 curl http://localhost:8080/api/health
@@ -44,25 +71,72 @@ docker build -t freeshop-client-builder client/
 docker run --rm -v "${PWD}/client:/workspace" freeshop-client-builder make
 ```
 
-Produces `client/freeshop-client.nro`. Before running it on a Switch or in
-an emulator, edit `client/source/config.h` and set `CATALOG_BASE_URL` to
-wherever your server is actually reachable (a LAN IP, e.g.
-`http://192.168.1.50:8080`), then rebuild.
+Produces `client/freeshop-client.nro`. It reads the catalog directly from
+the GitHub data repo's raw content CDN (`client/source/config.h`'s
+`CATALOG_BASE_URL`/`CATALOG_API_PATH`) rather than from the Firebase-hosted
+server - real-hardware testing found libnx's network stack couldn't
+complete a TLS connection to Google's frontend (Firebase Hosting/Cloud Run)
+at all, while `raw.githubusercontent.com` is a well-established working
+target for Switch homebrew. Only change these if you're using a different
+data repo (see [Admin setup](#admin-setup)), then rebuild.
 
 A GitHub Actions workflow (`.github/workflows/build-client.yml`) builds the
 same way in CI once this repo is pushed to a GitHub remote.
 
+## Admin setup
+
+The catalog now lives as a JSON file in a dedicated **public** GitHub data
+repo (kept separate from this code repo, e.g. `jhon1466/freeshop-data`),
+read via the free `raw.githubusercontent.com` CDN - no database, no
+per-read billing/quota. `/admin` edits it by committing through the GitHub
+Contents API. One-time setup, all manual (account-level, can't be scripted
+from here):
+
+1. Create a new **public** GitHub repo for the data (e.g. `freeshop-data`).
+   It can start empty - the first save from `/admin` creates
+   `data/catalog.json` with an initial commit.
+2. Generate a **fine-grained Personal Access Token**
+   (github.com -> Settings -> Developer settings -> Fine-grained tokens) -
+   scope it to just that repo, permission **Contents: Read and write**.
+3. In `server/.env`, set:
+   - `ADMIN_PASSWORD` - whatever password you want to use to log into
+     `/admin`.
+   - `GITHUB_TOKEN` - the token from step 2.
+   - `GITHUB_OWNER` / `GITHUB_REPO` - only if they differ from the defaults
+     (`jhon1466` / `jhon1466-freeshop-data`) baked into
+     [`server/src/lib/githubConfig.ts`](server/src/lib/githubConfig.ts).
+
+Then, with the server running (see Quick start below), open
+`http://localhost:8080/admin`, log in with `ADMIN_PASSWORD`, and use
+**Importar JSON** to paste the contents of `server/data/catalog.json` once to
+commit the initial `hello-homebrew` entry into the data repo. From then on,
+add/edit/delete apps directly in the admin page - each save is a real commit,
+and `GET /api/apps` reflects it immediately, no server restart.
+
+## Production deploy (Firebase)
+
+`server/` is for local dev. Production is a Firebase Cloud Function (`api`)
+behind Firebase Hosting - see [`functions/README.md`](functions/README.md)
+for the one-time setup (Blaze plan, `firebase functions:secrets:set` for
+`ADMIN_PASSWORD`/`GITHUB_TOKEN`) and `npm run deploy` from `functions/` to
+ship it.
+
 ## Adding an app to the catalog
 
-See [`docs/catalog-schema.md`](docs/catalog-schema.md#adding-an-app-v1-no-admin-ui).
-`server/data/catalog.json` currently contains one placeholder entry
-(`hello-homebrew`) - a plain text file standing in for a real `.nro`, used
-to exercise the download + checksum flow end-to-end. Replace it with real
-homebrew once you have some to list.
+See [`docs/catalog-schema.md`](docs/catalog-schema.md#adding-an-app). Icons
+are committed to the GitHub data repo (`icons/<id>.jpg`) rather than uploaded
+through the admin page or stored in Firebase Hosting - that keeps them off
+Hosting's storage quota entirely, served instead via
+`raw.githubusercontent.com`. Downloadable `.nro`/`.nsp`/`.xci` files still go under
+`server/public/downloads/` (or the data repo / an external host in
+production). Then fill in the entry's fields - including `fileSize` (use
+the "Calcular fileSize desde downloadUrl" button, a cheap HEAD request) and
+the icon's raw GitHub URL - through `/admin`. `sha256` is optional and
+unverified by the Switch client - see
+[`docs/catalog-schema.md`](docs/catalog-schema.md) for why.
 
 ## Status
 
 This is a v1 walking skeleton: one catalog entry, no search/categories
-filtering, no update-checking, no auth, no HTTPS, no admin UI. See the
-"Follow-ups" section of the original implementation plan for the rest of
-the roadmap.
+filtering, no auth on the public API, no HTTPS. See the "Follow-ups" section
+of the original implementation plan for the rest of the roadmap.

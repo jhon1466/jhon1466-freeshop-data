@@ -1,64 +1,13 @@
 #include "install.h"
+#include "install_common.h"
 #include "../config.h"
 #include "../net/http.h"
 
-#include <mbedtls/sha256.h>
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/statvfs.h>
-
-static void mkdir_ignore_exists(const char *path) {
-    if (mkdir(path, 0777) != 0 && errno != EEXIST) {
-        // Real failures (e.g. read-only SD, invalid path) surface later when
-        // the caller tries to open a file inside this directory and fails.
-    }
-}
-
-// Hex-encodes a 32-byte SHA-256 digest into a lowercase 65-byte buffer
-// (64 hex chars + NUL).
-static void sha256_hex(const unsigned char digest[32], char out_hex[65]) {
-    static const char hex[] = "0123456789abcdef";
-    for (int i = 0; i < 32; i++) {
-        out_hex[i * 2] = hex[(digest[i] >> 4) & 0xF];
-        out_hex[i * 2 + 1] = hex[digest[i] & 0xF];
-    }
-    out_hex[64] = '\0';
-}
-
-static int sha256_file(const char *path, char out_hex[65]) {
-    FILE *fp = fopen(path, "rb");
-    if (!fp) return -1;
-
-    mbedtls_sha256_context ctx;
-    mbedtls_sha256_init(&ctx);
-    mbedtls_sha256_starts(&ctx, 0); // 0 = SHA-256, not the SHA-224 variant
-
-    unsigned char buf[8192];
-    size_t n;
-    while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) {
-        mbedtls_sha256_update(&ctx, buf, n);
-    }
-    fclose(fp);
-
-    unsigned char digest[32];
-    mbedtls_sha256_finish(&ctx, digest);
-    mbedtls_sha256_free(&ctx);
-
-    sha256_hex(digest, out_hex);
-    return 0;
-}
-
-typedef struct {
-    InstallProgressCallback cb;
-    void *userdata;
-} ProgressThunkCtx;
-
-static void progress_thunk(long dltotal, long dlnow, void *userdata) {
-    ProgressThunkCtx *ctx = (ProgressThunkCtx *)userdata;
-    if (ctx->cb) ctx->cb(dltotal, dlnow, ctx->userdata);
-}
 
 InstallResult install_app(const AppEntry *entry, const char *base_url,
                            InstallProgressCallback cb, void *userdata,
@@ -66,55 +15,78 @@ InstallResult install_app(const AppEntry *entry, const char *base_url,
     char dest_dir[300];
     snprintf(dest_dir, sizeof(dest_dir), "%s/%s", SWITCH_APPS_ROOT, entry->id);
 
-    mkdir_ignore_exists(SWITCH_APPS_ROOT);
-    mkdir_ignore_exists(dest_dir);
+    install_common_mkdir_ignore_exists(SWITCH_APPS_ROOT);
+    install_common_mkdir_ignore_exists(dest_dir);
 
     struct statvfs st;
     if (statvfs("sdmc:/", &st) == 0) {
         unsigned long long free_bytes = (unsigned long long)st.f_bsize * st.f_bavail;
         if (entry->file_size > 0 && free_bytes < (unsigned long long)entry->file_size) {
             if (err_buf) snprintf(err_buf, err_buf_size,
-                                   "not enough free space on SD card (need %ld bytes)",
+                                   "no hay suficiente espacio libre en la tarjeta SD (se necesitan %ld bytes)",
                                    entry->file_size);
             return INSTALL_ERR_NO_SPACE;
         }
     }
 
     char part_path[512];
-    snprintf(part_path, sizeof(part_path), "%s/%s.part", dest_dir, entry->nro_filename);
+    snprintf(part_path, sizeof(part_path), "%s/%s.part", dest_dir, entry->filename);
 
     char url[900];
-    snprintf(url, sizeof(url), "%s%s", base_url, entry->download_url);
+    install_common_resolve_url(base_url, entry->download_url, url, sizeof(url));
 
-    ProgressThunkCtx thunk_ctx = { .cb = cb, .userdata = userdata };
-    HttpResult hres = http_download_to_file(url, part_path, progress_thunk, &thunk_ctx,
+    InstallProgressThunkCtx thunk_ctx = { .cb = cb, .userdata = userdata };
+    HttpResult hres = http_download_to_file(url, part_path, install_common_progress_thunk, &thunk_ctx,
                                              err_buf, err_buf_size);
+    if (hres == HTTP_ERR_CANCELED) {
+        return INSTALL_ERR_CANCELED;
+    }
     if (hres != HTTP_OK) {
         return INSTALL_ERR_DOWNLOAD;
     }
 
-    char actual_hex[65];
-    if (sha256_file(part_path, actual_hex) != 0) {
-        remove(part_path);
-        if (err_buf) snprintf(err_buf, err_buf_size, "could not read downloaded file to verify checksum");
-        return INSTALL_ERR_DOWNLOAD;
-    }
+    // sha256 is optional in the catalog now - skip the check (and the cost
+    // of hashing a potentially multi-GB file) when the entry doesn't have one.
+    if (entry->sha256[0] != '\0') {
+        char actual_hex[65];
+        if (install_common_sha256_file(part_path, actual_hex) != 0) {
+            remove(part_path);
+            if (err_buf) snprintf(err_buf, err_buf_size, "no se pudo leer el archivo descargado para verificar el checksum");
+            return INSTALL_ERR_DOWNLOAD;
+        }
 
-    if (strcasecmp(actual_hex, entry->sha256) != 0) {
-        remove(part_path);
-        if (err_buf) snprintf(err_buf, err_buf_size,
-                               "checksum mismatch (expected %s, got %s) - download corrupted",
-                               entry->sha256, actual_hex);
-        return INSTALL_ERR_HASH_MISMATCH;
+        if (strcasecmp(actual_hex, entry->sha256) != 0) {
+            remove(part_path);
+            if (err_buf) snprintf(err_buf, err_buf_size,
+                                   "el checksum no coincide (esperado %s, obtenido %s) - la descarga está corrupta",
+                                   entry->sha256, actual_hex);
+            return INSTALL_ERR_HASH_MISMATCH;
+        }
     }
 
     char final_path[512];
-    snprintf(final_path, sizeof(final_path), "%s/%s", dest_dir, entry->nro_filename);
+    snprintf(final_path, sizeof(final_path), "%s/%s", dest_dir, entry->filename);
+
+    // Clear out a stale file from a previous install/update attempt first -
+    // some FS drivers refuse to rename() onto an existing destination.
+    remove(final_path);
 
     if (rename(part_path, final_path) != 0) {
+        int rename_errno = errno;
+        // Fall back to a manual copy+delete - less atomic, but works even
+        // when the underlying sdmc driver's rename() doesn't behave like
+        // POSIX expects.
+        if (install_common_copy_file(part_path, final_path) != 0) {
+            int copy_errno = errno;
+            remove(part_path);
+            if (err_buf) {
+                snprintf(err_buf, err_buf_size,
+                         "no se pudo mover el archivo descargado a su ubicación final (rename: %s, copy: %s)",
+                         strerror(rename_errno), strerror(copy_errno));
+            }
+            return INSTALL_ERR_RENAME;
+        }
         remove(part_path);
-        if (err_buf) snprintf(err_buf, err_buf_size, "could not move downloaded file into place");
-        return INSTALL_ERR_RENAME;
     }
 
     return INSTALL_OK;

@@ -8,9 +8,13 @@
 #
 # devkitpro/devkita64:latest already bundles switch-curl, switch-mbedtls and
 # switch-jansson (verify with `dkp-pacman -Q | grep -E 'curl|mbedtls|jansson'`
-# inside the image), so no extra package install is needed for this project.
-# If you add a dependency that isn't preinstalled, add it here, e.g.:
-#   RUN dkp-pacman -Syu --noconfirm && dkp-pacman -S --noconfirm <package>
+# inside the image), so no extra package install is needed for those. It also
+# bundles switch-sdl2/switch-sdl2_ttf and their transitive deps (freetype,
+# harfbuzz, libpng16 - see client/Makefile's LIBS comment), so PNG icons
+# already decode. switch-libjpeg-turbo is NOT bundled and is installed below
+# for JPEG icon decoding (client/source/ui/ui_icons.c).
 FROM devkitpro/devkita64:latest
+
+RUN dkp-pacman -Sy --noconfirm switch-libjpeg-turbo
 
 WORKDIR /workspace

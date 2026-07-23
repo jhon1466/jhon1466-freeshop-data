@@ -1,5 +1,6 @@
 #pragma once
 #include "../catalog/app_entry.h"
+#include <stdbool.h>
 
 typedef enum {
     INSTALL_OK = 0,
@@ -8,14 +9,19 @@ typedef enum {
     INSTALL_ERR_DOWNLOAD,
     INSTALL_ERR_HASH_MISMATCH,
     INSTALL_ERR_RENAME,
+    INSTALL_ERR_CANCELED, // user canceled - not a real failure, don't alarm them.
 } InstallResult;
 
-typedef void (*InstallProgressCallback)(long total, long now, void *userdata);
+// Called periodically with total/downloaded byte counts so the caller can
+// drive a progress bar. Return false to cancel the install (e.g. the user
+// pressed a cancel button) - true to keep going. May be NULL.
+typedef bool (*InstallProgressCallback)(long total, long now, void *userdata);
 
 // Downloads entry's .nro from "<base_url><entry->download_url>" to
-// sdmc:/switch/<entry->id>/<entry->nro_filename>, verifying entry->sha256
+// sdmc:/switch/<entry->id>/<entry->filename>, verifying entry->sha256
 // before the file is moved into its final location. Never leaves a
-// partially-written or corrupt file at the final path.
+// partially-written or corrupt file at the final path. Only handles
+// entry->file_type == APP_FILE_TYPE_NRO - see install_nsp.h for NSP entries.
 InstallResult install_app(const AppEntry *entry, const char *base_url,
                            InstallProgressCallback cb, void *userdata,
                            char *err_buf, size_t err_buf_size);

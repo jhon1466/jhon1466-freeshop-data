@@ -1,0 +1,20 @@
+{
+  "hosting": {
+    "public": "hosting-public",
+    "ignore": ["firebase.json", "**/.*"],
+    "rewrites": [
+      { "source": "/admin", "destination": "/admin/index.html" },
+      { "source": "/api/**", "function": "api" }
+    ],
+    "headers": [
+      {
+        "source": "/admin/**",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+      }
+    ]
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20"
+  }
+}
