@@ -3,6 +3,10 @@
 
 typedef enum {
     UI_DETAIL_INSTALL,
+    // NSP only: install via the DBI hand-off instead of the native
+    // installer - a manual fallback while the native path is still being
+    // verified on real hardware. See install_nsp_and_launch_dbi.
+    UI_DETAIL_INSTALL_DBI,
     UI_DETAIL_BACK,
 } UiDetailAction;
 
@@ -13,10 +17,13 @@ typedef enum {
 // one, A installs the focused one instead of the base entry, B returns
 // focus to the base entry instead of leaving the screen).
 //
+// For an NSP entry, X triggers UI_DETAIL_INSTALL_DBI on the base entry
+// (only from the base-entry focus - not offered for DLC/update rows).
+//
 // Blocks until the user backs out from the base-entry focus (B) or installs
-// something (A, from either focus). On UI_DETAIL_INSTALL, *out_target is
-// set to whichever entry was actually chosen - `entry` itself, or one of
-// `dlc_entries` - the caller must install *out_target, not necessarily
-// `entry`.
+// something (A/X, from either focus). On UI_DETAIL_INSTALL/UI_DETAIL_INSTALL_DBI,
+// *out_target is set to whichever entry was actually chosen - `entry` itself,
+// or one of `dlc_entries` - the caller must install *out_target, not
+// necessarily `entry`.
 UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries, int dlc_count,
                               const AppEntry **out_target);

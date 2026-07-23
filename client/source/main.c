@@ -15,6 +15,7 @@
 #include "ui/ui_icons.h"
 #include "install/install.h"
 #include "install/install_nsp.h"
+#include "install/install_nsp_native.h"
 
 // Fetches each enabled source's catalog and concatenates them into one
 // array. A source that fails to fetch is skipped rather than aborting the
@@ -235,7 +236,7 @@ int main(int argc, char **argv) {
     char err_buf[256];
 
     if (!ui_app_init(err_buf, sizeof(err_buf))) {
-        char msg[320];
+        char msg[512];
         snprintf(msg, sizeof(msg), "Error al iniciar los gráficos:\n%s", err_buf);
         fallback_console_error(msg);
         return 1;
@@ -330,11 +331,11 @@ int main(int argc, char **argv) {
 
         const AppEntry *install_target = NULL;
         UiDetailAction action = ui_show_detail(&root_entries[selected], dlc_entries, dlc_count, &install_target);
-        if (action != UI_DETAIL_INSTALL) {
+        if (action != UI_DETAIL_INSTALL && action != UI_DETAIL_INSTALL_DBI) {
             continue;
         }
 
-        char msg[320];
+        char msg[512];
 
         PadState install_pad;
         padConfigureInput(1, HidNpadStyleSet_NpadStandard);
@@ -345,7 +346,9 @@ int main(int argc, char **argv) {
         // not a single global one - see AppEntry.source_base_url.
         const char *base_url = install_target->source_base_url;
 
-        if (install_target->file_type == APP_FILE_TYPE_NSP || install_target->file_type == APP_FILE_TYPE_XCI) {
+        // XCI has no native install path yet, and UI_DETAIL_INSTALL_DBI is the
+        // explicit manual fallback for NSP - both go through the DBI hand-off.
+        if (action == UI_DETAIL_INSTALL_DBI || install_target->file_type == APP_FILE_TYPE_XCI) {
             NspHandoffResult nres = install_nsp_and_launch_dbi(install_target, base_url,
                                                                  install_progress_cb, &progress_ctx,
                                                                  err_buf, sizeof(err_buf));
@@ -362,6 +365,25 @@ int main(int argc, char **argv) {
                 ui_app_show_message("Descarga cancelada.");
             } else {
                 snprintf(msg, sizeof(msg), "Error de instalación: %s", err_buf);
+                ui_app_show_message(msg);
+            }
+            continue;
+        }
+
+        if (install_target->file_type == APP_FILE_TYPE_NSP) {
+            NspInstallResult nires = install_nsp_native(install_target, base_url,
+                                                          install_progress_cb, &progress_ctx,
+                                                          err_buf, sizeof(err_buf));
+            if (nires == NSP_INSTALL_OK) {
+                snprintf(msg, sizeof(msg), "\"%s\" instalado correctamente.\n\nVuelve al hbmenu para iniciarlo.",
+                         install_target->title);
+                ui_app_show_message(msg);
+            } else if (nires == NSP_INSTALL_ERR_CANCELED) {
+                ui_app_show_message("Descarga cancelada.");
+            } else {
+                snprintf(msg, sizeof(msg),
+                         "Error de instalación: %s\n\nSi el problema persiste, prueba \"Instalar vía DBI\" (botón X) desde esta misma pantalla.",
+                         err_buf);
                 ui_app_show_message(msg);
             }
             continue;

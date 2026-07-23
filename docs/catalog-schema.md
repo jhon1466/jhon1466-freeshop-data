@@ -38,7 +38,7 @@ and show a friendly message instead of crashing on unexpected structure.
 | `fileSize` | integer | yes | Bytes. Used for the progress bar and a pre-download free-space check. |
 | `sha256` | string | no | 64 lowercase hex chars, if present. **Not verified by the Switch client** - for large (multi-GB) game files, hashing the whole download on both the admin panel (which would have to fetch the entire file just to hash it) and again on-console (slow, no hardware crypto acceleration) was more cost than the corruption protection was worth for this project. Leave it out; if you want the extra check anyway, compute it yourself (`sha256sum`) and paste it in - `install/install.c` and `install/install_nsp.c` still verify it when present. |
 | `filename` | string | yes | e.g. `"Moonlight.nro"`, `"SomeForwarder.nsp"`, or `"SomeGame.xci"`. Extension must match `fileType`. |
-| `fileType` | string | no | `"nro"` (default), `"nsp"`, or `"xci"`. `"nro"` is downloaded straight into `sdmc:/switch/<id>/` and launched from hbmenu. `"nsp"`/`"xci"` are downloaded into `sdmc:/switch/DBI/nsp-repo/` and the client chain-loads into [DBI](https://github.com/rashevskyv/dbi) so the user can install it - this project doesn't reimplement NCM/ES title installation itself, and DBI installs both formats from that same folder. See [install_nsp.h](../client/source/install/install_nsp.h). |
+| `fileType` | string | no | `"nro"` (default), `"nsp"`, or `"xci"`. `"nro"` is downloaded straight into `sdmc:/switch/<id>/` and launched from hbmenu. `"nsp"` is installed natively (PFS0 parsed, NCAs streamed into NCM content storage, ticket imported, application record pushed) - see [install_nsp_native.h](../client/source/install/install_nsp_native.h); a manual "Instalar vía DBI" fallback is also offered. `"xci"` still downloads into `sdmc:/switch/DBI/nsp-repo/` and chain-loads into [DBI](https://github.com/rashevskyv/dbi) - see [install_nsp.h](../client/source/install/install_nsp.h). |
 | `homepageUrl` | string | no | |
 | `license` | string | no | |
 | `parentId` | string | no | If set, this entry is DLC/an update *for* the base game with this id. Hidden from the main list/grid on the Switch client - shown instead in that game's detail screen ("DLC y actualizaciones" section, `Y` to browse, `A` to install one). The target `id` must exist and must not itself have a `parentId` (one level of nesting only) - the admin page enforces both. |
@@ -66,13 +66,23 @@ rejecting the whole document.
 ## Adding an NSP or XCI entry
 
 Same as above, plus set `"fileType": "nsp"` or `"fileType": "xci"` and give
-`filename` a matching `.nsp`/`.xci` extension. The client cannot install
-either itself (that requires CFW-level NCM/ES services); on install it
-downloads the file to `sdmc:/switch/DBI/nsp-repo/<filename>` and chain-loads
-into `sdmc:/switch/DBI/dbi.nro`, so the user needs
-[DBI](https://github.com/rashevskyv/dbi) installed at that path - DBI
-installs both formats from that same folder. If DBI is missing, the client
-shows a message instead of chain-loading.
+`filename` a matching `.nsp`/`.xci` extension.
+
+`"nsp"` installs natively, in-app: the client downloads the file into
+`sdmc:/switch/DBI/nsp-repo/<filename>` (shared with DBI's own folder - see
+below), parses it as a PFS0, streams every referenced NCA into NCM content
+storage, commits the content-meta record, imports the ticket/cert if
+present, and pushes the application record so the title shows on hbmenu.
+The detail screen also offers "Instalar vía DBI" (X button) as a manual
+fallback while this path is still being verified across different NSPs on
+real hardware - it uses the same downloaded file and the DBI hand-off
+described below.
+
+`"xci"` has no native install path yet - it always downloads to
+`sdmc:/switch/DBI/nsp-repo/<filename>` and chain-loads into
+`sdmc:/switch/DBI/dbi.nro`, so the user needs
+[DBI](https://github.com/rashevskyv/dbi) installed at that path. If DBI is
+missing, the client shows a message instead of chain-loading.
 
 ## Adding DLC or an update
 
