@@ -47,8 +47,9 @@ Homebrew Menu.
   fresh on launch, so any edit made in `/admin` is picked up the next time
   the client is opened - no extra "update detection" logic needed. `L`
   toggles a categories sidebar (built from whatever `category` values are
-  in the catalog) to filter the list/grid; the install screen shows a live
-  speed/time-remaining estimate. The client itself also self-updates: on
+  in the catalog) to filter the list/grid; `R` opens the system keyboard to
+  search by title. The install screen shows a live speed/time-remaining
+  estimate. The client itself also self-updates: on
   launch it checks the data repo's GitHub Releases for a newer version and,
   if found, asks before downloading and replacing its own `.nro` - see
   [Publishing a client update](#publishing-a-client-update) below.

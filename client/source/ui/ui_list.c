@@ -136,14 +136,35 @@ static int collect_categories(const AppEntry *entries, int count,
 // Rebuilt whenever the filter or `entries`' order changes (sort, category
 // pick) - cheap enough for a homebrew-catalog-sized list to just redo
 // wholesale rather than track incrementally.
-static int build_visible(const AppEntry *entries, int count, const char *filter, int *out_visible) {
+// Case-insensitive substring search - not strcasestr (a GNU extension gated
+// behind _GNU_SOURCE in this toolchain's newlib) to avoid pulling in a
+// broader feature-test macro just for this one call.
+static bool title_contains(const char *title, const char *query) {
+    size_t title_len = strlen(title), query_len = strlen(query);
+    if (query_len == 0) return true;
+    if (query_len > title_len) return false;
+    for (size_t i = 0; i + query_len <= title_len; i++) {
+        if (strncasecmp(title + i, query, query_len) == 0) return true;
+    }
+    return false;
+}
+
+static int build_visible(const AppEntry *entries, int count, const char *category_filter,
+                          const char *search_query, int *out_visible) {
     int n = 0;
     for (int i = 0; i < count && n < VISIBLE_MAX; i++) {
-        if (filter[0] == '\0' || strcmp(entries[i].category, filter) == 0) {
-            out_visible[n++] = i;
-        }
+        if (category_filter[0] != '\0' && strcmp(entries[i].category, category_filter) != 0) continue;
+        if (!title_contains(entries[i].title, search_query)) continue;
+        out_visible[n++] = i;
     }
     return n;
+}
+
+static const char *empty_state_message(int count, const char *category_filter, const char *search_query) {
+    if (count == 0) return "(el catálogo está vacío)";
+    if (search_query[0] && category_filter[0]) return "(sin resultados para esta búsqueda en esta categoría)";
+    if (search_query[0]) return "(sin resultados para esta búsqueda)";
+    return "(sin apps en esta categoría)";
 }
 
 // Boxed gauge in the Tinfoil style: label, big "X.X GB libres" line, thin
@@ -209,9 +230,21 @@ static void truncate_to_width(TTF_Font *font, const char *text, int max_w, char 
     }
 }
 
+// Highlight box padding around the icon+title, symmetric on every side -
+// was previously sized off GRID_CELL_W - GRID_GAP (208px), as if that were
+// the icon's width, but the icon is GRID_ICON_SIZE (168px) and sits at the
+// cell's left edge, not centered in that wider span - the highlight ended
+// up ~6px past the icon on the left but ~46px past it on the right.
+#define GRID_SELECT_PAD 8
+// Below the icon: the 6px gap before the title (see the ui_draw_text call
+// below) plus roughly one g_font_small (16pt) line.
+#define GRID_SELECT_TITLE_H 28
+
 static void draw_grid_cell(int x, int y, const AppEntry *entry, bool is_selected) {
     if (is_selected) {
-        ui_draw_rect(x - 6, y - 6, GRID_CELL_W - GRID_GAP + 12, GRID_CELL_H - GRID_GAP + 12, COLOR_ACCENT);
+        int box_w = GRID_ICON_SIZE + GRID_SELECT_PAD * 2;
+        int box_h = GRID_ICON_SIZE + GRID_SELECT_TITLE_H + GRID_SELECT_PAD * 2;
+        ui_draw_rect(x - GRID_SELECT_PAD, y - GRID_SELECT_PAD, box_w, box_h, COLOR_ACCENT);
     }
 
     ui_draw_rect(x, y, GRID_ICON_SIZE, GRID_ICON_SIZE, COLOR_PANEL);
@@ -294,6 +327,7 @@ int ui_show_list(AppEntry *entries, int count) {
     static ViewMode view_mode = VIEW_LIST;
     static SortMode sort_mode = SORT_TITLE;
     static char category_filter[APP_ENTRY_CATEGORY_MAX] = "";
+    static char search_query[64] = "";
 
     char categories[MAX_CATEGORIES][APP_ENTRY_CATEGORY_MAX];
     int category_count = collect_categories(entries, count, categories);
@@ -313,7 +347,7 @@ int ui_show_list(AppEntry *entries, int count) {
     }
 
     int visible[VISIBLE_MAX];
-    int visible_count = build_visible(entries, count, category_filter, visible);
+    int visible_count = build_visible(entries, count, category_filter, search_query, visible);
 
     StorageInfo storage;
     ui_storage_refresh(&storage);
@@ -379,7 +413,7 @@ int ui_show_list(AppEntry *entries, int count) {
                 } else {
                     snprintf(category_filter, sizeof(category_filter), "%s", categories[sidebar_selected - 1]);
                 }
-                visible_count = build_visible(entries, count, category_filter, visible);
+                visible_count = build_visible(entries, count, category_filter, search_query, visible);
                 selected = 0;
                 scroll_offset = 0;
                 sidebar_open = false;
@@ -425,7 +459,7 @@ int ui_show_list(AppEntry *entries, int count) {
                 // Sorting reorders `entries` in place - the set of ids
                 // passing the filter is unchanged, but their positions are,
                 // so `visible` must be rebuilt against the new order.
-                visible_count = build_visible(entries, count, category_filter, visible);
+                visible_count = build_visible(entries, count, category_filter, search_query, visible);
                 selected = 0;
                 scroll_offset = 0;
             }
@@ -440,13 +474,43 @@ int ui_show_list(AppEntry *entries, int count) {
                 }
                 sidebar_scroll = 0;
             }
+            if (kDown & HidNpadButton_R) {
+                SwkbdConfig kbd;
+                if (R_SUCCEEDED(swkbdCreate(&kbd, 0))) {
+                    swkbdConfigMakePresetDefault(&kbd);
+                    swkbdConfigSetHeaderText(&kbd, "Buscar en el catálogo");
+                    swkbdConfigSetGuideText(&kbd, "Título del juego/app (vacío para quitar el filtro)");
+                    swkbdConfigSetInitialText(&kbd, search_query);
+                    swkbdConfigSetStringLenMax(&kbd, sizeof(search_query) - 1);
+
+                    char typed[sizeof(search_query)];
+                    if (R_SUCCEEDED(swkbdShow(&kbd, typed, sizeof(typed)))) {
+                        snprintf(search_query, sizeof(search_query), "%s", typed);
+                        visible_count = build_visible(entries, count, category_filter, search_query, visible);
+                        selected = 0;
+                        scroll_offset = 0;
+                    }
+                    swkbdClose(&kbd);
+                }
+                // The keyboard applet takes over the screen - the baseline
+                // read at the top of this function is now stale (whatever
+                // was held when swkbd closed would otherwise be misread as
+                // newly pressed on the very next frame).
+                padUpdate(&pad);
+            }
         }
 
         SDL_SetRenderDrawColor(g_renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, COLOR_BG.a);
         SDL_RenderClear(g_renderer);
 
         ui_draw_text(g_font_title, LEFT_EDGE, HEADER_Y, COLOR_TEXT, "FreeShop");
-        ui_draw_text(g_font_body, 210, HEADER_Y + 4, COLOR_TEXT_DIM, "- Catálogo");
+        if (search_query[0]) {
+            char header_line[96];
+            snprintf(header_line, sizeof(header_line), "- Catálogo - buscando \"%s\"", search_query);
+            ui_draw_text(g_font_body, 210, HEADER_Y + 4, COLOR_TEXT_DIM, header_line);
+        } else {
+            ui_draw_text(g_font_body, 210, HEADER_Y + 4, COLOR_TEXT_DIM, "- Catálogo");
+        }
         ui_draw_text_right(g_font_body, RIGHT_EDGE, STATUS_Y, COLOR_TEXT, status_line);
 
         draw_storage_panel(PANEL_SD_X, PANEL_Y, PANEL_W, PANEL_H, "Tarjeta SD",
@@ -464,7 +528,7 @@ int ui_show_list(AppEntry *entries, int count) {
 
             if (visible_count == 0) {
                 ui_draw_text(g_font_body, COL_NAME_X, LIST_TOP, COLOR_TEXT_DIM,
-                             count == 0 ? "(el catálogo está vacío)" : "(sin apps en esta categoría)");
+                             empty_state_message(count, category_filter, search_query));
             }
 
             if (selected < scroll_offset) scroll_offset = selected;
@@ -503,7 +567,7 @@ int ui_show_list(AppEntry *entries, int count) {
 
             if (visible_count == 0) {
                 ui_draw_text(g_font_body, LEFT_EDGE, GRID_TOP, COLOR_TEXT_DIM,
-                             count == 0 ? "(el catálogo está vacío)" : "(sin apps en esta categoría)");
+                             empty_state_message(count, category_filter, search_query));
             }
 
             int first = scroll_offset * GRID_COLS;
@@ -528,10 +592,10 @@ int ui_show_list(AppEntry *entries, int count) {
             snprintf(footer, sizeof(footer), "Arriba/Abajo: elegir    A: aplicar    B: cerrar");
         } else {
             snprintf(footer, sizeof(footer),
-                     "D-Pad: navegar    A: instalar    L: categorías%s    Y: vista %s    X: ordenar (%s)    "
-                     "-: fuentes    B/+: salir",
-                     category_filter[0] ? " (filtrado)" : "", view_mode == VIEW_LIST ? "cuadrícula" : "lista",
-                     sort_mode_label(sort_mode));
+                     "D-Pad: navegar    A: instalar    L: categorías%s    R: buscar%s    Y: vista %s    "
+                     "X: ordenar (%s)    -: fuentes    B/+: salir",
+                     category_filter[0] ? " (filtrado)" : "", search_query[0] ? " (activa)" : "",
+                     view_mode == VIEW_LIST ? "cuadrícula" : "lista", sort_mode_label(sort_mode));
         }
         ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y, COLOR_TEXT_DIM, footer);
 
