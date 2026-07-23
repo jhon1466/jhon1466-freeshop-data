@@ -61,10 +61,19 @@ static NspInstallResult install_from_local_file(const char *nsp_path,
         return NSP_INSTALL_ERR_NCM;
     }
 
+    rc = ncmInitialize();
+    if (R_FAILED(rc)) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "no se pudo conectar con el servicio ncm (0x%x)", rc);
+        ns_record_exit();
+        es_exit();
+        return NSP_INSTALL_ERR_NCM;
+    }
+
     NcmContentStorage cs;
     rc = ncmOpenContentStorage(&cs, NcmStorageId_SdCard);
     if (R_FAILED(rc)) {
         if (err_buf) snprintf(err_buf, err_buf_size, "ncmOpenContentStorage falló (0x%x)", rc);
+        ncmExit();
         ns_record_exit();
         es_exit();
         return NSP_INSTALL_ERR_NCM;
@@ -75,6 +84,7 @@ static NspInstallResult install_from_local_file(const char *nsp_path,
     if (R_FAILED(rc)) {
         if (err_buf) snprintf(err_buf, err_buf_size, "ncmOpenContentMetaDatabase falló (0x%x)", rc);
         ncmContentStorageClose(&cs);
+        ncmExit();
         ns_record_exit();
         es_exit();
         return NSP_INSTALL_ERR_NCM;
@@ -85,6 +95,7 @@ static NspInstallResult install_from_local_file(const char *nsp_path,
         if (err_buf) snprintf(err_buf, err_buf_size, "no se pudo reabrir el archivo descargado");
         ncmContentMetaDatabaseClose(&db);
         ncmContentStorageClose(&cs);
+        ncmExit();
         ns_record_exit();
         es_exit();
         return NSP_INSTALL_ERR_PARSE;
@@ -242,6 +253,7 @@ static NspInstallResult install_from_local_file(const char *nsp_path,
     fclose(src);
     ncmContentMetaDatabaseClose(&db);
     ncmContentStorageClose(&cs);
+    ncmExit();
     ns_record_exit();
     es_exit();
 
