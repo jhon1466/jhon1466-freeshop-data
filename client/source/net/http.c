@@ -33,40 +33,6 @@ static void set_curl_error(char *err_buf, size_t err_buf_size, CURLcode code) {
     snprintf(err_buf, err_buf_size, "%s", curl_easy_strerror(code));
 }
 
-// TEMPORARY diagnostic instrumentation for the "Timeout was reached" issue
-// on real hardware (survives Firebase, GitHub raw, curl_global_init, and
-// bigger socket buffers - all identical) - logs libcurl's own blow-by-blow
-// account of the connection (DNS/connect/TLS handshake stages) to a file on
-// the SD card, since there's no visible stderr on-console. Remove once
-// diagnosed. See CURLOPT_DEBUGFUNCTION docs for the curl_infotype meanings.
-#define HTTP_DEBUG_LOG_PATH "sdmc:/switch/freeshop/http_debug.log"
-
-static int curl_debug_cb(CURL *handle, curl_infotype type, char *data, size_t size, void *userdata) {
-    (void)handle;
-    FILE *fp = (FILE *)userdata;
-    const char *prefix;
-    switch (type) {
-        case CURLINFO_TEXT:       prefix = "* ";       break;
-        case CURLINFO_HEADER_OUT: prefix = "> ";        break;
-        case CURLINFO_HEADER_IN:  prefix = "< ";        break;
-        case CURLINFO_SSL_DATA_OUT: prefix = ">> SSL "; break;
-        case CURLINFO_SSL_DATA_IN:  prefix = "<< SSL "; break;
-        case CURLINFO_DATA_OUT:  prefix = ">> DATA ";   break;
-        case CURLINFO_DATA_IN:   prefix = "<< DATA ";   break;
-        default: return 0;
-    }
-
-    if (type == CURLINFO_TEXT || type == CURLINFO_HEADER_OUT || type == CURLINFO_HEADER_IN) {
-        fputs(prefix, fp);
-        fwrite(data, 1, size, fp);
-        if (size == 0 || data[size - 1] != '\n') fputc('\n', fp);
-    } else {
-        fprintf(fp, "%s%zu bytes\n", prefix, size);
-    }
-    fflush(fp);
-    return 0;
-}
-
 HttpResult http_get(const char *url, char **out_buf, size_t *out_len,
                      char *err_buf, size_t err_buf_size) {
     CURL *curl = curl_easy_init();
@@ -75,18 +41,11 @@ HttpResult http_get(const char *url, char **out_buf, size_t *out_len,
         return HTTP_ERR_INIT;
     }
 
-    FILE *debug_fp = fopen(HTTP_DEBUG_LOG_PATH, "w");
-
     MemBuffer buf = {0};
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, mem_write_cb);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buf);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    if (debug_fp) {
-        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
-        curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, curl_debug_cb);
-        curl_easy_setopt(curl, CURLOPT_DEBUGDATA, debug_fp);
-    }
     // mbedtls's handshake on the Switch's ARM CPU (software crypto, no HW
     // acceleration) against Google's frontend (Firebase Hosting/Cloud Run)
     // can take noticeably longer than a plain HTTP request to a LAN
@@ -121,7 +80,6 @@ HttpResult http_get(const char *url, char **out_buf, size_t *out_len,
 
     CURLcode res = curl_easy_perform(curl);
     curl_easy_cleanup(curl);
-    if (debug_fp) fclose(debug_fp);
 
     if (res != CURLE_OK) {
         free(buf.data);
@@ -173,12 +131,6 @@ HttpResult http_download_to_file(const char *url, const char *dest_path,
         return HTTP_ERR_INIT;
     }
 
-    // TEMPORARY - same diagnostic pattern as http_get's HTTP_DEBUG_LOG_PATH,
-    // to confirm which cipher actually got negotiated (was the
-    // CURLOPT_SSL_CIPHER_LIST below honored, or ignored/fell back?) rather
-    // than guessing. Look for a "SSL connection using ..." line in the log.
-    FILE *debug_fp = fopen("sdmc:/switch/freeshop/download_debug.log", "w");
-
     ProgressCtx ctx = { .cb = cb, .userdata = userdata };
 
     curl_easy_setopt(curl, CURLOPT_URL, url);
@@ -186,11 +138,6 @@ HttpResult http_download_to_file(const char *url, const char *dest_path,
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30L);
-    if (debug_fp) {
-        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
-        curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, curl_debug_cb);
-        curl_easy_setopt(curl, CURLOPT_DEBUGDATA, debug_fp);
-    }
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
     curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, xfer_progress_cb);
     curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &ctx);
@@ -231,7 +178,6 @@ HttpResult http_download_to_file(const char *url, const char *dest_path,
     CURLcode res = curl_easy_perform(curl);
     curl_easy_cleanup(curl);
     fclose(fp);
-    if (debug_fp) fclose(debug_fp);
 
     if (res == CURLE_ABORTED_BY_CALLBACK) {
         remove(dest_path);
