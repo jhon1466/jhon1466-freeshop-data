@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-23T01:00:56.682Z",
+  "generatedAt": "2026-07-23T01:02:34.508Z",
   "apps": [
     {
       "id": "2",
@@ -144,7 +144,7 @@
     },
     {
       "id": "12",
-      "title": "Super Mario Galaxy 1 + 2",
+      "title": "Super Mario Galaxy 2",
       "author": "Unknown",
       "category": "Game",
       "description": "",
@@ -154,7 +154,8 @@
       "fileSize": 3048409088,
       "filename": "Super Mario Galaxy 2.xci",
       "fileType": "xci",
-      "parentId": "11"
+      "parentId": "11",
+      "contentType": "dlc"
     }
   ]
 }
