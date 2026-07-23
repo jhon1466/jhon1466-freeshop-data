@@ -86,18 +86,21 @@ missing, the client shows a message instead of chain-loading.
 
 For a homebrew app that ships as a folder (an `.nro` plus data files/
 subfolders it needs - e.g. a native port's asset pack) rather than a single
-file: zip that folder up, set `"fileType": "port"`, `filename` ending in
+file: zip up the port's own folder (e.g. `someport/someport.nro`,
+`someport/data/...`) - the same layout you'd get unzipping it straight onto
+an SD card on a PC - then set `"fileType": "port"`, `filename` ending in
 `.zip`, and `downloadUrl` pointing at the zip.
 
-The client downloads it to `sdmc:/switch/<id>/<filename>`, then extracts it
-in place - recreating whatever folder structure the archive has - via
-[zip_extract.h](../client/source/install/zip_extract.h), and deletes the zip
-afterward. Both Stored and Deflate compression (what every mainstream zip
-tool produces) are supported; anything else fails with a clear error rather
-than silently skipping files. Zip the port's folder itself (the `.nro`
-directly at the zip's root, alongside its data files/subfolders) rather than
-a wrapper folder containing it, so the layout under `sdmc:/switch/<id>/`
-matches what the port expects.
+The client downloads it to a scratch path under `sdmc:/switch/freeshop/`,
+then extracts it **directly into `sdmc:/switch/`** - recreating whatever
+folder structure the archive has, so its top-level folder (`someport/`)
+ends up at `sdmc:/switch/someport/`, not nested under the catalog entry's
+`id` - via [zip_extract.h](../client/source/install/zip_extract.h), and
+deletes the zip afterward. Both Stored and Deflate compression (what every
+mainstream zip tool produces) are supported; anything else fails with a
+clear error rather than silently skipping files. **The zip must contain its
+own top-level folder** - don't zip loose files at the archive root, or
+they'll land directly in `sdmc:/switch/` instead of their own subfolder.
 
 ## Adding DLC or an update
 

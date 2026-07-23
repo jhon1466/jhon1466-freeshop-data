@@ -10,13 +10,19 @@
 #include <sys/stat.h>
 #include <sys/statvfs.h>
 
+// A port's zip already contains its own top-level folder (named after the
+// port itself, e.g. "maxpaynenx/...") - extracting it here, not into
+// sdmc:/switch/<id>/, avoids adding an extra nesting level the port never
+// expects (which would put its .nro somewhere it can't find its own data
+// files relative to). The zip is only ever downloaded to a scratch path
+// under here, never left behind.
+#define PORT_SCRATCH_DIR SWITCH_APPS_ROOT "/freeshop"
+
 PortInstallResult install_port(const AppEntry *entry, const char *base_url,
                                 InstallProgressCallback cb, InstallPhaseCallback phase_cb, void *userdata,
                                 char *err_buf, size_t err_buf_size) {
-    char dest_dir[300];
-    snprintf(dest_dir, sizeof(dest_dir), "%s/%s", SWITCH_APPS_ROOT, entry->id);
     install_common_mkdir_ignore_exists(SWITCH_APPS_ROOT);
-    install_common_mkdir_ignore_exists(dest_dir);
+    install_common_mkdir_ignore_exists(PORT_SCRATCH_DIR);
 
     struct statvfs st;
     if (statvfs("sdmc:/", &st) == 0) {
@@ -34,7 +40,7 @@ PortInstallResult install_port(const AppEntry *entry, const char *base_url,
     }
 
     char part_path[512];
-    snprintf(part_path, sizeof(part_path), "%s/%s.part", dest_dir, entry->filename);
+    snprintf(part_path, sizeof(part_path), "%s/%s.part", PORT_SCRATCH_DIR, entry->filename);
 
     char url[900];
     install_common_resolve_url(base_url, entry->download_url, url, sizeof(url));
@@ -65,7 +71,7 @@ PortInstallResult install_port(const AppEntry *entry, const char *base_url,
 
     if (phase_cb) phase_cb(INSTALL_PHASE_INSTALLING, userdata);
 
-    if (!zip_extract_to_dir(part_path, dest_dir, cb, userdata, err_buf, err_buf_size)) {
+    if (!zip_extract_to_dir(part_path, SWITCH_APPS_ROOT, cb, userdata, err_buf, err_buf_size)) {
         bool canceled = err_buf && strstr(err_buf, "cancel") != NULL;
         remove(part_path);
         return canceled ? PORT_INSTALL_ERR_CANCELED : PORT_INSTALL_ERR_EXTRACT;

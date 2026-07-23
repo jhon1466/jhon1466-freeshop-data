@@ -11,11 +11,13 @@ typedef enum {
     PORT_INSTALL_ERR_CANCELED,
 } PortInstallResult;
 
-// Downloads entry's .zip from "<base_url><entry->download_url>" into
-// sdmc:/switch/<entry->id>/<entry->filename>, verifies entry->sha256 if
-// present, then extracts it in place - recreating whatever folder structure
-// it has (the .nro plus its data files/subfolders, e.g. a native port's
-// asset pack) - via zip_extract_to_dir, and deletes the .zip afterward.
+// Downloads entry's .zip from "<base_url><entry->download_url>" into a
+// scratch path under sdmc:/switch/freeshop/, verifies entry->sha256 if
+// present, then extracts it directly into sdmc:/switch/ - recreating
+// whatever folder structure the zip has (it's expected to already contain
+// its own top-level folder named after the port, e.g. "someport/...", the
+// same way it'd be laid out if unzipped straight onto an SD card on a PC)
+// via zip_extract_to_dir, and deletes the .zip afterward.
 //
 // `phase_cb` (may be NULL) is called once, right before extraction starts,
 // so the caller can switch its progress label from "downloading" to
