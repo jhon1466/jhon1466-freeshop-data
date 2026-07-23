@@ -410,15 +410,6 @@ int ui_show_list(AppEntry *entries, int count) {
     int sidebar_selected = 0; // 0 = "Todos", i+1 = categories[i]
     int sidebar_scroll = 0;
 
-    // Tracks how long the selection has sat still, to reveal the full,
-    // untruncated title after a 1s dwell (titles get cut short with "..."
-    // in the grid view's narrow cells, and can in the list view too for a
-    // long enough title) - reset whenever `selected` itself changes, not
-    // persisted across re-entries (starts fresh every time this screen
-    // shows again, same as sidebar_open).
-    int dwell_selected = -1;
-    u64 dwell_start_tick = 0;
-
     PadState pad;
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
     padInitializeDefault(&pad);
@@ -442,12 +433,7 @@ int ui_show_list(AppEntry *entries, int count) {
             last_status_tick = now_tick;
         }
 
-        if (selected != dwell_selected) {
-            dwell_selected = selected;
-            dwell_start_tick = now_tick;
-        }
-        bool show_full_title = !sidebar_open && visible_count > 0 &&
-                                armTicksToNs(now_tick - dwell_start_tick) >= 1000000000ULL;
+        bool show_full_title = !sidebar_open && visible_count > 0;
 
         if (sidebar_open) {
             int total_items = category_count + 1;
@@ -640,13 +626,13 @@ int ui_show_list(AppEntry *entries, int count) {
         }
 
         // Titles get cut short with "..." to fit the grid's narrow cells
-        // (and could in the list view too, for a long enough one) - after
-        // holding the selection still for 1s, show it in full here instead
-        // of guessing from the truncated version.
+        // (and could in the list view too, for a long enough one) - always
+        // show the selected entry's full title here instead of guessing
+        // from the truncated version.
         if (show_full_title) {
-            const AppEntry *dwell_entry = &entries[visible[selected]];
+            const AppEntry *selected_entry = &entries[visible[selected]];
             ui_draw_rect(LEFT_EDGE, FOOTER_Y - 40, RIGHT_EDGE - LEFT_EDGE, 26, COLOR_PANEL);
-            ui_draw_text(g_font_body, LEFT_EDGE + 10, FOOTER_Y - 36, COLOR_TEXT, dwell_entry->title);
+            ui_draw_text(g_font_body, LEFT_EDGE + 10, FOOTER_Y - 36, COLOR_TEXT, selected_entry->title);
         }
 
         ui_draw_rect(LEFT_EDGE, FOOTER_Y - 10, RIGHT_EDGE - LEFT_EDGE, 1, COLOR_PANEL);
