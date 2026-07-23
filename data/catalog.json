@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-23T00:45:20.370Z",
+  "generatedAt": "2026-07-23T00:57:44.727Z",
   "apps": [
     {
       "id": "2",
@@ -127,6 +127,20 @@
       "filename": "Red Dead Redemption.xci",
       "fileType": "xci",
       "longDescription": "Cuando agentes federales amenazan a su familia, el ex forajido John Marston se ve obligado a dar caza a la banda de criminales a quienes una vez llamó amigos. Vive el viaje de Marston a través de las vastas extensiones del Oeste americano y México mientras lucha por enterrar su sangriento pasado en la aclamada secuela del éxito de taquilla de 2018, Red Dead Redemption 2. También se incluye Undead Nightmare, la icónica historia de terror que transforma el mundo de Red Dead Redemption en una lucha apocalíptica por la supervivencia contra una horda de zombis. Con las experiencias completas para un jugador de ambos juegos, Red Dead Redemption también incluye contenido adicional de la Edición Juego del Año y más.* Forajidos hasta el final *Red Dead Redemption incluye las experiencias para un jugador de Red Dead Redemption y Undead Nightmare, además de contenido adicional de la Edición Juego del Año y más. Red Dead Redemption no incluye contenido multijugador."
+    },
+    {
+      "id": "11",
+      "title": "Super Mario Galaxy 1 + 2",
+      "author": "Unknow",
+      "category": "Game",
+      "description": "",
+      "version": "1.3.1",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/11.jpeg",
+      "downloadUrl": "https://download1586.mediafire.com/ftl5rgpzru8gWbrwyzPMPpVShWhzLbEfi70SrOD0SjRrWVDaonmJ0FeJzhhoe7zMGxILmm_c_LuoAGQy-3cJ_Mv_KpWJZdkgJjd9gV5ioqRjNP2AVbKVoAphm48z8OLvkjuJDs177vBsWWHCk1CHkvbSb-LZQA2zF4llX23hEoD4SFE/nu255n9g2aur5l4/Super+Mario+Galaxy+%5Bv1.3.1%5D.xci",
+      "fileSize": 3893030912,
+      "filename": "Super Mario Galaxy .xci",
+      "fileType": "xci",
+      "longDescription": "¡Viaja con Mario por las estrellas en las versiones mejoradas de estas adoradas aventuras, ahora disponibles en la consola Nintendo Switch™! También podrán jugarse en Nintendo Switch 2 mediante una actualización gratuita."
     }
   ]
 }
