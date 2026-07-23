@@ -231,6 +231,11 @@ bool zip_extract_to_dir(const char *zip_path, const char *dest_dir,
         if (err_buf) snprintf(err_buf, err_buf_size, "no se pudo abrir el archivo ZIP descargado");
         return false;
     }
+    // stdio's default buffer (a few KB) turns every fread() below into that
+    // many small reads against the sdmc filesystem driver - same fix as
+    // http_download_to_file's own setvbuf, for the same reason.
+    static char zip_read_buf[256 * 1024];
+    setvbuf(zip_fp, zip_read_buf, _IOFBF, sizeof(zip_read_buf));
 
     if (fseek(zip_fp, 0, SEEK_END) != 0) {
         fclose(zip_fp);
@@ -350,6 +355,10 @@ bool zip_extract_to_dir(const char *zip_path, const char *dest_dir,
                 ok = false;
                 break;
             }
+            // Same reasoning as zip_read_buf above, for the extracted
+            // file's writes - reused across entries, one file open at a time.
+            static char out_write_buf[256 * 1024];
+            setvbuf(out_fp, out_write_buf, _IOFBF, sizeof(out_write_buf));
 
             if (hdr.method == METHOD_STORED) {
                 ok = extract_stored(zip_fp, hdr.compressed_size, out_fp, cb, userdata, &progress,
