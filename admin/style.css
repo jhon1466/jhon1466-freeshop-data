@@ -95,6 +95,10 @@ dialog::backdrop {
   margin-top: 0.6rem;
 }
 
+#confirm-dialog-message {
+  white-space: pre-line;
+}
+
 #import-textarea {
   min-height: 16rem;
 }

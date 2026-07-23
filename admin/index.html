@@ -86,6 +86,7 @@
             <option value="nro">nro</option>
             <option value="nsp">nsp</option>
             <option value="xci">xci</option>
+            <option value="port">port (.zip con .nro + archivos)</option>
           </select>
         </label>
         <label>
@@ -123,6 +124,16 @@
         <div class="dialog-actions">
           <button type="button" id="import-cancel-btn">Cancelar</button>
           <button type="button" id="import-confirm-btn">Reemplazar cat&aacute;logo</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="confirm-dialog">
+      <form method="dialog">
+        <p id="confirm-dialog-message"></p>
+        <div class="dialog-actions">
+          <button type="button" id="confirm-cancel-btn">Cancelar</button>
+          <button type="button" id="confirm-ok-btn">Confirmar</button>
         </div>
       </form>
     </dialog>

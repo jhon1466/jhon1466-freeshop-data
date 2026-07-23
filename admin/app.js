@@ -67,7 +67,8 @@ function validateEntry(entry, existingApps, editingId) {
   }
   const fileType = entry.fileType || "nro";
   if (entry.filename) {
-    const expectedExt = fileType === "nsp" ? ".nsp" : fileType === "xci" ? ".xci" : ".nro";
+    const expectedExt =
+      fileType === "nsp" ? ".nsp" : fileType === "xci" ? ".xci" : fileType === "port" ? ".zip" : ".nro";
     if (!entry.filename.toLowerCase().endsWith(expectedExt)) {
       errors.push(`filename debe terminar en ${expectedExt} para fileType "${fileType}"`);
     }
@@ -125,6 +126,10 @@ const els = {
   importError: $("#import-error"),
   importCancelBtn: $("#import-cancel-btn"),
   importConfirmBtn: $("#import-confirm-btn"),
+  confirmDialog: $("#confirm-dialog"),
+  confirmDialogMessage: $("#confirm-dialog-message"),
+  confirmOkBtn: $("#confirm-ok-btn"),
+  confirmCancelBtn: $("#confirm-cancel-btn"),
   iconFileInput: $("#icon-file-input"),
   iconUploadBtn: $("#icon-upload-btn"),
   iconUploadStatus: $("#icon-upload-status"),
@@ -172,6 +177,29 @@ async function loadCatalog() {
     state.catalog = { schemaVersion: 1, generatedAt: new Date().toISOString(), apps: [] };
   }
   renderTable();
+}
+
+// Replaces window.confirm() for the delete flow - some browsers/embedded
+// contexts suppress native confirm()/alert() dialogs entirely (silently
+// returning false), which made "Borrar" look like it did nothing. Uses the
+// same <dialog> pattern already in place for edit/import.
+function showConfirmDialog(message) {
+  return new Promise((resolve) => {
+    els.confirmDialogMessage.textContent = message;
+
+    const onOk = () => finish(true);
+    const onCancel = () => finish(false);
+    function finish(result) {
+      els.confirmDialog.close();
+      els.confirmOkBtn.removeEventListener("click", onOk);
+      els.confirmCancelBtn.removeEventListener("click", onCancel);
+      resolve(result);
+    }
+
+    els.confirmOkBtn.addEventListener("click", onOk);
+    els.confirmCancelBtn.addEventListener("click", onCancel);
+    els.confirmDialog.showModal();
+  });
 }
 
 async function saveCatalog(nextApps) {
@@ -341,12 +369,13 @@ async function main() {
               .map((c) => c.title)
               .join(", ")}.`
           : "";
-      if (!confirm(`¿Borrar "${id}" del catálogo?${childNote}`)) return;
+      const ok = await showConfirmDialog(`¿Borrar "${id}" del catálogo?${childNote}`);
+      if (!ok) return;
       try {
         const childIds = new Set(children.map((c) => c.id));
         await saveCatalog(state.catalog.apps.filter((a) => a.id !== id && !childIds.has(a.id)));
       } catch (err) {
-        alert("No se pudo borrar: " + err.message);
+        setStatus(els.saveStatus, "No se pudo borrar: " + err.message, "error");
       }
     }
   });
