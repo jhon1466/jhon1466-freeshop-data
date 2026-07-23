@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-23T22:03:07.624Z",
+  "generatedAt": "2026-07-23T22:12:20.570Z",
   "apps": [
     {
       "id": "3",
@@ -255,6 +255,20 @@
       "filename": "Xenoblade Chronicles 2 [v2.1.0 + 7 DLCs].xci",
       "fileType": "xci",
       "longDescription": "Viaja hasta la cuna de la humanidad: el Elíseo.\n\nEn el enorme RPG Xenoblade Chronicles 2 para Nintendo Switch, explorarás un océano infinito de nubes entre las que perviven los restos de una civilización sobre los lomos de enormes bestias llamadas titanes. Descubre la historia de Rex y su nueva amiga Pyra, un ser misterioso ser conocido como Blade que le otorga enorme poder. Juntos emprenderán la búsqueda del hogar perdido de Pyra, el Elíseo, la cuna de la humanidad."
+    },
+    {
+      "id": "21",
+      "title": "Minecraft Bedrock NS",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.26.33",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/21.jpg",
+      "downloadUrl": "https://download942.mediafire.com/ec4a7vxq5q7g-hnD3ukGdrQvHBgdRnPfdXHwti0tHsiWxMVU3PHvQsv5_K7jxt4EWpjGhFhir3z4DKZVY2WfDI3KUczcX03drIAmq0tdRvfODmsQuguqZWdynxYjJrR1awdHjvPAysT5Zwnnibd409oV9BpH0Lee4-4GDj6Nh4ekIeU/4hy8qwbm2s25f1v/Minecraft+Bedrock+NS+%5Bv1.26.33%5D.xci",
+      "fileSize": 1842372608,
+      "filename": "Minecraft Bedrock NS [v1.26.33].xci",
+      "fileType": "xci",
+      "longDescription": "¡Sobrevive a la noche o crea una obra de arte en el juego aislado definitivo! Crea lo que sea que puedas imaginar, descubre misterios y enfréntate a enemigos emocionantes en un mundo infinito que es único cada vez que lo juegues. No hay forma incorrecta de jugar."
     }
   ]
 }
