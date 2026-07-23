@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-23T20:06:27.483Z",
+  "generatedAt": "2026-07-23T21:58:22.951Z",
   "apps": [
     {
       "id": "3",
@@ -227,6 +227,20 @@
       "filename": "maxpaynenx.zip",
       "fileType": "port",
       "longDescription": "Max Payne, el premiado título, ya está disponible para dispositivos móviles Android.\n\nMax es un fugitivo, un agente encubierto incriminado en un asesinato que no ha cometido, perseguido por policías y mafiosos. Se halla entre la espada y la pared, librando una batalla desesperada. Max Payne es un juego trepidante de gran profundidad narrativa sobre un hombre que ha sido llevado al límite, que lucha por limpiar su nombre mientras intenta descubrir la verdad sobre el asesinato de su familia entre una miríada de giros en la trama."
+    },
+    {
+      "id": "19",
+      "title": "Hello Neighbor",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/19.jpg",
+      "downloadUrl": "https://download1640.mediafire.com/6hpbu6v2njzgDutl7v42e_inAXPtd7tEWqepvgOwqe5QgMW5cggEpGcouUrJii-Rg8RdcZQnxnmftgP4IXeQ-4Tv0K7Fp2ZHlR5DpLT-PklFvA9YugwKc5gzLWbDcClJ-flIGgnnDSr_w4K1yMgzgqkuGcvbmabiQuBHzAwZIBdq_SI/ss00ns04w4vk1sl/Hello+Neighbor+%5Bv1.0%5D.xci",
+      "fileSize": 2550660096,
+      "filename": "Hello Neighbor [v1.0].xci",
+      "fileType": "xci",
+      "longDescription": "Hello Neighbor es un juego de terror y sigilo donde debes meterte en la casa de tu vecino y averiguar los secretos que esconde en el sótano. Juega contra una IA avanzada que aprende de tus movimientos. ¿Te gusta escalar ventanas? Pondrá una trampa para osos. ¿Intentas salir sin ser visto por la puerta principal? Instalará cámaras en un abrir y cerrar de ojos. ¿Tratas de escapar? Encontrará un atajo. Salir de una pieza no va a resultar nada fácil..."
     }
   ]
 }
