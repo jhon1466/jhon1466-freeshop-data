@@ -258,6 +258,13 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    // Without this, the console dims/sleeps on its own inactivity timer
+    // regardless of what's happening in the app - including mid-download,
+    // where curl keeps running but there's no controller input for
+    // however long the transfer takes. Best-effort (ignore failure - worst
+    // case the console behaves as if this call was never made).
+    appletSetAutoSleepDisabled(true);
+
     // socketInitializeDefault()'s stock buffer sizes are tuned for small
     // LAN traffic and are a known source of stalls on real hardware once
     // TLS is involved: a big CDN's handshake (cert chain, etc.) can arrive
@@ -273,6 +280,7 @@ int main(int argc, char **argv) {
     Result rc = socketInitialize(&socket_config);
     if (R_FAILED(rc)) {
         ui_app_show_message("No se pudo iniciar la red.");
+        appletSetAutoSleepDisabled(false);
         ui_app_shutdown();
         return 1;
     }
@@ -338,6 +346,7 @@ int main(int argc, char **argv) {
         ui_app_show_message(msg);
         curl_global_cleanup();
         socketExit();
+        appletSetAutoSleepDisabled(false);
         ui_app_shutdown();
         return 1;
     }
@@ -502,6 +511,11 @@ int main(int argc, char **argv) {
     ui_icons_clear();
     curl_global_cleanup();
     socketExit();
+    // Restore normal auto-sleep behavior before handing control back to
+    // hbmenu (or chain-loading into DBI/a self-update, which each get a
+    // fresh applet session anyway, but this is cheap and leaves nothing to
+    // chance either way).
+    appletSetAutoSleepDisabled(false);
     ui_app_shutdown();
     return 0;
 }
