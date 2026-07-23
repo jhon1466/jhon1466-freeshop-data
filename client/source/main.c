@@ -17,6 +17,7 @@
 #include "install/install_nsp.h"
 #include "install/install_nsp_native.h"
 #include "install/install_xci_native.h"
+#include "update/self_update.h"
 
 // Fetches each enabled source's catalog and concatenates them into one
 // array. A source that fails to fetch is skipped rather than aborting the
@@ -241,8 +242,11 @@ static bool install_progress_cb(long total, long now, void *userdata) {
 }
 
 int main(int argc, char **argv) {
-    (void)argc;
-    (void)argv;
+    // hbmenu passes the running .nro's own sdmc path as argv[0] - needed for
+    // self_update_apply() to know what file to replace. NULL/empty when not
+    // launched that way (e.g. nxlink during development) - self-update just
+    // skips itself in that case rather than failing outright.
+    const char *self_path = (argc > 0 && argv && argv[0] && argv[0][0] != '\0') ? argv[0] : NULL;
 
     char err_buf[256];
 
@@ -280,6 +284,45 @@ int main(int argc, char **argv) {
     // hanging until timeout, while the original plain-HTTP LAN setup never
     // exercised the SSL backend at all. Must run once, before any curl call.
     curl_global_init(CURL_GLOBAL_ALL);
+
+    // Best-effort - a failed check is silent (no need to alarm the user
+    // every launch over a network hiccup); only a genuinely available
+    // update interrupts them, and only with their confirmation before
+    // anything is downloaded/replaced.
+    char new_version[32];
+    char asset_url[512];
+    if (self_update_check(new_version, sizeof(new_version), asset_url, sizeof(asset_url),
+                           NULL, 0) == SELF_UPDATE_AVAILABLE) {
+        char confirm_msg[256];
+        snprintf(confirm_msg, sizeof(confirm_msg),
+                 "Hay una nueva versión disponible: v%s (actual: v%s).\n\n¿Actualizar ahora?",
+                 new_version, CLIENT_VERSION);
+        if (!self_path) {
+            snprintf(confirm_msg, sizeof(confirm_msg),
+                     "Hay una nueva versión disponible (v%s), pero no se pudo determinar dónde "
+                     "está instalada esta app para actualizarla automáticamente.",
+                     new_version);
+            ui_app_show_message(confirm_msg);
+        } else if (ui_app_show_confirm(confirm_msg)) {
+            PadState update_pad;
+            padConfigureInput(1, HidNpadStyleSet_NpadStandard);
+            padInitializeDefault(&update_pad);
+            InstallProgressCtx update_ctx = { .pad = &update_pad, .start_tick = 0, .started = false,
+                                               .phase = INSTALL_PHASE_DOWNLOADING };
+            char update_err[256];
+            SelfUpdateApplyResult ares = self_update_apply(self_path, asset_url, install_progress_cb, &update_ctx,
+                                                            update_err, sizeof(update_err));
+            if (ares == SELF_UPDATE_APPLY_OK) {
+                ui_app_show_message("Actualización descargada.\n\nCierra la app y ábrela de nuevo desde el "
+                                     "hbmenu para usar la nueva versión.");
+            } else {
+                char err_msg[320];
+                snprintf(err_msg, sizeof(err_msg), "No se pudo actualizar: %s\n\nSigues usando la versión actual.",
+                         update_err);
+                ui_app_show_message(err_msg);
+            }
+        }
+    }
 
     SourceList sources;
     sources_load(&sources);

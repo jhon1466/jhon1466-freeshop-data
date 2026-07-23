@@ -39,3 +39,7 @@ int ui_draw_text_wrapped(TTF_Font *font, int x, int y, int max_width, int line_h
 
 // Full-screen modal message (supports '\n'), blocks until A or + is pressed.
 void ui_app_show_message(const char *msg);
+
+// Same as ui_app_show_message but blocks until A/+ (returns true) or B
+// (returns false) is pressed - for a yes/no confirmation.
+bool ui_app_show_confirm(const char *msg);

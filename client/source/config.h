@@ -28,3 +28,17 @@
 #define CATALOG_API_PATH "/data/catalog.json"
 
 #define SWITCH_APPS_ROOT "sdmc:/switch"
+
+// Bumped by hand with every release. Compared as a plain string (not
+// semver-aware) against the latest GitHub Release's tag on
+// jhon1466-freeshop-data - see update/self_update.h. To publish a new
+// version: bump this, build, tag a GitHub Release on that repo as
+// "v<this value>" (a leading "v" is stripped before comparing, either form
+// works), and attach the built freeshop-client.nro as a release asset named
+// exactly "freeshop-client.nro".
+#define CLIENT_VERSION "1.0.0"
+
+// GitHub Releases API endpoint checked for a new client version - see
+// update/self_update.c.
+#define CLIENT_RELEASES_API_URL "https://api.github.com/repos/jhon1466/jhon1466-freeshop-data/releases/latest"
+#define CLIENT_RELEASE_ASSET_NAME "freeshop-client.nro"

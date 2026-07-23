@@ -20,7 +20,7 @@ include $(DEVKITPRO)/libnx/switch_rules
 #---------------------------------------------------------------------------------
 TARGET      :=  freeshop-client
 BUILD       :=  build
-SOURCES     :=  source source/net source/ui source/catalog source/install
+SOURCES     :=  source source/net source/ui source/catalog source/install source/update
 INCLUDES    :=  source
 ICON        :=  icon.jpg
 

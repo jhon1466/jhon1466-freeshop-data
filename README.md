@@ -42,7 +42,10 @@ Homebrew Menu.
   the client is opened - no extra "update detection" logic needed. `L`
   toggles a categories sidebar (built from whatever `category` values are
   in the catalog) to filter the list/grid; the install screen shows a live
-  speed/time-remaining estimate.
+  speed/time-remaining estimate. The client itself also self-updates: on
+  launch it checks the data repo's GitHub Releases for a newer version and,
+  if found, asks before downloading and replacing its own `.nro` - see
+  [Publishing a client update](#publishing-a-client-update) below.
 
 ## Quick start
 
@@ -141,6 +144,25 @@ the "Calcular fileSize desde downloadUrl" button, a cheap HEAD request) and
 the icon's raw GitHub URL - through `/admin`. `sha256` is optional and
 unverified by the Switch client - see
 [`docs/catalog-schema.md`](docs/catalog-schema.md) for why.
+
+## Publishing a client update
+
+The client checks jhon1466-freeshop-data's GitHub Releases for a newer
+version on every launch (see
+[`self_update.h`](client/source/update/self_update.h)) - to ship one:
+
+1. Bump `CLIENT_VERSION` in [`config.h`](client/source/config.h).
+2. Build (`docker build -t freeshop-client-builder client/` once, then
+   `docker run --rm -v "$(pwd)/client:/workspace" freeshop-client-builder sh -c "cd /workspace && make"`).
+3. On `jhon1466-freeshop-data`, create a GitHub Release tagged `v<version>`
+   (a leading `v` is optional - stripped before comparing) and attach the
+   built `client/freeshop-client.nro` as a release asset named **exactly**
+   `freeshop-client.nro` (see `CLIENT_RELEASE_ASSET_NAME` in `config.h`).
+
+The version check is a plain string comparison, not semver-aware - it only
+detects "different from what's running", so don't publish a release with an
+older version string than one already out (clients that already updated
+would see it as "available" again).
 
 ## Status
 

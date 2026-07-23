@@ -190,3 +190,36 @@ void ui_app_show_message(const char *msg) {
         SDL_RenderPresent(g_renderer);
     }
 }
+
+bool ui_app_show_confirm(const char *msg) {
+    PadState pad;
+    padConfigureInput(1, HidNpadStyleSet_NpadStandard);
+    padInitializeDefault(&pad);
+    padUpdate(&pad);
+
+    while (appletMainLoop()) {
+        padUpdate(&pad);
+        u64 kDown = padGetButtonsDown(&pad);
+        if (kDown & (HidNpadButton_A | HidNpadButton_Plus)) return true;
+        if (kDown & HidNpadButton_B) return false;
+
+        SDL_SetRenderDrawColor(g_renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, COLOR_BG.a);
+        SDL_RenderClear(g_renderer);
+
+        char buf[512];
+        snprintf(buf, sizeof(buf), "%s", msg);
+        int y = 300;
+        char *saveptr = NULL;
+        char *line = strtok_r(buf, "\n", &saveptr);
+        while (line) {
+            ui_draw_text(g_font_body, 80, y, COLOR_TEXT, line);
+            y += 30;
+            line = strtok_r(NULL, "\n", &saveptr);
+        }
+        ui_draw_text(g_font_small, 80, y + 20, COLOR_TEXT_DIM, "A o +: sí    B: no");
+
+        SDL_RenderPresent(g_renderer);
+    }
+
+    return false;
+}
