@@ -27,11 +27,20 @@
 #define PANEL_NAND_X (RIGHT_EDGE - PANEL_W)
 #define PANEL_SD_X (PANEL_NAND_X - PANEL_GAP - PANEL_W)
 
-#define COL_HEADER_Y 148
+// Always-visible horizontal category tab bar, replacing the old L-toggled
+// sidebar - sits right below the storage panels, pushing everything below
+// it (column header / grid) down from where it used to start.
+#define TAB_BAR_Y (PANEL_Y + PANEL_H + 4)
+#define TAB_BAR_H 40
+#define TAB_BAR_ARROW_W 32
+#define TAB_BAR_PAD_X 18
+#define TAB_BAR_UNDERLINE_H 4
+
+#define COL_HEADER_Y (TAB_BAR_Y + TAB_BAR_H + 10)
 #define COL_HEADER_H 34
 #define LIST_TOP (COL_HEADER_Y + COL_HEADER_H + 10)
 #define ROW_HEIGHT 42
-#define VISIBLE_ROWS 10
+#define VISIBLE_ROWS 9
 
 #define COL_NAME_X 40
 #define COL_TYPE_X 660
@@ -53,18 +62,10 @@
 
 #define FOOTER_Y (SCREEN_H - 46)
 
-// Categories sidebar (L toggles it). A generous fixed cap, matching this
-// file's existing style (VISIBLE_ROWS/GRID_COLS etc. are fixed too) rather
-// than dynamically sizing for the 1280x720 layout this whole screen assumes.
+// A generous fixed cap on distinct categories, matching this file's
+// existing style (VISIBLE_ROWS/GRID_COLS etc. are fixed too) rather than
+// dynamically sizing for the 1280x720 layout this whole screen assumes.
 #define MAX_CATEGORIES 16
-#define SIDEBAR_X LEFT_EDGE
-#define SIDEBAR_PANEL_TOP 20
-#define SIDEBAR_PANEL_BOTTOM (FOOTER_Y - 20)
-#define SIDEBAR_TITLE_Y (SIDEBAR_PANEL_TOP + 16)
-#define SIDEBAR_Y (SIDEBAR_TITLE_Y + 40)
-#define SIDEBAR_W 320
-#define SIDEBAR_ROW_H 38
-#define SIDEBAR_VISIBLE_ROWS 13
 
 // Indices into `entries` that pass the current category filter - a plain
 // cap (matching APP_DLC_MAX/SOURCES_MAX elsewhere in this project) instead
@@ -111,8 +112,8 @@ static void apply_sort(AppEntry *entries, int count, SortMode mode) {
 }
 
 // Every distinct, non-empty `category` value across `entries`, in first-seen
-// order. Used to populate the sidebar - "Todos" (all of them) is handled
-// separately by the caller, not included here.
+// order. Used to populate the category tab bar - "Todos" (all of them) is
+// handled separately by the caller, not included here.
 static int collect_categories(const AppEntry *entries, int count,
                                char categories[][APP_ENTRY_CATEGORY_MAX]) {
     int n = 0;
@@ -280,59 +281,88 @@ static void draw_grid_cell(int x, int y, const AppEntry *entry, bool is_selected
     ui_draw_text(g_font_small, x, y + GRID_ICON_SIZE + 6, title_color, title);
 }
 
-// No bundled icon assets to map specific glyphs to arbitrary free-text
-// categories, so each gets a small color swatch instead - still gives the
-// sidebar rows a distinct per-category visual marker instead of a plain
-// text list. Cycles if there are more categories than colors.
-static const SDL_Color CATEGORY_SWATCH_COLORS[] = {
-    { 0x3a, 0x8f, 0xd8, 0xff }, // blue (matches COLOR_ACCENT)
-    { 0xd8, 0x8f, 0x3a, 0xff }, // orange
-    { 0x5b, 0xc4, 0x5b, 0xff }, // green
-    { 0xd8, 0x4a, 0x8f, 0xff }, // pink
-    { 0x9a, 0x5b, 0xd8, 0xff }, // purple
-    { 0x3a, 0xc9, 0xb0, 0xff }, // teal
-};
-#define CATEGORY_SWATCH_COUNT (sizeof(CATEGORY_SWATCH_COLORS) / sizeof(CATEGORY_SWATCH_COLORS[0]))
-#define SIDEBAR_SWATCH_SIZE 14
-#define SIDEBAR_TEXT_X (SIDEBAR_X + SIDEBAR_SWATCH_SIZE + 12)
-
-// Spans the full content height (near the very top down to the footer
-// rule) regardless of how many categories exist - a panel only as tall as
-// its item count ends up as a small floating box that just partially
-// covers whatever's underneath instead of cleanly replacing that column,
-// which looks like a rendering glitch rather than a real sidebar.
-static void draw_sidebar(const char categories[][APP_ENTRY_CATEGORY_MAX], int category_count,
-                          int selected, int scroll) {
-    int total_items = category_count + 1; // +1 for "Todos"
-    int panel_h = SIDEBAR_PANEL_BOTTOM - SIDEBAR_PANEL_TOP;
-
-    ui_draw_rect(SIDEBAR_X - 10, SIDEBAR_PANEL_TOP, SIDEBAR_W, panel_h, COLOR_PANEL);
-    // Right-edge accent line so the panel reads as a distinct column rather
-    // than a box floating over the grid/list.
-    ui_draw_rect(SIDEBAR_X - 10 + SIDEBAR_W - 3, SIDEBAR_PANEL_TOP, 3, panel_h, COLOR_ACCENT);
-
-    ui_draw_text(g_font_small, SIDEBAR_X, SIDEBAR_TITLE_Y, COLOR_TEXT_DIM, "CATEGORÍAS");
-
-    for (int vi = scroll; vi < total_items && vi < scroll + SIDEBAR_VISIBLE_ROWS; vi++) {
-        int row_y = SIDEBAR_Y + (vi - scroll) * SIDEBAR_ROW_H;
-        bool is_selected = (vi == selected);
-        if (is_selected) {
-            // Bordered box (accent outline, panel-colored fill) instead of a
-            // solid block - reads as a selection highlight, not a slab.
-            int bx = SIDEBAR_X - 6, by = row_y - 4, bw = SIDEBAR_W - 20, bh = SIDEBAR_ROW_H - 6;
-            ui_draw_rect(bx, by, bw, bh, COLOR_ACCENT);
-            ui_draw_rect(bx + 3, by + 3, bw - 6, bh - 6, COLOR_PANEL);
-        }
-        SDL_Color color = is_selected ? COLOR_TEXT : COLOR_TEXT_DIM;
-        const char *label = vi == 0 ? "Todos" : categories[vi - 1];
-
-        // "Todos" gets a neutral marker (not a category of its own);
-        // real categories cycle through the swatch palette by position.
-        SDL_Color swatch = vi == 0 ? COLOR_TEXT_DIM : CATEGORY_SWATCH_COLORS[(vi - 1) % CATEGORY_SWATCH_COUNT];
-        ui_draw_rect(SIDEBAR_X, row_y + 4, SIDEBAR_SWATCH_SIZE, SIDEBAR_SWATCH_SIZE, swatch);
-
-        ui_draw_text(g_font_body, SIDEBAR_TEXT_X, row_y, color, label);
+// 0 = "Todos", i+1 = categories[i] - the tab index for whatever
+// category_filter currently names (0 if it's empty or names something that
+// no longer exists in `categories`).
+static int category_tab_index(const char categories[][APP_ENTRY_CATEGORY_MAX], int category_count,
+                               const char *category_filter) {
+    if (category_filter[0] == '\0') return 0;
+    for (int i = 0; i < category_count; i++) {
+        if (strcmp(categories[i], category_filter) == 0) return i + 1;
     }
+    return 0;
+}
+
+// Always-visible horizontal tab strip (replaces the old L-toggled sidebar -
+// users reported categories were too easy to miss tucked behind a hidden
+// panel). The active tab gets a brighter label plus an accent underline so
+// it's unambiguous which catalog is showing, matching how a plain color
+// swatch could get lost at a glance. ZL/ZR step between tabs one at a time;
+// since more categories can exist than fit across 1280px, `tab_scroll_start`
+// (persisted by the caller across frames) tracks which tab the strip
+// currently starts rendering from, auto-advancing to keep the active tab in
+// view, with "<"/">" glyphs shown whenever there's more to either side.
+// Returns the (possibly adjusted) tab_scroll_start for the caller to keep.
+static int draw_category_tabs(const char categories[][APP_ENTRY_CATEGORY_MAX], int category_count,
+                               const char *category_filter, int tab_scroll_start) {
+    int total_tabs = category_count + 1;
+    int current_index = category_tab_index(categories, category_count, category_filter);
+
+    int content_left = LEFT_EDGE + TAB_BAR_ARROW_W;
+    int content_right = RIGHT_EDGE - TAB_BAR_ARROW_W;
+    int content_w = content_right - content_left;
+
+    if (current_index < tab_scroll_start) tab_scroll_start = current_index;
+    for (;;) {
+        int x = 0;
+        bool fits_current = false;
+        for (int i = tab_scroll_start; i < total_tabs; i++) {
+            const char *label = i == 0 ? "Todos" : categories[i - 1];
+            int w, h;
+            TTF_SizeUTF8(g_font_body, label, &w, &h);
+            int tab_w = w + TAB_BAR_PAD_X * 2;
+            if (x + tab_w > content_w) break;
+            x += tab_w;
+            if (i == current_index) fits_current = true;
+        }
+        if (fits_current || tab_scroll_start >= current_index) break;
+        tab_scroll_start++;
+    }
+
+    ui_draw_rect(LEFT_EDGE, TAB_BAR_Y, RIGHT_EDGE - LEFT_EDGE, TAB_BAR_H, COLOR_PANEL);
+
+    bool can_scroll_left = tab_scroll_start > 0;
+    ui_draw_text(g_font_body, LEFT_EDGE + 8, TAB_BAR_Y + 8,
+                 can_scroll_left ? COLOR_TEXT_DIM : COLOR_PANEL, "<");
+
+    int x = content_left;
+    bool can_scroll_right = false;
+    for (int i = tab_scroll_start; i < total_tabs; i++) {
+        const char *label = i == 0 ? "Todos" : categories[i - 1];
+        int w, h;
+        TTF_SizeUTF8(g_font_body, label, &w, &h);
+        int tab_w = w + TAB_BAR_PAD_X * 2;
+        if (x + tab_w > content_right) {
+            can_scroll_right = true;
+            break;
+        }
+
+        bool is_active = (i == current_index);
+        ui_draw_text(g_font_body, x + TAB_BAR_PAD_X, TAB_BAR_Y + 8,
+                     is_active ? COLOR_TEXT : COLOR_TEXT_DIM, label);
+        if (is_active) {
+            ui_draw_rect(x, TAB_BAR_Y + TAB_BAR_H - TAB_BAR_UNDERLINE_H, tab_w, TAB_BAR_UNDERLINE_H, COLOR_ACCENT);
+        }
+        if (i + 1 < total_tabs) {
+            ui_draw_rect(x + tab_w, TAB_BAR_Y + 6, 1, TAB_BAR_H - 12, COLOR_BG);
+        }
+        x += tab_w;
+    }
+
+    ui_draw_text(g_font_body, RIGHT_EDGE - 20, TAB_BAR_Y + 8,
+                 can_scroll_right ? COLOR_TEXT_DIM : COLOR_PANEL, ">");
+
+    return tab_scroll_start;
 }
 
 int ui_show_list(AppEntry *entries, int count) {
@@ -406,9 +436,10 @@ int ui_show_list(AppEntry *entries, int count) {
     if (selected >= visible_count) selected = visible_count > 0 ? visible_count - 1 : 0;
     if (selected < 0) selected = 0;
 
-    bool sidebar_open = false;
-    int sidebar_selected = 0; // 0 = "Todos", i+1 = categories[i]
-    int sidebar_scroll = 0;
+    // Which tab the always-visible category strip currently starts
+    // rendering from - not persisted across re-entries (recomputed to keep
+    // the active tab in view the moment this screen is shown again).
+    int tab_scroll_start = 0;
 
     PadState pad;
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
@@ -433,36 +464,9 @@ int ui_show_list(AppEntry *entries, int count) {
             last_status_tick = now_tick;
         }
 
-        bool show_full_title = !sidebar_open && visible_count > 0;
+        bool show_full_title = visible_count > 0;
 
-        if (sidebar_open) {
-            int total_items = category_count + 1;
-            if (kDown & HidNpadButton_Down) {
-                if (sidebar_selected < total_items - 1) sidebar_selected++;
-            }
-            if (kDown & HidNpadButton_Up) {
-                if (sidebar_selected > 0) sidebar_selected--;
-            }
-            if (kDown & HidNpadButton_A) {
-                if (sidebar_selected == 0) {
-                    category_filter[0] = '\0';
-                } else {
-                    snprintf(category_filter, sizeof(category_filter), "%s", categories[sidebar_selected - 1]);
-                }
-                visible_count = build_visible(entries, count, category_filter, search_query, visible);
-                selected = 0;
-                scroll_offset = 0;
-                sidebar_open = false;
-                save_prefs(view_mode, sort_mode, category_filter);
-            }
-            if (kDown & HidNpadButton_B) {
-                sidebar_open = false;
-            }
-            if (sidebar_selected < sidebar_scroll) sidebar_scroll = sidebar_selected;
-            if (sidebar_selected >= sidebar_scroll + SIDEBAR_VISIBLE_ROWS) {
-                sidebar_scroll = sidebar_selected - SIDEBAR_VISIBLE_ROWS + 1;
-            }
-        } else {
+        {
             int cols = (view_mode == VIEW_GRID) ? GRID_COLS : 1;
 
             if (kDown & HidNpadButton_Down) {
@@ -502,16 +506,23 @@ int ui_show_list(AppEntry *entries, int count) {
                 scroll_offset = 0;
                 save_prefs(view_mode, sort_mode, category_filter);
             }
-            if (kDown & HidNpadButton_L) {
-                sidebar_open = true;
-                sidebar_selected = 0;
-                for (int i = 0; i < category_count; i++) {
-                    if (strcmp(categories[i], category_filter) == 0) {
-                        sidebar_selected = i + 1;
-                        break;
-                    }
+            if (kDown & (HidNpadButton_ZL | HidNpadButton_ZR)) {
+                // Steps directly to the next/previous category tab - no
+                // separate "open panel, navigate, confirm" step, matching
+                // how the always-visible tab strip itself works.
+                int total_tabs = category_count + 1;
+                int current_index = category_tab_index(categories, category_count, category_filter);
+                int step = (kDown & HidNpadButton_ZL) ? -1 : 1;
+                int new_index = (current_index + step + total_tabs) % total_tabs;
+                if (new_index == 0) {
+                    category_filter[0] = '\0';
+                } else {
+                    snprintf(category_filter, sizeof(category_filter), "%s", categories[new_index - 1]);
                 }
-                sidebar_scroll = 0;
+                visible_count = build_visible(entries, count, category_filter, search_query, visible);
+                selected = 0;
+                scroll_offset = 0;
+                save_prefs(view_mode, sort_mode, category_filter);
             }
             if (kDown & HidNpadButton_R) {
                 SwkbdConfig kbd;
@@ -556,6 +567,8 @@ int ui_show_list(AppEntry *entries, int count) {
                             storage.sd_ok, storage.sd_total, storage.sd_free);
         draw_storage_panel(PANEL_NAND_X, PANEL_Y, PANEL_W, PANEL_H, "NAND",
                             storage.nand_ok, storage.nand_total, storage.nand_free);
+
+        tab_scroll_start = draw_category_tabs(categories, category_count, category_filter, tab_scroll_start);
 
         if (view_mode == VIEW_LIST) {
             ui_draw_rect(LEFT_EDGE, COL_HEADER_Y, RIGHT_EDGE - LEFT_EDGE, COL_HEADER_H, COLOR_PANEL);
@@ -621,10 +634,6 @@ int ui_show_list(AppEntry *entries, int count) {
             }
         }
 
-        if (sidebar_open) {
-            draw_sidebar(categories, category_count, sidebar_selected, sidebar_scroll);
-        }
-
         // Titles get cut short with "..." to fit the grid's narrow cells
         // (and could in the list view too, for a long enough one) - always
         // show the selected entry's full title here instead of guessing
@@ -637,15 +646,11 @@ int ui_show_list(AppEntry *entries, int count) {
 
         ui_draw_rect(LEFT_EDGE, FOOTER_Y - 10, RIGHT_EDGE - LEFT_EDGE, 1, COLOR_PANEL);
         char footer[200];
-        if (sidebar_open) {
-            snprintf(footer, sizeof(footer), "Arriba/Abajo: elegir    A: aplicar    B: cerrar");
-        } else {
-            snprintf(footer, sizeof(footer),
-                     "D-Pad: navegar    A: instalar    L: categorías%s    R: buscar%s    Y: vista %s    "
-                     "X: ordenar (%s)    -: fuentes    B/+: salir",
-                     category_filter[0] ? " (filtrado)" : "", search_query[0] ? " (activa)" : "",
-                     view_mode == VIEW_LIST ? "cuadrícula" : "lista", sort_mode_label(sort_mode));
-        }
+        snprintf(footer, sizeof(footer),
+                 "D-Pad: navegar    A: instalar    ZL/ZR: categoría    R: buscar%s    Y: vista %s    "
+                 "X: ordenar (%s)    -: fuentes    B/+: salir",
+                 search_query[0] ? " (activa)" : "", view_mode == VIEW_LIST ? "cuadrícula" : "lista",
+                 sort_mode_label(sort_mode));
         ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y, COLOR_TEXT_DIM, footer);
 
         SDL_RenderPresent(g_renderer);

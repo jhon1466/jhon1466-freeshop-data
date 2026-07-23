@@ -45,10 +45,12 @@ Homebrew Menu.
   when the catalog entry provides one, otherwise skipped (see
   [`docs/catalog-schema.md`](docs/catalog-schema.md)). It always fetches
   fresh on launch, so any edit made in `/admin` is picked up the next time
-  the client is opened - no extra "update detection" logic needed. `L`
-  toggles a categories sidebar (built from whatever `category` values are
-  in the catalog) to filter the list/grid; `R` opens the system keyboard to
-  search by title. View mode, sort mode, and the active category filter are
+  the client is opened - no extra "update detection" logic needed. An
+  always-visible category tab strip sits below the storage panels (built
+  from whatever `category` values are in the catalog); `ZL`/`ZR` step
+  between tabs directly, with the active one underlined so it's obvious
+  which catalog is showing. `R` opens the system keyboard to search by
+  title. View mode, sort mode, and the active category filter are
   saved to `sdmc:/switch/freeshop/prefs.json` and restored on the next
   launch (see [`ui_prefs.h`](client/source/ui/ui_prefs.h)). Holding the
   selection still for 1s reveals a title's full, untruncated name (grid
