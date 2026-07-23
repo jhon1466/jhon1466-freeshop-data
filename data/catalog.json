@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-23T16:52:54.735Z",
+  "generatedAt": "2026-07-23T17:09:20.641Z",
   "apps": [
     {
       "id": "2",
@@ -239,6 +239,19 @@
       "downloadUrl": "https://download946.mediafire.com/idapntbvyzxgzqpIbQHT7zlAz8r1uS3DVBYL1-T9LuFECwIt0tN631LFjpVxN7ZTjZ0EmyFqhFfwzwnoL_amOvKiuwm3Pnd2iYJ8N4AyN17ISaToX18Sd9fHMU_b8JOnEdCW675mjPBjzEd9oe6oOY_HedDpFM-0sZn3-01kqX5euhg/67drla0nzznzeys/Tinfoil+%5B050000BADDAD0000%5D%5B20.0%5D%5Bv2%5D.nsp",
       "fileSize": 16863448,
       "filename": "Tinfoil [050000BADDAD0000][20.0][v2].nsp",
+      "fileType": "nsp"
+    },
+    {
+      "id": "19",
+      "title": "mina",
+      "author": "no c xd",
+      "category": "Game",
+      "description": "",
+      "version": "1.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/19.jpg",
+      "downloadUrl": "https://download2277.mediafire.com/5qyjh6tfrsvg5pF6H4SUiUZ_fpMdAm50JhXcrMaZZvh4RBBYxD6_RMKCu6EURAior5YMJNE__UkNJa8epza1j-GxGTlzJ3h2kucEhasXMUiDEMN44cB1ARRK3w0pPKqcDpf2mT8VoRw9t_guP5XG0rVJaiP7paD89QgmUVb_wn1KJMs/rvbpzuik3k3ll6q/Mina+the+Hollower+Switch+NSP+Base+Game.nsp",
+      "fileSize": 875425557,
+      "filename": "Mina the Hollower Switch NSP Base Game.nsp",
       "fileType": "nsp"
     }
   ]
