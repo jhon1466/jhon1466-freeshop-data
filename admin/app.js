@@ -334,9 +334,17 @@ async function main() {
     if (btn.dataset.action === "edit") {
       openEditDialog(state.catalog.apps.find((a) => a.id === id));
     } else if (btn.dataset.action === "delete") {
-      if (!confirm(`¿Borrar "${id}" del catálogo?`)) return;
+      const children = state.catalog.apps.filter((a) => a.parentId === id);
+      const childNote =
+        children.length > 0
+          ? `\n\nTambién se borrarán ${children.length} DLC/actualización(es) vinculada(s): ${children
+              .map((c) => c.title)
+              .join(", ")}.`
+          : "";
+      if (!confirm(`¿Borrar "${id}" del catálogo?${childNote}`)) return;
       try {
-        await saveCatalog(state.catalog.apps.filter((a) => a.id !== id));
+        const childIds = new Set(children.map((c) => c.id));
+        await saveCatalog(state.catalog.apps.filter((a) => a.id !== id && !childIds.has(a.id)));
       } catch (err) {
         alert("No se pudo borrar: " + err.message);
       }
