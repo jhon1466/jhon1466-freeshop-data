@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-23T19:06:40.481Z",
+  "generatedAt": "2026-07-23T19:06:43.402Z",
   "apps": [
     {
       "id": "3",
@@ -213,19 +213,6 @@
       "fileType": "nsp",
       "parentId": "16",
       "contentType": "update"
-    },
-    {
-      "id": "18",
-      "title": "tinfoil",
-      "author": "dsds",
-      "category": "Game",
-      "description": "",
-      "version": "20.0",
-      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/18.jpg",
-      "downloadUrl": "https://download946.mediafire.com/7zpw33lmeaig25lZK1WKW-TLEPbyjYR45uKon5k2HOnj7NDLaC-TaMmFeUeZxRZQryKFMtfzthKm7x17viiLL7SrJ0KibGBmq_7Ab2a2RWva8sz002dM4c4Kd3wSwYBgGeU6z9fW-7mM3eRAOOJD7qxSPWbELx2JKah6M9Sn4FWD304/67drla0nzznzeys/Tinfoil+%5B050000BADDAD0000%5D%5B20.0%5D%5Bv2%5D.nsp",
-      "fileSize": 16863448,
-      "filename": "Tinfoil [050000BADDAD0000][20.0][v2].nsp",
-      "fileType": "nsp"
     }
   ]
 }
