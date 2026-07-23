@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-22T23:30:53.251Z",
+  "generatedAt": "2026-07-23T00:37:28.559Z",
   "apps": [
     {
       "id": "2",
@@ -99,6 +99,20 @@
       "filename": "Mario Party Superstars.xci",
       "fileType": "xci",
       "longDescription": "La serie Mario Party está de regreso con una colección superestrella de tableros y minijuegos clásicos, exclusivamente para las consolas de la familia Nintendo Switch™. Toma la ventaja en disparatadas partidas con tus amigos y tu familia donde las circunstancias pueden cambiar al lanzar los dados."
+    },
+    {
+      "id": "9",
+      "title": "DRAGON BALL FighterZ",
+      "author": "Unknown",
+      "category": "Games",
+      "description": "Update 1.50 + 35 DLCs",
+      "version": "1.50",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/9.jpg",
+      "downloadUrl": "https://download1531.mediafire.com/lecg8f30ycog81xk_GGWwDdbC2HAxzcJqha635p_QoGiCjuD71YASLOPA38x7jj_QOYzc_KVd0SJvJHgrwhiYT7TtE7oLsbJS6JB3pIMI5tOxomFgl_3V2YiZW55VwT7ThO7QK-xmDEEHwyBo4TVe6bdh62OgIk9ZdOTQ0oLvo8hPJw/a699xzrrxaaydjr/DRAGON+BALL+FighterZ+%5Bv1.50+%2B+35+DLCs%5D.xci",
+      "fileSize": 10796092928,
+      "filename": "DRAGON BALL FighterZ.xci",
+      "fileType": "xci",
+      "longDescription": "DRAGON BALL FighterZ nace de lo que hace a DRAGON BALL tan famosa: luchas espectaculares e interminables con luchadores superpoderosos.\nCon Arc System Works, DRAGON BALL FighterZ maximiza los gráficos de anime de alta calidad y ofrece un juego de lucha fácil de aprender pero difícil de dominar.\nGráficos de anime de alta calidad\nCon el poder del motor Unreal y el talentoso equipo de Arc System Works, DRAGON BALL FighterZ es toda una hazaña visual."
     }
   ]
 }
