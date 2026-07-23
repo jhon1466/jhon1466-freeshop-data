@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-23T03:57:26.067Z",
+  "generatedAt": "2026-07-23T04:26:58.994Z",
   "apps": [
     {
       "id": "2",
@@ -198,6 +198,20 @@
       "filename": "Undertale.xci",
       "fileType": "xci",
       "longDescription": "Bienvenido a UNDERTALE, el amistoso RPG donde nadie tiene por qué morir. Baila con un slime, acaricia a un perro, susúrrale secretos a un caballero... o ignora todo eso y fulmina a tus enemigos. Tú eliges, pero... ¿tienes la determinación necesaria para sobrevivir?"
+    },
+    {
+      "id": "16",
+      "title": "Bayonetta 3",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/16.jpg",
+      "downloadUrl": "https://drive.dlarchive.my.id/dl/file/2026%2F01%2F13%2F5eop8htn-Bayonetta_3_01004A4010FEA000_v0_US_.xci?token=eyJrIjoiMjAyNi8wMS8xMy81ZW9wOGh0bi1CYXlvbmV0dGFfM18wMTAwNEE0MDEwRkVBMDAwX3YwX1VTXy54Y2kiLCJlIjoxNzg1Mzg1NDE2LCJmIjoiIEJheW9uZXR0YSAzIFswMTAwNEE0MDEwRkVBMDAwXVt2MF1bVVNdLnhjaSJ9.Kb-ENbsqeWGK5TKJV4wYyvhQ5EAyIWWrRJA6VwZvuNY&filename=%5BROMsNS%5D+Bayonetta+3+%5B01004A4010FEA000%5D%5Bv0%5D%5BUS%5D.xci",
+      "fileSize": 15971909632,
+      "filename": "Bayonetta 3 [01004A4010FEA000][v0][US].xci",
+      "fileType": "xci",
+      "longDescription": "¡La bruja está de regreso y es más poderosa que nunca!\n\n¡Desplázate por múltiples ubicaciones en un nuevo juego de acción culminante! Bayonetta deberá enfrentarse a un misterioso mal con la ayuda de sus distintivas pistolas, su habilidad Tiempo Brujo (que ralentiza el tiempo) y sus malignas predilectas. Dispara, pisotea y golpea a través de múltiples ubicaciones mientras conoces a otras brujas malignas durante tu aventura."
     }
   ]
 }
