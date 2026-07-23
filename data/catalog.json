@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-23T01:02:34.508Z",
+  "generatedAt": "2026-07-23T01:27:07.743Z",
   "apps": [
     {
       "id": "2",
@@ -156,6 +156,20 @@
       "fileType": "xci",
       "parentId": "11",
       "contentType": "dlc"
+    },
+    {
+      "id": "13",
+      "title": "Super Mario Party Jamboree",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "2.3.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/13.jpg",
+      "downloadUrl": "https://download1580.mediafire.com/vk1jpmd3qb1gyV0MugvrLK8XqQmNWHcDJ15Wg_hrULiGm2b-7QBfl49AKHfncnLFz7KoX3D3jtRUkK4fRNWV0cN1tHEEQ0uWKACr80uBZT-wXDO71zP3DZCpj2nYphxw8GsFsOUHsuIV1F6qs3X0KSIuzr1M32srYc3Bp39QKBDae6A/i67mqp2b6k735et/Super+Mario+Party+Jamboree+%5Bv2.3.0%5D.xci",
+      "fileSize": 5750463488,
+      "filename": "Super Mario Party Jamboree.xci",
+      "fileType": "xci",
+      "longDescription": "¡La serie Mario Party está de regreso y ofrece aún más diversión! Con más de 110 minijuegos, nuevos modos en línea* y sin conexión** y una gran cantidad de opciones de personalización, ¡hay algo increíble para todos!"
     }
   ]
 }
