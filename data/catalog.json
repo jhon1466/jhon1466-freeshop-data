@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-23T15:59:51.029Z",
+  "generatedAt": "2026-07-23T16:50:15.100Z",
   "apps": [
     {
       "id": "2",
@@ -227,6 +227,32 @@
       "fileType": "nsp",
       "parentId": "16",
       "contentType": "update"
+    },
+    {
+      "id": "speed-test-http",
+      "title": "TEST - Speed Test (HTTP sin TLS)",
+      "author": "diagnóstico",
+      "category": "Test",
+      "description": "Prueba temporal de velocidad - borrar después",
+      "version": "1.0.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/hello-homebrew.jpg",
+      "downloadUrl": "http://speedtest.tele2.net/100MB.zip",
+      "fileSize": 104857600,
+      "filename": "speed-test-100mb.nro",
+      "fileType": "nro"
+    },
+    {
+      "id": "18",
+      "title": "tinfoil",
+      "author": "dsds",
+      "category": "Game",
+      "description": "",
+      "version": "20.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/18.jpg",
+      "downloadUrl": "https://download946.mediafire.com/idapntbvyzxgzqpIbQHT7zlAz8r1uS3DVBYL1-T9LuFECwIt0tN631LFjpVxN7ZTjZ0EmyFqhFfwzwnoL_amOvKiuwm3Pnd2iYJ8N4AyN17ISaToX18Sd9fHMU_b8JOnEdCW675mjPBjzEd9oe6oOY_HedDpFM-0sZn3-01kqX5euhg/67drla0nzznzeys/Tinfoil+%5B050000BADDAD0000%5D%5B20.0%5D%5Bv2%5D.nsp",
+      "fileSize": 16863448,
+      "filename": "Tinfoil [050000BADDAD0000][20.0][v2].nsp",
+      "fileType": "nsp"
     }
   ]
 }
