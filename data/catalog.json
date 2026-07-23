@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-23T21:58:22.951Z",
+  "generatedAt": "2026-07-23T22:03:07.624Z",
   "apps": [
     {
       "id": "3",
@@ -241,6 +241,20 @@
       "filename": "Hello Neighbor [v1.0].xci",
       "fileType": "xci",
       "longDescription": "Hello Neighbor es un juego de terror y sigilo donde debes meterte en la casa de tu vecino y averiguar los secretos que esconde en el sótano. Juega contra una IA avanzada que aprende de tus movimientos. ¿Te gusta escalar ventanas? Pondrá una trampa para osos. ¿Intentas salir sin ser visto por la puerta principal? Instalará cámaras en un abrir y cerrar de ojos. ¿Tratas de escapar? Encontrará un atajo. Salir de una pieza no va a resultar nada fácil..."
+    },
+    {
+      "id": "20",
+      "title": "Xenoblade Chronicles 2",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "2.1.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/20.jpg",
+      "downloadUrl": "https://download1649.mediafire.com/2brmy729qftgizbX61bxd1tkTsysTEms2NeWS1yY4PVtFSmD9QemdwQOQD9gNP3AJITW0j8bu51nuJ2i_Hxn1DvKw0wjRubjETkvj7Kz4Zzn6Caq_v-N4eUxYFlKSgUEtpO1wptJb3Ueadcwq_hmbRCw4nsstd4HNt7ClDJBBAyLuWs/xqm6h9gl90sw9ii/Xenoblade+Chronicles+2+%5Bv2.1.0+%2B+7+DLCs%5D.xci",
+      "fileSize": 19087005696,
+      "filename": "Xenoblade Chronicles 2 [v2.1.0 + 7 DLCs].xci",
+      "fileType": "xci",
+      "longDescription": "Viaja hasta la cuna de la humanidad: el Elíseo.\n\nEn el enorme RPG Xenoblade Chronicles 2 para Nintendo Switch, explorarás un océano infinito de nubes entre las que perviven los restos de una civilización sobre los lomos de enormes bestias llamadas titanes. Descubre la historia de Rex y su nueva amiga Pyra, un ser misterioso ser conocido como Blade que le otorga enorme poder. Juntos emprenderán la búsqueda del hogar perdido de Pyra, el Elíseo, la cuna de la humanidad."
     }
   ]
 }
