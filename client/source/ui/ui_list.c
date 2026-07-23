@@ -324,8 +324,19 @@ int ui_show_list(AppEntry *entries, int count) {
     format_status_line(&status, status_line, sizeof(status_line));
     u64 last_status_tick = armGetSystemTick();
 
-    int selected = 0;
-    int scroll_offset = 0; // rows scrolled, in list-row or grid-row units depending on view_mode
+    // Persisted across calls (this screen is re-entered every time the
+    // detail screen is backed out of) so backing out of a game doesn't
+    // bounce the user back to the top of the list every time.
+    static int selected = 0;
+    static int scroll_offset = 0; // rows scrolled, in list-row or grid-row units depending on view_mode
+
+    // The catalog/filter/sort can differ from the last time this screen was
+    // shown (sources reload, or view_mode/category changed elsewhere) -
+    // clamp rather than trust the previous position blindly. scroll_offset
+    // doesn't need its own clamp: the per-frame scroll-follow logic below
+    // already derives it from `selected` unconditionally.
+    if (selected >= visible_count) selected = visible_count > 0 ? visible_count - 1 : 0;
+    if (selected < 0) selected = 0;
 
     bool sidebar_open = false;
     int sidebar_selected = 0; // 0 = "Todos", i+1 = categories[i]
