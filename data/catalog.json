@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-23T00:37:28.559Z",
+  "generatedAt": "2026-07-23T00:44:38.184Z",
   "apps": [
     {
       "id": "2",
@@ -113,6 +113,20 @@
       "filename": "DRAGON BALL FighterZ.xci",
       "fileType": "xci",
       "longDescription": "DRAGON BALL FighterZ nace de lo que hace a DRAGON BALL tan famosa: luchas espectaculares e interminables con luchadores superpoderosos.\nCon Arc System Works, DRAGON BALL FighterZ maximiza los gráficos de anime de alta calidad y ofrece un juego de lucha fácil de aprender pero difícil de dominar.\nGráficos de anime de alta calidad\nCon el poder del motor Unreal y el talentoso equipo de Arc System Works, DRAGON BALL FighterZ es toda una hazaña visual."
+    },
+    {
+      "id": "10",
+      "title": "Red Dead Redemption",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.4",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/10.jpeg",
+      "downloadUrl": "https://drive.usercontent.google.com/download?id=1eg0VbpvJggRiMs4vY_BDLiW1nVSk0jLV&export=download&authuser=0&confirm=t&uuid=7705619c-c4de-4cd7-8cd6-3518655f65a8&at=ABswASaKV4FQwAwuDKiwMd9yUAmK%3A1784767304020",
+      "fileSize": 12459116544,
+      "filename": "Red Dead Redemption.xci",
+      "fileType": "xci",
+      "longDescription": "Cuando agentes federales amenazan a su familia, el ex forajido John Marston se ve obligado a dar caza a la banda de criminales a quienes una vez llamó amigos. Vive el viaje de Marston a través de las vastas extensiones del Oeste americano y México mientras lucha por enterrar su sangriento pasado en la aclamada secuela del éxito de taquilla de 2018, Red Dead Redemption 2. También se incluye Undead Nightmare, la icónica historia de terror que transforma el mundo de Red Dead Redemption en una lucha apocalíptica por la supervivencia contra una horda de zombis. Con las experiencias completas para un jugador de ambos juegos, Red Dead Redemption también incluye contenido adicional de la Edición Juego del Año y más.* Forajidos hasta el final *Red Dead Redemption incluye las experiencias para un jugador de Red Dead Redemption y Undead Nightmare, además de contenido adicional de la Edición Juego del Año y más. Red Dead Redemption no incluye contenido multijugador."
     }
   ]
 }
