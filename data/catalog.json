@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-23T22:12:20.570Z",
+  "generatedAt": "2026-07-23T22:43:22.868Z",
   "apps": [
     {
       "id": "3",
@@ -269,6 +269,20 @@
       "filename": "Minecraft Bedrock NS [v1.26.33].xci",
       "fileType": "xci",
       "longDescription": "¡Sobrevive a la noche o crea una obra de arte en el juego aislado definitivo! Crea lo que sea que puedas imaginar, descubre misterios y enfréntate a enemigos emocionantes en un mundo infinito que es único cada vez que lo juegues. No hay forma incorrecta de jugar."
+    },
+    {
+      "id": "22",
+      "title": "Splatoon 3",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "Update v11.2.0 + 3 DLCs",
+      "version": "11.2.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/22.jpeg",
+      "downloadUrl": "https://download947.mediafire.com/hpry2y70199gjBoZIC1uwxp65hNeqwzSwAinGFvqKYPoPQmebc7D6fJXZ-I1Wr5CP3xMxZ378426qptSE8780O4CvEJildTl_KuZa7axRuNnqetzQeLf7cHqFHK5v58x0gD9KpVi_tJNLGc5QzMLU3R29epfO0o6cArZNq16UDYot5w/p6x94qe3x5ei8ka/Splatoon+3+%5BUpdate+11.2.0+%2B+3+DLCs%5D.xci",
+      "fileSize": 13406767104,
+      "filename": "Splatoon 3 [Update 11.2.0 + 3 DLCs].xci",
+      "fileType": "xci",
+      "longDescription": "Splatoon 3\nTe damos la bienvenida a Tintelia, en la abrasadora región del mismo nombre, ¡donde te esperan nuevas armas, habilidades, escenarios e indumentaria de lo más novedoso!\n\nEnfréntate a rivales en combates en línea a tope de tinta, repele ofensivas de salmónidos y evita una invasión de octarianos."
     }
   ]
 }
