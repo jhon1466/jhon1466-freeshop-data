@@ -26,15 +26,16 @@ Homebrew Menu.
   `/downloads` directly and rewrite `/api/**` to this Function.
 - [`client/`](client/) - devkitPro/libnx C project (SDL2-rendered, Tinfoil-
   styled list and grid views, cover icons). `.nro` entries are downloaded
-  straight into `sdmc:/switch/<id>/`. `.nsp` installs natively - the client
-  parses the PFS0, streams every NCA straight into NCM content storage,
-  commits the content-meta record, imports the ticket if present, and pushes
-  the application record, all without leaving the app (see
-  [`install_nsp_native.h`](client/source/install/install_nsp_native.h));
+  straight into `sdmc:/switch/<id>/`. `.nsp`/`.xci` both install natively -
+  the client parses the container (PFS0 for `.nsp`, the nested "secure" HFS0
+  partition for `.xci`), streams every NCA straight into NCM content
+  storage, commits the content-meta record, imports the ticket if present,
+  and pushes the application record, all without leaving the app (see
+  [`install_nsp_native.h`](client/source/install/install_nsp_native.h) /
+  [`install_xci_native.h`](client/source/install/install_xci_native.h));
   "Instalar vía DBI" (X button) remains as a manual fallback to
-  [DBI](https://github.com/rashevskyv/dbi) while this is still being verified
-  on real hardware. `.xci` still hands off to DBI (this project doesn't
-  reimplement NCM/ES for that container format yet). `sha256` is verified
+  [DBI](https://github.com/rashevskyv/dbi) for both while this is still
+  being verified across real hardware. `sha256` is verified
   when the catalog entry provides one, otherwise skipped (see
   [`docs/catalog-schema.md`](docs/catalog-schema.md)). It always fetches
   fresh on launch, so any edit made in `/admin` is picked up the next time

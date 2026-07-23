@@ -24,10 +24,11 @@ static const char *dlc_tag_label(const AppEntry *e) {
     return (strcmp(e->content_type, "update") == 0) ? "[UPD]" : "[DLC]";
 }
 
-// NSP now installs natively (see install_nsp_native.h) - only XCI still has
-// no install path of its own and always hands off to DBI.
-static bool needs_dbi(const AppEntry *e) {
-    return e->file_type == APP_FILE_TYPE_XCI;
+// NSP and XCI both install natively now (see install_nsp_native.h,
+// install_xci_native.h) - DBI is only offered as a manual fallback (X) for
+// these, not the primary path.
+static bool has_native_install(const AppEntry *e) {
+    return e->file_type == APP_FILE_TYPE_NSP || e->file_type == APP_FILE_TYPE_XCI;
 }
 
 UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries, int dlc_count,
@@ -59,7 +60,7 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
             if (kDown & HidNpadButton_B) {
                 return UI_DETAIL_BACK;
             }
-            if (entry->file_type == APP_FILE_TYPE_NSP && (kDown & HidNpadButton_X)) {
+            if (has_native_install(entry) && (kDown & HidNpadButton_X)) {
                 *out_target = entry;
                 return UI_DETAIL_INSTALL_DBI;
             }
@@ -134,7 +135,7 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
         char hint[160];
         if (focus == FOCUS_DLC_LIST) {
             snprintf(hint, sizeof(hint), "Arriba/Abajo: elegir    A: instalar seleccionado    B: volver al juego");
-        } else if (entry->file_type == APP_FILE_TYPE_NSP) {
+        } else if (has_native_install(entry)) {
             if (dlc_count > 0) {
                 snprintf(hint, sizeof(hint), "A: instalar    X: instalar vía DBI    Y: ver DLC/actualizaciones (%d)    B: volver", dlc_count);
             } else {
@@ -143,7 +144,7 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
         } else if (dlc_count > 0) {
             snprintf(hint, sizeof(hint), "A: instalar    Y: ver DLC/actualizaciones (%d)    B: volver", dlc_count);
         } else {
-            snprintf(hint, sizeof(hint), "%s", needs_dbi(entry) ? "A: instalar vía DBI    B: volver" : "A: instalar    B: volver");
+            snprintf(hint, sizeof(hint), "A: instalar    B: volver");
         }
         ui_draw_text(g_font_small, LEFT_EDGE, 680, COLOR_TEXT_DIM, hint);
 

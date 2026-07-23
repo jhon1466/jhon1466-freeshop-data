@@ -16,6 +16,7 @@
 #include "install/install.h"
 #include "install/install_nsp.h"
 #include "install/install_nsp_native.h"
+#include "install/install_xci_native.h"
 
 // Fetches each enabled source's catalog and concatenates them into one
 // array. A source that fails to fetch is skipped rather than aborting the
@@ -139,7 +140,16 @@ typedef struct {
     u64 start_tick;
     bool started;
     u64 last_render_tick;
+    // Defaults to downloading - installers that also write content to NCM
+    // storage (install_nsp_native, install_xci_native) flip this via
+    // on_install_phase once that phase actually starts.
+    InstallPhase phase;
 } InstallProgressCtx;
+
+static void on_install_phase(InstallPhase phase, void *userdata) {
+    InstallProgressCtx *ctx = (InstallProgressCtx *)userdata;
+    if (ctx) ctx->phase = phase;
+}
 
 // Only actually does any work (cancel check + redraw) at most this often -
 // see the comment below on why.
@@ -189,7 +199,8 @@ static bool install_progress_cb(long total, long now, void *userdata) {
     SDL_SetRenderDrawColor(g_renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, COLOR_BG.a);
     SDL_RenderClear(g_renderer);
 
-    ui_draw_text(g_font_title, 90, 260, COLOR_TEXT, "Instalando...");
+    const char *title = (ctx && ctx->phase == INSTALL_PHASE_INSTALLING) ? "Instalando..." : "Descargando...";
+    ui_draw_text(g_font_title, 90, 260, COLOR_TEXT, title);
 
     char line[64];
     float pct = 0.0f;
@@ -340,15 +351,17 @@ int main(int argc, char **argv) {
         PadState install_pad;
         padConfigureInput(1, HidNpadStyleSet_NpadStandard);
         padInitializeDefault(&install_pad);
-        InstallProgressCtx progress_ctx = { .pad = &install_pad, .start_tick = 0, .started = false };
+        InstallProgressCtx progress_ctx = { .pad = &install_pad, .start_tick = 0, .started = false,
+                                             .phase = INSTALL_PHASE_DOWNLOADING };
 
         // Entries from different enabled sources need their own base URL,
         // not a single global one - see AppEntry.source_base_url.
         const char *base_url = install_target->source_base_url;
 
-        // XCI has no native install path yet, and UI_DETAIL_INSTALL_DBI is the
-        // explicit manual fallback for NSP - both go through the DBI hand-off.
-        if (action == UI_DETAIL_INSTALL_DBI || install_target->file_type == APP_FILE_TYPE_XCI) {
+        // UI_DETAIL_INSTALL_DBI is the explicit manual fallback offered for
+        // both NSP and XCI (see ui_detail.c) - only that goes through the
+        // DBI hand-off now.
+        if (action == UI_DETAIL_INSTALL_DBI) {
             NspHandoffResult nres = install_nsp_and_launch_dbi(install_target, base_url,
                                                                  install_progress_cb, &progress_ctx,
                                                                  err_buf, sizeof(err_buf));
@@ -372,13 +385,32 @@ int main(int argc, char **argv) {
 
         if (install_target->file_type == APP_FILE_TYPE_NSP) {
             NspInstallResult nires = install_nsp_native(install_target, base_url,
-                                                          install_progress_cb, &progress_ctx,
+                                                          install_progress_cb, on_install_phase, &progress_ctx,
                                                           err_buf, sizeof(err_buf));
             if (nires == NSP_INSTALL_OK) {
                 snprintf(msg, sizeof(msg), "\"%s\" instalado correctamente.\n\nVuelve al hbmenu para iniciarlo.",
                          install_target->title);
                 ui_app_show_message(msg);
             } else if (nires == NSP_INSTALL_ERR_CANCELED) {
+                ui_app_show_message("Descarga cancelada.");
+            } else {
+                snprintf(msg, sizeof(msg),
+                         "Error de instalación: %s\n\nSi el problema persiste, prueba \"Instalar vía DBI\" (botón X) desde esta misma pantalla.",
+                         err_buf);
+                ui_app_show_message(msg);
+            }
+            continue;
+        }
+
+        if (install_target->file_type == APP_FILE_TYPE_XCI) {
+            XciInstallResult xires = install_xci_native(install_target, base_url,
+                                                          install_progress_cb, on_install_phase, &progress_ctx,
+                                                          err_buf, sizeof(err_buf));
+            if (xires == XCI_INSTALL_OK) {
+                snprintf(msg, sizeof(msg), "\"%s\" instalado correctamente.\n\nVuelve al hbmenu para iniciarlo.",
+                         install_target->title);
+                ui_app_show_message(msg);
+            } else if (xires == XCI_INSTALL_ERR_CANCELED) {
                 ui_app_show_message("Descarga cancelada.");
             } else {
                 snprintf(msg, sizeof(msg),

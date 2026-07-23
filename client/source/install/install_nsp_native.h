@@ -27,8 +27,12 @@ typedef enum {
 // re-diagnosing anything. On success the file is deleted (it's now
 // installed, DBI no longer needs it) to reclaim SD space.
 //
+// `phase_cb` (may be NULL) is called once, right before content starts being
+// written to NCM content storage, so the caller can switch its progress
+// label from "downloading" to "installing" - see InstallPhaseCallback.
+//
 // Only handles entry->file_type == APP_FILE_TYPE_NSP - see install_nsp.h for
 // XCI, which still goes through DBI.
 NspInstallResult install_nsp_native(const AppEntry *entry, const char *base_url,
-                                     InstallProgressCallback cb, void *userdata,
+                                     InstallProgressCallback cb, InstallPhaseCallback phase_cb, void *userdata,
                                      char *err_buf, size_t err_buf_size);

@@ -17,6 +17,18 @@ typedef enum {
 // pressed a cancel button) - true to keep going. May be NULL.
 typedef bool (*InstallProgressCallback)(long total, long now, void *userdata);
 
+typedef enum {
+    INSTALL_PHASE_DOWNLOADING, // fetching the file over the network
+    INSTALL_PHASE_INSTALLING,  // writing already-downloaded content into the console's own storage (NCM)
+} InstallPhase;
+
+// Called once when a multi-phase install (download, then write content to
+// the console's storage) switches phase, so the caller can update its UI
+// label (e.g. "Descargando..." -> "Instalando..."). May be NULL. Installers
+// that are pure downloads (install_app, install_nsp_and_launch_dbi) never
+// call this - their whole visible progress is the download itself.
+typedef void (*InstallPhaseCallback)(InstallPhase phase, void *userdata);
+
 // Downloads entry's .nro from "<base_url><entry->download_url>" to
 // sdmc:/switch/<entry->id>/<entry->filename>, verifying entry->sha256
 // before the file is moved into its final location. Never leaves a
