@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-23T19:32:14.696Z",
+  "generatedAt": "2026-07-23T19:37:36.389Z",
   "apps": [
     {
       "id": "3",
@@ -213,19 +213,6 @@
       "fileType": "nsp",
       "parentId": "16",
       "contentType": "update"
-    },
-    {
-      "id": "18",
-      "title": "prueba xci",
-      "author": "fdfd",
-      "category": "Game",
-      "description": "",
-      "version": "1.0",
-      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/18.jpg",
-      "downloadUrl": "https://download1531.mediafire.com/ew8w5rig8omgVQSVOq5LwkY6SuDf60INLPladdPWzCv-aKMppq22GnovwS_aQlbK5G8Z7AGAKQJC-4kDc7TWOLAvyKbifrbhrmPKJQgOVNIV5Fx3jUIqtMRuUB4_FooVvaKL3OlRkaA1DwX3tTZzQVEGoEkP-5kEGqGLMOp5oEt4X4c/soi32gacq1u5cjc/BATTLLOON_V1.0.1_Eur.xci",
-      "fileSize": 221710848,
-      "filename": "BATTLLOON_V1.0.1_Eur.xci",
-      "fileType": "xci"
     }
   ]
 }
