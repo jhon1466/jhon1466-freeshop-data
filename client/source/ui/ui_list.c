@@ -49,6 +49,45 @@
 #define COL_CATEGORY_X 900
 #define COL_SIZE_X 1080
 
+// Directional navigation (D-Pad or left stick) auto-repeats while held,
+// instead of requiring a fresh press per step - the classic "tap to move
+// one, hold to fast-scroll" pattern. First step is immediate on press; once
+// held past NAV_REPEAT_DELAY_NS it repeats every NAV_REPEAT_INTERVAL_NS.
+#define NAV_REPEAT_DELAY_NS 350000000ULL
+#define NAV_REPEAT_INTERVAL_NS 120000000ULL
+// How far the left stick has to be pushed (of a ~32767 max) before it counts
+// as "held" in that direction - well past resting/drift noise, well short
+// of needing a full-deflection press.
+#define NAV_STICK_DEADZONE 13000
+
+typedef struct {
+    bool was_held;
+    u64 next_repeat_tick;
+} NavRepeatState;
+
+// Returns true once for a "step" in this direction: immediately on the
+// press (was_held transitioning false -> true), then repeatedly while held,
+// starting NAV_REPEAT_DELAY_NS after the press and every
+// NAV_REPEAT_INTERVAL_NS after that. `state` is one direction's own
+// persisted timing (see the four NavRepeatState statics in ui_show_list) -
+// each direction repeats independently of the others.
+static bool nav_repeat_step(NavRepeatState *state, bool held, u64 now_tick) {
+    if (!held) {
+        state->was_held = false;
+        return false;
+    }
+    if (!state->was_held) {
+        state->was_held = true;
+        state->next_repeat_tick = now_tick + armNsToTicks(NAV_REPEAT_DELAY_NS);
+        return true;
+    }
+    if (now_tick >= state->next_repeat_tick) {
+        state->next_repeat_tick = now_tick + armNsToTicks(NAV_REPEAT_INTERVAL_NS);
+        return true;
+    }
+    return false;
+}
+
 // Grid view (Y toggles list <-> grid). Fixed constants tuned for the fixed
 // 1280x720 layout this whole screen already assumes (see SCREEN_W/H above) -
 // not derived dynamically, matching the rest of this file's style.
@@ -258,25 +297,43 @@ static void truncate_to_width(TTF_Font *font, const char *text, int max_w, char 
 // below) plus roughly one g_font_small (16pt) line.
 #define GRID_SELECT_TITLE_H 28
 
-static void draw_grid_cell(int x, int y, const AppEntry *entry, bool is_selected) {
+// How much the selected cell's icon grows (12%) - GRID_CELL_W - GRID_ICON_SIZE
+// (56px) is the slack between icons before the next column starts, so this
+// has plenty of room without touching a neighboring cell.
+#define GRID_ZOOM_TARGET 1.12f
+// Eased toward GRID_ZOOM_TARGET by this fraction of the remaining distance
+// each drawn frame - at ~60fps this settles in well under a second, fast
+// enough to feel responsive to cursor movement rather than sluggish.
+#define GRID_ZOOM_EASE 0.35f
+
+// `zoom` (1.0 = no scaling) grows the icon in place - only meaningful when
+// is_selected, callers pass 1.0 for every other cell. Anchored to the
+// icon's bottom edge (grows up and sideways, never down) rather than
+// centered on all four sides, so it never grows into the title drawn right
+// below it. The highlight box and title stay fixed size, so it reads as the
+// icon popping slightly out of its frame rather than the whole cell resizing.
+static void draw_grid_cell(int x, int y, const AppEntry *entry, bool is_selected, float zoom) {
     if (is_selected) {
         int box_w = GRID_ICON_SIZE + GRID_SELECT_PAD * 2;
         int box_h = GRID_ICON_SIZE + GRID_SELECT_TITLE_H + GRID_SELECT_PAD * 2;
         ui_draw_rect(x - GRID_SELECT_PAD, y - GRID_SELECT_PAD, box_w, box_h, COLOR_ACCENT);
     }
 
-    ui_draw_rect(x, y, GRID_ICON_SIZE, GRID_ICON_SIZE, COLOR_PANEL);
+    int icon_size = (int)(GRID_ICON_SIZE * zoom);
+    int grow = icon_size - GRID_ICON_SIZE;
+    SDL_Rect icon_rect = { x - grow / 2, y - grow, icon_size, icon_size };
+
+    ui_draw_rect(icon_rect.x, icon_rect.y, icon_rect.w, icon_rect.h, COLOR_PANEL);
 
     SDL_Texture *icon = ui_icons_get(entry);
     if (icon) {
-        SDL_Rect dst = { x, y, GRID_ICON_SIZE, GRID_ICON_SIZE };
-        SDL_RenderCopy(g_renderer, icon, NULL, &dst);
+        SDL_RenderCopy(g_renderer, icon, NULL, &icon_rect);
     } else {
         // Placeholder while the icon loads (or if it never resolves): the
         // title's first letter, centered-ish, so the grid isn't just blank
         // panels before icons finish fetching.
         char initial[2] = { entry->title[0] ? entry->title[0] : '?', '\0' };
-        ui_draw_text(g_font_title, x + GRID_ICON_SIZE / 2 - 8, y + GRID_ICON_SIZE / 2 - 16,
+        ui_draw_text(g_font_title, icon_rect.x + icon_rect.w / 2 - 8, icon_rect.y + icon_rect.h / 2 - 16,
                      COLOR_TEXT_DIM, initial);
     }
 
@@ -448,6 +505,17 @@ int ui_show_list(AppEntry *entries, int count) {
     static int selected = 0;
     static int scroll_offset = 0; // rows scrolled, in list-row or grid-row units depending on view_mode
 
+    // Grid view's selected-icon "pop": eases toward GRID_ZOOM_TARGET each
+    // frame rather than jumping there instantly, and resets to 1.0
+    // whenever the selection changes so every new focus re-triggers the pop
+    // instead of picking up mid-animation. Persisted across calls like
+    // `selected` above, for the same reason.
+    static float grid_zoom = 1.0f;
+    static int grid_zoom_selected = -1;
+
+    // Independent auto-repeat timing per direction - see nav_repeat_step().
+    static NavRepeatState nav_up = {0}, nav_down = {0}, nav_left = {0}, nav_right = {0};
+
     // The catalog/filter/sort can differ from the last time this screen was
     // shown (sources reload, or view_mode/category changed elsewhere) -
     // clamp rather than trust the previous position blindly. scroll_offset
@@ -489,15 +557,45 @@ int ui_show_list(AppEntry *entries, int count) {
         {
             int cols = (view_mode == VIEW_GRID) ? GRID_COLS : 1;
 
-            if (kDown & HidNpadButton_Down) {
-                if (selected + cols < visible_count) selected += cols;
+            // Held state for repeat purposes - D-Pad or left stick, either
+            // one counts. (Stick Y follows the usual up=positive convention;
+            // if this ends up inverted on real hardware it's this one sign
+            // that needs flipping.)
+            u64 kHeld = padGetButtons(&pad);
+            HidAnalogStickState stick = padGetStickPos(&pad, 0);
+            bool held_up = (kHeld & HidNpadButton_Up) || stick.y > NAV_STICK_DEADZONE;
+            bool held_down = (kHeld & HidNpadButton_Down) || stick.y < -NAV_STICK_DEADZONE;
+            bool held_left = (kHeld & HidNpadButton_Left) || stick.x < -NAV_STICK_DEADZONE;
+            bool held_right = (kHeld & HidNpadButton_Right) || stick.x > NAV_STICK_DEADZONE;
+
+            if (nav_repeat_step(&nav_down, held_down, now_tick)) {
+                // A straight "selected+cols < visible_count" check refuses
+                // to move at all once the target row is the last one and
+                // it's shorter than a full row (visible_count isn't a
+                // multiple of cols) - the exact column below simply doesn't
+                // exist there. Move to it when it exists, otherwise land on
+                // the last item instead of not moving - but only when
+                // there's a row below at all (selected isn't already in the
+                // last, possibly-partial, row).
+                int last_row_start = ((visible_count - 1) / cols) * cols;
+                if (selected < last_row_start) {
+                    int target = selected + cols;
+                    selected = (target < visible_count) ? target : visible_count - 1;
+                }
             }
-            if (kDown & HidNpadButton_Up) {
+            if (nav_repeat_step(&nav_up, held_up, now_tick)) {
                 if (selected - cols >= 0) selected -= cols;
             }
             if (view_mode == VIEW_GRID) {
-                if ((kDown & HidNpadButton_Right) && selected < visible_count - 1) selected++;
-                if ((kDown & HidNpadButton_Left) && selected > 0) selected--;
+                if (nav_repeat_step(&nav_right, held_right, now_tick) && selected < visible_count - 1) selected++;
+                if (nav_repeat_step(&nav_left, held_left, now_tick) && selected > 0) selected--;
+            } else {
+                // List view doesn't use left/right - keep their repeat
+                // timers from carrying stale state into grid view if the
+                // user switches while holding one (Y toggles view_mode
+                // without waiting for buttons to be released).
+                nav_left.was_held = false;
+                nav_right.was_held = false;
             }
             if (kDown & HidNpadButton_A) {
                 if (visible_count > 0) return visible[selected];
@@ -630,6 +728,12 @@ int ui_show_list(AppEntry *entries, int count) {
         } else {
             ui_icons_begin_frame();
 
+            if (selected != grid_zoom_selected) {
+                grid_zoom = 1.0f;
+                grid_zoom_selected = selected;
+            }
+            grid_zoom += (GRID_ZOOM_TARGET - grid_zoom) * GRID_ZOOM_EASE;
+
             int selected_row = selected / GRID_COLS;
             if (selected_row < scroll_offset) scroll_offset = selected_row;
             if (selected_row >= scroll_offset + GRID_ROWS_VISIBLE) scroll_offset = selected_row - GRID_ROWS_VISIBLE + 1;
@@ -647,7 +751,8 @@ int ui_show_list(AppEntry *entries, int count) {
                 int col = vi % GRID_COLS;
                 int cell_x = GRID_LEFT + col * GRID_CELL_W;
                 int cell_y = GRID_TOP + row_in_view * GRID_CELL_H;
-                draw_grid_cell(cell_x, cell_y, &entries[i], vi == selected);
+                bool is_selected = vi == selected;
+                draw_grid_cell(cell_x, cell_y, &entries[i], is_selected, is_selected ? grid_zoom : 1.0f);
             }
         }
 
