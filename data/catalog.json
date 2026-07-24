@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T19:30:02.918Z",
+  "generatedAt": "2026-07-24T19:30:13.777Z",
   "apps": [
     {
       "id": "3",
@@ -198,21 +198,6 @@
       "filename": "Bayonetta 3 [01004A4010FEA000][v0][US].xci",
       "fileType": "xci",
       "longDescription": "¡La bruja está de regreso y es más poderosa que nunca!\n¡Desplázate por múltiples ubicaciones en un nuevo juego de acción culminante! Bayonetta deberá enfrentarse a un misterioso mal con la ayuda de sus distintivas pistolas, su habilidad Tiempo Brujo (que ralentiza el tiempo) y sus malignas predilectas. Dispara, pisotea y golpea a través de múltiples ubicaciones mientras conoces a otras brujas malignas durante tu aventura."
-    },
-    {
-      "id": "17",
-      "title": "Bayonetta 3",
-      "author": "Unknown",
-      "category": "Game",
-      "description": "",
-      "version": "1.1",
-      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/17.jpg",
-      "downloadUrl": "https://drive.dlarchive.my.id/dl/file/2026%2F01%2F13%2Fnt22zmda-Bayonetta_3_01004A4010FEA800_v131072_US_.nsp?token=eyJrIjoiMjAyNi8wMS8xMy9udDIyem1kYS1CYXlvbmV0dGFfM18wMTAwNEE0MDEwRkVBODAwX3YxMzEwNzJfVVNfLm5zcCIsImUiOjE3ODUwNDAwMzksImYiOiIgQmF5b25ldHRhIDMgWzAxMDA0QTQwMTBGRUE4MDBdW3YxMzEwNzJdW1VTXS5uc3AifQ.Zy_ECmYslvXX8H5dCo0bXa0A037a9aOmID8RLux3gQg&filename=%5BROMsNS%5D+Bayonetta+3+%5B01004A4010FEA800%5D%5Bv131072%5D%5BUS%5D.nsp",
-      "fileSize": 2241292224,
-      "filename": "Bayonetta 3 [01004A4010FEA800][v131072][US].nsp",
-      "fileType": "nsp",
-      "parentId": "16",
-      "contentType": "update"
     },
     {
       "id": "18",
