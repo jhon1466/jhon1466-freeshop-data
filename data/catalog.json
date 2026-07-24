@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T15:30:45.694Z",
+  "generatedAt": "2026-07-24T15:36:03.484Z",
   "apps": [
     {
       "id": "3",
@@ -464,6 +464,20 @@
       "filename": "Fire Emblem Three Houses [v1.2.0 + 6 DLCs].xci",
       "fileType": "xci",
       "longDescription": "Tres territorios. Tres casas. Tu propia aventura.\n\nLa guerra se acerca al continente de Fódlan. Aquí, el orden lo mantiene la Iglesia de Seiros, la cual alberga en sus instalaciones principales a la prestigiosa Academia de Oficiales. Tú estás invitado a enseñar en una de sus poderosas casas, cada una de ellas integrada con estudiantes llenos de personalidad y representados por un monarca de uno de los tres territorios. En tu rol de profesor, deberás guiar a tus estudiantes a través de su vida académica y en combates en un juego de rol táctico por turnos, llenos de estrategia y obstáculos por superar. ¿Cuál casa y camino escogerás?"
+    },
+    {
+      "id": "36",
+      "title": "Sonic Mania Plus",
+      "author": "Unknow",
+      "category": "Game",
+      "description": "Updates v1.04 + DLC",
+      "version": "1.0.4",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/36.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F2aasu9uru6kbufm%2FSonic%2BMania%2B%5Bv1.04%2B%2B%2BDLC%5D.xci%2Ffile",
+      "fileSize": 400343552,
+      "filename": "Sonic Mania [v1.04 + DLC].xci",
+      "fileType": "xci",
+      "longDescription": "Disfruta del homenaje definitivo al pasado y al futuro en Sonic Mania, una nueva aventura de Sonic en 2D a la que podrás jugar cuando quieras y donde quieras en Nintendo Switch. Vuelve a vivir los juegos clásicos de Sonic y entra en nuevas zonas repletas de rutas ocultas nunca vistas y otros secretos."
     }
   ]
 }
