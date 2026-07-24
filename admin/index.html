@@ -74,6 +74,11 @@
         </div>
         <label>downloadUrl * <input name="downloadUrl" required /></label>
         <div class="icon-upload-row">
+          <input type="text" id="mediafire-page-url" placeholder="https://www.mediafire.com/file/.../nombre" />
+          <button type="button" id="mediafire-fill-btn">Usar link de MediaFire</button>
+          <span id="mediafire-fill-status"></span>
+        </div>
+        <div class="icon-upload-row">
           <button type="button" id="checksum-btn">Calcular fileSize desde downloadUrl</button>
           <span id="checksum-status"></span>
         </div>

@@ -139,8 +139,19 @@ adminRouter.post(
       return Number.isFinite(n) && n > 0 ? n : null;
     };
 
+    // Some hosts (e.g. MediaFire's direct download servers) reject or
+    // otherwise short-circuit requests that don't look like they come from
+    // a browser - fetch()'s default has no User-Agent at all, which reads
+    // as an obvious script. See the same workaround client-side in
+    // client/source/net/http.c.
+    const browserHeaders = {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) " +
+        "Chrome/124.0.0.0 Safari/537.36",
+    };
+
     try {
-      const headRes = await fetch(url, { method: "HEAD" });
+      const headRes = await fetch(url, { method: "HEAD", headers: browserHeaders });
       const headSize = headRes.ok ? parseSize(headRes.headers.get("content-length")) : null;
       if (headSize !== null) {
         res.json({ fileSize: headSize });
@@ -150,7 +161,7 @@ adminRouter.post(
       // Some hosts don't implement HEAD properly (or answer it with a bogus
       // 0) - ask for just the first byte instead and read the total size
       // back out of Content-Range.
-      const rangeRes = await fetch(url, { headers: { Range: "bytes=0-0" } });
+      const rangeRes = await fetch(url, { headers: { ...browserHeaders, Range: "bytes=0-0" } });
       const contentRange = rangeRes.headers.get("content-range"); // "bytes 0-0/12345"
       const total = contentRange?.split("/")[1];
       const rangeSize = total && total !== "*" ? parseSize(total) : null;

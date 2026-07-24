@@ -135,6 +135,9 @@ const els = {
   iconUploadStatus: $("#icon-upload-status"),
   checksumBtn: $("#checksum-btn"),
   checksumStatus: $("#checksum-status"),
+  mediafirePageUrl: $("#mediafire-page-url"),
+  mediafireFillBtn: $("#mediafire-fill-btn"),
+  mediafireFillStatus: $("#mediafire-fill-status"),
   parentIdSelect: $("#parent-id-select"),
   categorySuggestions: $("#category-suggestions"),
 };
@@ -296,6 +299,8 @@ function openEditDialog(entry) {
   els.iconFileInput.value = "";
   els.iconUploadStatus.textContent = "";
   els.checksumStatus.textContent = "";
+  els.mediafirePageUrl.value = "";
+  els.mediafireFillStatus.textContent = "";
   els.editForm.dataset.editingId = entry ? entry.id : "";
   els.editDialogTitle.textContent = entry ? `Editar "${entry.id}"` : "Añadir app";
   populateParentIdSelect(entry ? entry.id : null);
@@ -419,6 +424,25 @@ async function main() {
     } catch (err) {
       setStatus(els.iconUploadStatus, "error: " + err.message, "error");
     }
+  });
+
+  els.mediafireFillBtn.addEventListener("click", () => {
+    const pageUrl = els.mediafirePageUrl.value.trim();
+    if (!pageUrl) {
+      setStatus(els.mediafireFillStatus, "pega el link de la página de MediaFire primero", "error");
+      return;
+    }
+    if (!/^https:\/\/(www\.)?mediafire\.com\/file\//i.test(pageUrl)) {
+      setStatus(
+        els.mediafireFillStatus,
+        "debe ser el link de la página del archivo (mediafire.com/file/...), no el botón de descarga directa",
+        "error"
+      );
+      return;
+    }
+    const resolverUrl = `${window.location.origin}/api/dl/mediafire?url=${encodeURIComponent(pageUrl)}`;
+    els.editForm.elements.namedItem("downloadUrl").value = resolverUrl;
+    setStatus(els.mediafireFillStatus, "downloadUrl actualizado ✓ (se resuelve al link directo en cada descarga)", "ok");
   });
 
   els.checksumBtn.addEventListener("click", async () => {

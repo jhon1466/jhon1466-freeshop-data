@@ -34,7 +34,7 @@ and show a friendly message instead of crashing on unexpected structure.
 | `longDescription` | string | no | Shown on the detail screen. |
 | `version` | string | yes | |
 | `iconUrl` | string | yes | Absolute URL, e.g. `https://raw.githubusercontent.com/<owner>/<data-repo>/main/icons/<id>.jpg` - icons are committed to the GitHub data repo (not Firebase Hosting) so they don't count against its storage. Recommend ~256x256, <100KB. **Must be JPEG or PNG** - the Switch client (`client/source/ui/ui_icons.c`) only decodes those two formats for the grid view; WEBP is accepted by the admin upload endpoint for browser convenience but won't render on-console. This is the catalog-listing icon, distinct from the client's own NACP launcher icon (`client/icon.jpg`). |
-| `downloadUrl` | string | yes | e.g. `/downloads/<id>/<version>/<file>.nro`. Can be same-origin or an external URL. |
+| `downloadUrl` | string | yes | e.g. `/downloads/<id>/<version>/<file>.nro`. Can be same-origin or an external URL. **For files hosted on MediaFire**, don't paste MediaFire's direct CDN link (`download<N>.mediafire.com/...`) directly - those expire after roughly a day. Instead use `/admin`'s "Usar link de MediaFire" helper (paste the MediaFire file *page* URL, `https://www.mediafire.com/file/<key>/<name>`) to fill this field with `<origin>/api/dl/mediafire?url=<encoded page url>` instead - that endpoint re-resolves the page to its current direct link on every request, so the catalog entry never goes stale. See [`server/src/routes/dl.ts`](../server/src/routes/dl.ts). |
 | `fileSize` | integer | yes | Bytes. Used for the progress bar and a pre-download free-space check. |
 | `sha256` | string | no | 64 lowercase hex chars, if present. **Not verified by the Switch client** - for large (multi-GB) game files, hashing the whole download on both the admin panel (which would have to fetch the entire file just to hash it) and again on-console (slow, no hardware crypto acceleration) was more cost than the corruption protection was worth for this project. Leave it out; if you want the extra check anyway, compute it yourself (`sha256sum`) and paste it in - `install/install.c` and `install/install_nsp.c` still verify it when present. |
 | `filename` | string | yes | e.g. `"Moonlight.nro"`, `"SomeForwarder.nsp"`, `"SomeGame.xci"`, or `"SomePort.zip"`. Extension must match `fileType`. |
@@ -58,9 +58,13 @@ rejecting the whole document.
 2. Commit the listing icon to `icons/<id>.jpg` in the GitHub data repo (e.g.
    via the Contents API or GitHub's web UI), and use its
    `raw.githubusercontent.com` URL as `iconUrl`.
-3. Log into `/admin` and add an entry. Use "Calcular fileSize desde
-   downloadUrl" to fill in `fileSize` automatically (a cheap HEAD request,
-   instant regardless of file size) - `sha256` is optional, leave it blank.
+3. Log into `/admin` and add an entry. If the file is hosted on MediaFire,
+   paste its file page URL into "Usar link de MediaFire" first to fill
+   `downloadUrl` with a self-resolving link (see the `downloadUrl` row
+   above) - otherwise fill `downloadUrl` in directly. Then use "Calcular
+   fileSize desde downloadUrl" to fill in `fileSize` automatically (a cheap
+   HEAD request, instant regardless of file size) - `sha256` is optional,
+   leave it blank.
 4. `GET /api/apps` reflects the new entry immediately, no server restart.
 
 ## Adding an NSP or XCI entry

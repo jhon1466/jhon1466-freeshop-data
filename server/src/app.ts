@@ -4,6 +4,7 @@ import cors from "cors";
 import { appsRouter } from "./routes/apps";
 import { healthRouter } from "./routes/health";
 import { adminRouter } from "./routes/admin";
+import { dlRouter } from "./routes/dl";
 
 // Builds the Express app without starting a listener, so it can be reused
 // both by the local dev server (server/src/index.ts, app.listen) and by the
@@ -17,6 +18,7 @@ export function createApp(): express.Express {
   app.use("/api/apps", appsRouter);
   app.use("/api/health", healthRouter);
   app.use("/api/admin", adminRouter);
+  app.use("/api/dl", dlRouter);
 
   // Only exercised in local dev / non-Firebase hosting - in production,
   // Firebase Hosting serves /admin and /downloads directly as static files

@@ -3,6 +3,7 @@ import cors from "cors";
 import { appsRouter } from "./routes/apps";
 import { healthRouter } from "./routes/health";
 import { adminRouter } from "./routes/admin";
+import { dlRouter } from "./routes/dl";
 
 // Mirrors server/src/app.ts, minus the /admin, /icons and /downloads static
 // routes: in this deployment, Firebase Hosting serves those directly (see
@@ -15,6 +16,7 @@ export function createApp(): express.Express {
   app.use("/api/apps", appsRouter);
   app.use("/api/health", healthRouter);
   app.use("/api/admin", adminRouter);
+  app.use("/api/dl", dlRouter);
 
   return app;
 }
