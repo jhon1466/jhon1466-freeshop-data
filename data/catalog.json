@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T15:27:37.062Z",
+  "generatedAt": "2026-07-24T15:30:45.694Z",
   "apps": [
     {
       "id": "3",
@@ -450,6 +450,20 @@
       "filename": "Resident Evil 4 [v1.0.2].xci",
       "fileType": "xci",
       "longDescription": "La obra maestra que consiguió casar el horror y la acción.\n\nEl juego que fue un punto y aparte en la serie Resident Evil se centra en los eventos que tuvieron lugar tras la disolución de Umbrella. La pionera perspectiva de cámara sobre el hombro supuso una novedad con respecto a la cámara fija de las entregas anteriores, lo que permitió una experiencia de juego sin igual aclamada universalmente.\n\nTras el desastre biológico sin precedentes ocurrido en Raccoon City, la corporación acusada de iniciar las atrocidades, Umbrella, ha sido disuelta."
+    },
+    {
+      "id": "35",
+      "title": "Fire Emblem: Three Houses",
+      "author": "Unknow",
+      "category": "Game",
+      "description": "Update 1.2.0 + 6 DLCs",
+      "version": "1.2.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/35.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fpxrnn0bydesyrrb%2FFire%2BEmblem%2BThree%2BHouses%2B%5Bv1.2.0%2B%2B%2B6%2BDLCs%5D.xci%2Ffile",
+      "fileSize": 13517739008,
+      "filename": "Fire Emblem Three Houses [v1.2.0 + 6 DLCs].xci",
+      "fileType": "xci",
+      "longDescription": "Tres territorios. Tres casas. Tu propia aventura.\n\nLa guerra se acerca al continente de Fódlan. Aquí, el orden lo mantiene la Iglesia de Seiros, la cual alberga en sus instalaciones principales a la prestigiosa Academia de Oficiales. Tú estás invitado a enseñar en una de sus poderosas casas, cada una de ellas integrada con estudiantes llenos de personalidad y representados por un monarca de uno de los tres territorios. En tu rol de profesor, deberás guiar a tus estudiantes a través de su vida académica y en combates en un juego de rol táctico por turnos, llenos de estrategia y obstáculos por superar. ¿Cuál casa y camino escogerás?"
     }
   ]
 }
