@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T02:07:51.253Z",
+  "generatedAt": "2026-07-24T02:09:42.103Z",
   "apps": [
     {
       "id": "3",
@@ -324,6 +324,20 @@
       "filename": "Metroid Dread [v2.1.0].xci",
       "fileType": "xci",
       "longDescription": "En un remoto planeta alienígena, una amenaza mecánica pondrá a prueba a la mejor cazarrecompensas de la galaxia hasta límites insospechados. Únete a Samus Aran en su aventura en 2D más desafiante y peligrosa hasta la fecha en Metroid Dread para Nintendo Switch."
+    },
+    {
+      "id": "26",
+      "title": "Pikmin 4",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.2",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/26.jpg",
+      "downloadUrl": "https://download1980.mediafire.com/cv16ifcylrxgN065AgLWIiY-6L7eeVtZ8xN8GhH5dLuXzkuokrNzRADP0-AX5A1NaEAZWD921jHHmHRDk4Ne_V5eKmK8M4h4T9wPMEHl-THMNnXESv3mzBzlSJzGOGQeHDpt9FDuaI6o_o1aJZAJc0KPr5uotx3v5mPYPpES7mLJw70/gyal65vpj8iouqx/Pikmin+4+%5Bv1.0.2%5D.xci",
+      "fileSize": 11248022016,
+      "filename": "Pikmin 4 [v1.0.2].xci",
+      "fileType": "xci",
+      "longDescription": "En un peculiar planeta lejano, un grupo de viajeros espaciales se encuentra varado y a la espera de ser rescatado. ¿Eres el rescatador indicado? Recibe sus señales de socorro y explora un mundo inexplorado habitado por una curiosa variedad de criaturas.\n\nPor suerte, ¡algunos son amigos, no enemigos! Conoce a los Pikmin: estos intrépidos ayudantes, aunque pequeños, son muy fuertes en grupo. Críalos, reúnelos y guíalos para que superen tareas grandes y pequeñas.\n\nExplora, busca tesoros en vastas áreas abiertas, lucha contra criaturas salvajes, resuelve acertijos y rescata juntos a los viajeros varados."
     }
   ]
 }
