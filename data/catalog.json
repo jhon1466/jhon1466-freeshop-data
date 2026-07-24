@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T14:28:59.149Z",
+  "generatedAt": "2026-07-24T14:31:51.014Z",
   "apps": [
     {
       "id": "3",
@@ -408,6 +408,20 @@
       "filename": "Xenoblade Chronicles Definitive Edition [v1.1.2].xci",
       "fileType": "xci",
       "longDescription": "¡Desvela los secretos de Monado y salva el mundo!\n\nUn clásico de los juegos de rol renace como Xenoblade Chronicles: Definitive Edition para Nintendo Switch. A consecuencia de una invasión devastadora, deberás embarcarte en un viaje que te llevará más allá del horizonte. ¿Lograrás cambiar el futuro o se verá tu pueblo abocado a la extinción?"
+    },
+    {
+      "id": "32",
+      "title": "Xenoblade Chronicles 3",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "Update 2.2.1 + 4 DLCs",
+      "version": "2.2.1",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/32.jpeg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F1zjznsopdmzhtyj%2FXenoblade%2BChronicles%2B3%2B%5Bv2.2.1%2B%2B%2B4%2BDLCs%5D.xci%2Ffile",
+      "fileSize": 20134443008,
+      "filename": "Xenoblade Chronicles 3 [v2.2.1 + 4 DLCs].xci",
+      "fileType": "xci",
+      "longDescription": "Una historia sobre la vida en la que el pasado y el futuro se entrelazan\n\nDescubre Xenoblade Chronicles 3, un emocionante juego de rol para Nintendo Switch. Únete a Noah, Mio y sus amigos mientras recorren paisajes majestuosos, se enfrentan a bestias feroces y luchan para romper el ciclo de violencia sin fin que asola sus tierras."
     }
   ]
 }
