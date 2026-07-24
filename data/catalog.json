@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T19:56:40.644Z",
+  "generatedAt": "2026-07-24T22:34:55.272Z",
   "apps": [
     {
       "id": "3",
@@ -566,7 +566,7 @@
       "id": "42",
       "title": "Tomodachi Life Living the Dream",
       "author": "Unknown",
-      "category": "Gane",
+      "category": "Game",
       "description": "",
       "version": "1.0.3",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/42.jpg",
