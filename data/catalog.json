@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T14:14:52.651Z",
+  "generatedAt": "2026-07-24T14:15:19.142Z",
   "apps": [
     {
       "id": "3",
@@ -278,7 +278,7 @@
       "description": "Update v11.2.0 + 3 DLCs",
       "version": "11.2.0",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/22.jpeg",
-      "downloadUrl": "https://download947.mediafire.com/hpry2y70199gjBoZIC1uwxp65hNeqwzSwAinGFvqKYPoPQmebc7D6fJXZ-I1Wr5CP3xMxZ378426qptSE8780O4CvEJildTl_KuZa7axRuNnqetzQeLf7cHqFHK5v58x0gD9KpVi_tJNLGc5QzMLU3R29epfO0o6cArZNq16UDYot5w/p6x94qe3x5ei8ka/Splatoon+3+%5BUpdate+11.2.0+%2B+3+DLCs%5D.xci",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fp6x94qe3x5ei8ka%2FSplatoon%2B3%2B%255BUpdate%2B11.2.0%2B%252B%2B3%2BDLCs%255D.xci",
       "fileSize": 13406767104,
       "filename": "Splatoon 3 [Update 11.2.0 + 3 DLCs].xci",
       "fileType": "xci",
