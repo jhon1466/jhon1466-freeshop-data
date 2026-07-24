@@ -53,7 +53,13 @@ void ncm_format_content_id(const NcmContentId *id, char out_hex[33]) {
     out_hex[32] = '\0';
 }
 
-#define NCM_INSTALL_CHUNK_SIZE (1 * 1024 * 1024)
+// How much is read from the source file and handed to the NCM service per
+// iteration during the install phase. Bigger = fewer read()+IPC round trips
+// for the same file, which the install phase (re-reading the whole
+// downloaded file off SD and writing it back into content storage) is
+// dominated by. 4 MB balances that against how often the cancel check /
+// progress update below runs (once per chunk).
+#define NCM_INSTALL_CHUNK_SIZE (4 * 1024 * 1024)
 
 bool ncm_install_content(NcmContentStorage *cs, const NcmContentId *content_id,
                           FILE *src, uint64_t file_offset, uint64_t size,

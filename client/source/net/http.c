@@ -120,8 +120,10 @@ HttpResult http_download_to_file(const char *url, const char *dest_path,
     // many small writes to the sdmc filesystem driver, which has much higher
     // per-call latency than a desktop OS - for a multi-GB file that adds up
     // to the write side dominating total download time. A large explicit
-    // buffer batches those into far fewer, bigger writes.
-    static char file_buf[256 * 1024];
+    // buffer batches those into far fewer, bigger writes; 1 MB is a multiple
+    // of the allocation-unit size typical SD cards are formatted with (exFAT
+    // 128KB/256KB), so each flush lands as one big aligned sequential write.
+    static char file_buf[1024 * 1024];
     setvbuf(fp, file_buf, _IOFBF, sizeof(file_buf));
 
     CURL *curl = curl_easy_init();
@@ -142,8 +144,10 @@ HttpResult http_download_to_file(const char *url, const char *dest_path,
     curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, xfer_progress_cb);
     curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &ctx);
     // Bigger receive buffer (curl's default is 16KB) - fewer, larger calls
-    // into the write callback, complementing the stdio buffer above.
-    curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 256L * 1024L);
+    // into the write callback, complementing the stdio buffer above. 512KB
+    // is this curl version's max (CURL_MAX_READ_SIZE); two of these fill one
+    // 1MB stdio buffer before it flushes to SD.
+    curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 512L * 1024L);
     // Some hosts (e.g. MediaFire's free-tier download servers) throttle or
     // otherwise treat requests differently when the User-Agent doesn't look
     // like a real browser - this doesn't claim to be any specific browser
