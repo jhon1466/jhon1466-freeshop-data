@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T07:07:59.387Z",
+  "generatedAt": "2026-07-24T07:08:31.555Z",
   "apps": [
     {
       "id": "3",
@@ -94,7 +94,7 @@
       "description": "Update 1.50 + 35 DLCs",
       "version": "1.50",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/9.jpg",
-      "downloadUrl": "https://download1531.mediafire.com/lecg8f30ycog81xk_GGWwDdbC2HAxzcJqha635p_QoGiCjuD71YASLOPA38x7jj_QOYzc_KVd0SJvJHgrwhiYT7TtE7oLsbJS6JB3pIMI5tOxomFgl_3V2YiZW55VwT7ThO7QK-xmDEEHwyBo4TVe6bdh62OgIk9ZdOTQ0oLvo8hPJw/a699xzrrxaaydjr/DRAGON+BALL+FighterZ+%5Bv1.50+%2B+35+DLCs%5D.xci",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fa699xzrrxaaydjr%2FDRAGON%2BBALL%2BFighterZ%2B%255Bv1.50%2B%252B%2B35%2BDLCs%255D.xci",
       "fileSize": 10796092928,
       "filename": "DRAGON BALL FighterZ.xci",
       "fileType": "xci",
