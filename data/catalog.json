@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T23:18:39.993Z",
+  "generatedAt": "2026-07-24T23:20:56.279Z",
   "apps": [
     {
       "id": "3",
@@ -603,6 +603,20 @@
       "filename": "The Legend of Zelda Link's Awakening [v1.1.0].xci",
       "fileType": "xci",
       "longDescription": "Ayuda a Link a escapar de una tierra extraña en The Legend of Zelda: Link's Awakening para Nintendo Switch. Entabla amistad con un elenco de personajes de lo más variopinto, combate montones de monstruos y explora peligrosas mazmorras en esta aventura clásica con un nuevo estilo artístico."
+    },
+    {
+      "id": "45",
+      "title": "The Legend of Zelda: Tears of the Kingdom",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.4.3",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/44.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fyuee12ssuw37kdu%2FThe%2BLegend%2Bof%2BZelda%2BTears%2Bof%2Bthe%2BKingdom%2B%5Bv1.4.3%5D.xci%2Ffile",
+      "fileSize": 17677675520,
+      "filename": "The Legend of Zelda Tears of the Kingdom [v1.4.3].xci",
+      "fileType": "xci",
+      "longDescription": "En esta secuela de The Legend of Zelda: Breath of the Wild, te embarcarás en una arriesgada misión para descubrir la causa del estremecedor evento que ha sumido el reino en el caos."
     }
   ]
 }
