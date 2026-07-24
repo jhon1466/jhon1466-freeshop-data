@@ -2,6 +2,7 @@
 #include "../config.h"
 #include "../install/install_common.h"
 
+#include <errno.h>
 #include <jansson.h>
 #include <stdio.h>
 #include <string.h>
@@ -93,12 +94,24 @@ SelfUpdateApplyResult self_update_apply(const char *self_path, const char *asset
     }
 
     // Some sdmc filesystem driver states refuse rename() onto an existing
-    // destination - clear it first, same reasoning as install_nsp.c.
-    remove(self_path);
+    // destination - clear it first, same reasoning as install_nsp.c. Its
+    // own success/failure isn't fatal by itself (rename/fopen below might
+    // still work either way) but its errno is worth keeping in case both
+    // fallbacks fail, to actually see why instead of guessing.
+    int remove_errno = 0;
+    if (remove(self_path) != 0) remove_errno = errno;
+
     if (rename(tmp_path, self_path) != 0) {
+        int rename_errno = errno;
         if (install_common_copy_file(tmp_path, self_path) != 0) {
+            int copy_errno = errno;
             remove(tmp_path);
-            if (err_buf) snprintf(err_buf, err_buf_size, "no se pudo reemplazar el archivo actual");
+            if (err_buf) {
+                snprintf(err_buf, err_buf_size,
+                         "no se pudo reemplazar el archivo actual (remove: %s, rename: %s, copy: %s)",
+                         remove_errno ? strerror(remove_errno) : "ok",
+                         strerror(rename_errno), strerror(copy_errno));
+            }
             return SELF_UPDATE_APPLY_ERR_REPLACE;
         }
         remove(tmp_path);
