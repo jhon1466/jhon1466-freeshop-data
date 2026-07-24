@@ -61,15 +61,34 @@ typedef enum {
 // is true: copies this running staging file onto the canonical path (i.e.
 // `self_path` with the suffix stripped, written to out_canonical_path) and
 // deletes the staging file. Confirmed on real hardware that a running .nro
-// can't remove()/rename() *itself* (nx-hbloader appears to keep the file
-// open/locked for the life of the process, unlike the "loads fully into
-// memory upfront" assumption the old single-hop version of this code made) -
-// this function is only ever called from a process running out of the
-// staging file, so the canonical path it's replacing here is a different,
-// not-currently-executing file, which is safe. On success the caller should
-// envSetNextLoad() into out_canonical_path and exit so the final process
-// runs from the "real" filename hbmenu shows, rather than staying on the
-// staging copy forever.
+// can't remove()/rename() *itself* (the very first errno-logging report
+// showed rename() failing with EEXIST on the same path remove() had just
+// reported ENOENT for, moments apart) - this function is only ever called
+// from a process running out of the staging file, so the canonical path it's
+// replacing here is a different, not-currently-executing file, which is
+// safe. On success the caller should check envHasNextLoad() and, if
+// supported, envSetNextLoad() into out_canonical_path and exit so the final
+// process runs from the "real" filename hbmenu shows, rather than staying on
+// the staging copy forever - if chain-loading isn't supported in this launch
+// environment, the swap has still landed correctly here; only the automatic
+// relaunch is unavailable, so falling back to asking the user to reopen the
+// app manually is enough.
 SelfUpdateSwapResult self_update_finish_swap(const char *self_path, char *out_canonical_path,
                                               size_t out_canonical_path_size,
                                               char *err_buf, size_t err_buf_size);
+
+// Fallback used when envHasNextLoad() says this launch environment doesn't
+// support chain-loading at all (e.g. some NSP-forwarder-based launch setups,
+// as opposed to a plain hbmenu -> nx-hbloader launch) - so hop two of the
+// normal flow (self_update_finish_swap(), reached by chain-loading into the
+// staging copy) can never run. Attempts the old, pre-two-hop-design
+// behavior instead: overwrite `self_path` (the file this process is
+// *currently running from*) directly with `staging_path`'s content.
+// rename() is expected to fail here since self_path is in use - the copy
+// fallback (a plain truncating write of new content into the existing,
+// already-open-for-execution file) is what has a real chance of working.
+// Whether or not this succeeds, the caller still needs to tell the user to
+// manually close and reopen the app - there is no way to auto-relaunch
+// without chain-load support.
+SelfUpdateSwapResult self_update_swap_in_place(const char *staging_path, const char *self_path,
+                                                char *err_buf, size_t err_buf_size);

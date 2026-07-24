@@ -110,6 +110,30 @@ bool self_update_is_staging_copy(const char *self_path) {
     return len > suffix_len && strcmp(self_path + (len - suffix_len), SELF_UPDATE_STAGING_SUFFIX) == 0;
 }
 
+// Shared by self_update_finish_swap() (staging -> canonical) and
+// self_update_swap_in_place() (staging -> self, used when chain-loading
+// isn't available at all - see self_update.h): clears `dst` first (some
+// sdmc filesystem driver states refuse rename() onto an existing
+// destination), then rename()s `src` onto it, falling back to a full copy
+// if rename fails outright.
+static int swap_files(const char *src, const char *dst, char *err_buf, size_t err_buf_size) {
+    remove(dst);
+    int rename_errno = 0;
+    if (rename(src, dst) != 0) {
+        rename_errno = errno;
+        if (install_common_copy_file(src, dst) != 0) {
+            int copy_errno = errno;
+            if (err_buf) {
+                snprintf(err_buf, err_buf_size, "rename: %s, copy: %s",
+                         strerror(rename_errno), strerror(copy_errno));
+            }
+            return -1;
+        }
+        remove(src);
+    }
+    return 0;
+}
+
 SelfUpdateSwapResult self_update_finish_swap(const char *self_path, char *out_canonical_path,
                                               size_t out_canonical_path_size,
                                               char *err_buf, size_t err_buf_size) {
@@ -118,27 +142,33 @@ SelfUpdateSwapResult self_update_finish_swap(const char *self_path, char *out_ca
     char canonical[512];
     snprintf(canonical, sizeof(canonical), "%.*s", (int)(len - suffix_len), self_path);
 
-    // Same rename-refuses-an-existing-destination gotcha as before - but this
-    // time it's genuinely safe to clear first, since `canonical` isn't the
-    // file this process is running from (that's `self_path`, the staging
-    // copy).
-    remove(canonical);
-
-    int rename_errno = 0;
-    if (rename(self_path, canonical) != 0) {
-        rename_errno = errno;
-        if (install_common_copy_file(self_path, canonical) != 0) {
-            int copy_errno = errno;
-            if (err_buf) {
-                snprintf(err_buf, err_buf_size,
-                         "no se pudo completar la actualización (rename: %s, copy: %s)",
-                         strerror(rename_errno), strerror(copy_errno));
-            }
-            return SELF_UPDATE_SWAP_ERR_REPLACE;
-        }
-        remove(self_path);
+    // Safe to clear/replace `canonical` here even though it's not
+    // self_path: this function only ever runs from a process executing out
+    // of the staging copy, so nothing is running from `canonical` right now.
+    char swap_err[256];
+    if (swap_files(self_path, canonical, swap_err, sizeof(swap_err)) != 0) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "no se pudo completar la actualización (%s)", swap_err);
+        return SELF_UPDATE_SWAP_ERR_REPLACE;
     }
 
     if (out_canonical_path) snprintf(out_canonical_path, out_canonical_path_size, "%s", canonical);
+    return SELF_UPDATE_SWAP_OK;
+}
+
+SelfUpdateSwapResult self_update_swap_in_place(const char *staging_path, const char *self_path,
+                                                char *err_buf, size_t err_buf_size) {
+    // Unlike self_update_finish_swap(), this genuinely does try to replace
+    // the file this process is currently running from - only used when
+    // envHasNextLoad() says chain-loading isn't available in this launch
+    // environment at all, so there's no other way left to try. rename() is
+    // expected to fail here (confirmed on hardware where this matters -
+    // see self_update.h); the copy fallback overwriting self_path's
+    // on-disk *content* in place is the part that has a real chance of
+    // working while still running.
+    char swap_err[256];
+    if (swap_files(staging_path, self_path, swap_err, sizeof(swap_err)) != 0) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "no se pudo reemplazar el archivo actual (%s)", swap_err);
+        return SELF_UPDATE_SWAP_ERR_REPLACE;
+    }
     return SELF_UPDATE_SWAP_OK;
 }

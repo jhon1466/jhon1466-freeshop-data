@@ -71,7 +71,12 @@ Homebrew Menu.
   it, and *that* process (now running from a different file) swaps the
   staging copy onto the canonical path and chain-loads back - so from the
   user's side it's just a couple of quick screen flashes, no manual
-  close/reopen needed.
+  close/reopen needed. Chain-loading (`envSetNextLoad`) only works in launch
+  environments that support it (plain hbmenu launches do; some NSP-forwarder
+  setups don't - checked via `envHasNextLoad()` before relying on it) - if
+  unavailable, it falls back to directly overwriting the running file's
+  on-disk content in place and asking the user to close and reopen manually,
+  same as the original (pre-two-hop) behavior.
 
 ## Quick start
 

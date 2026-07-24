@@ -311,23 +311,40 @@ int main(int argc, char **argv) {
         SelfUpdateSwapResult sres = self_update_finish_swap(self_path, canonical_path, sizeof(canonical_path),
                                                               swap_err, sizeof(swap_err));
         if (sres == SELF_UPDATE_SWAP_OK) {
-            update_debug_log("finish_swap OK -> canonical=%s, chain-loading and exiting", canonical_path);
-            envSetNextLoad(canonical_path, canonical_path);
-            appletSetAutoSleepDisabled(false);
-            romfsExit();
-            ui_app_shutdown();
-            return 0;
+            // The file swap itself already succeeded at this point - only
+            // the automatic relaunch depends on chain-load support.
+            bool has_next_load = envHasNextLoad();
+            update_debug_log("finish_swap OK -> canonical=%s, envHasNextLoad=%s",
+                              canonical_path, has_next_load ? "true" : "false");
+            if (has_next_load) {
+                Result nrc = envSetNextLoad(canonical_path, canonical_path);
+                update_debug_log("envSetNextLoad(canonical) rc=0x%x", nrc);
+                if (R_SUCCEEDED(nrc)) {
+                    appletSetAutoSleepDisabled(false);
+                    romfsExit();
+                    ui_app_shutdown();
+                    return 0;
+                }
+            }
+            // Can't auto-relaunch here - the canonical file is already
+            // updated on disk, just not what this process is running from
+            // anymore. Tell the user and keep going as-is (this process'
+            // in-memory copy is still fully functional).
+            ui_app_show_message("Actualización completada.\n\nCierra la app y ábrela de nuevo desde el hbmenu "
+                                 "para terminar de usar la nueva versión.");
+        } else {
+            update_debug_log("finish_swap FAILED: %s", swap_err);
+            // Couldn't finish the swap - rather than getting the user stuck
+            // (the staging file is itself a fully valid, working build,
+            // just not at hbmenu's "normal" filename), tell them and keep
+            // going as-is.
+            char msg[512];
+            snprintf(msg, sizeof(msg),
+                     "No se pudo completar la actualización: %s\n\nLa app sigue funcionando, pero puede que "
+                     "vuelva a pedir la actualización la próxima vez que la abras.",
+                     swap_err);
+            ui_app_show_message(msg);
         }
-        update_debug_log("finish_swap FAILED: %s", swap_err);
-        // Couldn't finish the swap - rather than getting the user stuck (the
-        // staging file is itself a fully valid, working build, just not at
-        // hbmenu's "normal" filename), tell them and keep going as-is.
-        char msg[512];
-        snprintf(msg, sizeof(msg),
-                 "No se pudo completar la actualización: %s\n\nLa app sigue funcionando, pero puede que "
-                 "vuelva a pedir la actualización la próxima vez que la abras.",
-                 swap_err);
-        ui_app_show_message(msg);
     }
 
     // socketInitializeDefault()'s stock TCP receive buffer (0x40000 max) is
@@ -429,20 +446,46 @@ int main(int argc, char **argv) {
                               ares == SELF_UPDATE_APPLY_OK ? "OK" : "ERR",
                               ares == SELF_UPDATE_APPLY_OK ? staging_path : update_err);
             if (ares == SELF_UPDATE_APPLY_OK) {
-                update_debug_log("chain-loading into staging=%s and exiting", staging_path);
-                // Chain-load straight into the staging copy and exit now -
-                // it finishes the update (see the staging-copy handling
-                // right after romfsInit above) and relaunches itself into
-                // the canonical path on its own, so the user just sees a
-                // couple of quick screen flashes rather than having to
-                // manually close and reopen the app.
-                envSetNextLoad(staging_path, staging_path);
-                curl_global_cleanup();
-                socketExit();
-                appletSetAutoSleepDisabled(false);
-                romfsExit();
-                ui_app_shutdown();
-                return 0;
+                // Prefer chain-loading straight into the staging copy: it
+                // finishes the update (see the staging-copy handling right
+                // after romfsInit above) and relaunches itself into the
+                // canonical path on its own, so the user just sees a couple
+                // of quick screen flashes rather than having to manually
+                // close and reopen the app. Only actually works in launch
+                // environments nx-hbloader chain-loading is available in
+                // (plain hbmenu launches - some NSP-forwarder-based setups
+                // don't support it) - check both envHasNextLoad() and
+                // envSetNextLoad()'s own Result rather than assuming, and
+                // fall back to the old direct in-place overwrite if not.
+                bool has_next_load = envHasNextLoad();
+                update_debug_log("envHasNextLoad = %s", has_next_load ? "true" : "false");
+                if (has_next_load) {
+                    Result nrc = envSetNextLoad(staging_path, staging_path);
+                    update_debug_log("envSetNextLoad(staging) rc=0x%x", nrc);
+                    if (R_SUCCEEDED(nrc)) {
+                        curl_global_cleanup();
+                        socketExit();
+                        appletSetAutoSleepDisabled(false);
+                        romfsExit();
+                        ui_app_shutdown();
+                        return 0;
+                    }
+                }
+                char inplace_err[256];
+                SelfUpdateSwapResult ires = self_update_swap_in_place(staging_path, self_path,
+                                                                       inplace_err, sizeof(inplace_err));
+                update_debug_log("swap_in_place = %s%s%s",
+                                  ires == SELF_UPDATE_SWAP_OK ? "OK" : "ERR",
+                                  ires == SELF_UPDATE_SWAP_OK ? "" : ": ", ires == SELF_UPDATE_SWAP_OK ? "" : inplace_err);
+                if (ires == SELF_UPDATE_SWAP_OK) {
+                    ui_app_show_message("Actualización descargada.\n\nCierra la app y ábrela de nuevo desde el "
+                                         "hbmenu para usar la nueva versión.");
+                } else {
+                    char err_msg[400];
+                    snprintf(err_msg, sizeof(err_msg),
+                             "No se pudo actualizar: %s\n\nSigues usando la versión actual.", inplace_err);
+                    ui_app_show_message(err_msg);
+                }
             } else {
                 char err_msg[320];
                 snprintf(err_msg, sizeof(err_msg), "No se pudo actualizar: %s\n\nSigues usando la versión actual.",
