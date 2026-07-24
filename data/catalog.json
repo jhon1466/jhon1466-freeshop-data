@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T07:07:32.854Z",
+  "generatedAt": "2026-07-24T07:07:59.387Z",
   "apps": [
     {
       "id": "3",
@@ -80,7 +80,7 @@
       "description": "",
       "version": "v1.1.1",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/8.jpeg",
-      "downloadUrl": "https://download1475.mediafire.com/lal7khtw94jg3WkwiKFne_-fnM9eWxafedNmScF1zlg15YkJUnITgqypDimPO72j-sLW45ChtSWT0UlpRNxOoWHqwdrcyx5UCYNYKY0ccDirXuCk1Prxgk8i4u9hYe3PTDIzttEjh0Gets9IxXhCbE1bcgMArI1ZGJ5tRt6q8XdNeQM/z2d07nzjmvae4w2/Mario+Party+Superstars+%5Bv1.1.1%5D.xci",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fz2d07nzjmvae4w2%2FMario%2BParty%2BSuperstars%2B%255Bv1.1.1%255D.xci",
       "fileSize": 3055782400,
       "filename": "Mario Party Superstars.xci",
       "fileType": "xci",
