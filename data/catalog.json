@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T19:42:57.012Z",
+  "generatedAt": "2026-07-24T19:46:07.830Z",
   "apps": [
     {
       "id": "3",
@@ -547,6 +547,20 @@
       "filename": "Bayonetta 2 [v1.2.0].xci",
       "fileType": "xci",
       "longDescription": "Bayonetta está de regreso, con movimientos elegantes y poderosas armas.\n\n¡Bayonetta está de regreso, más potente que nunca! Equípate de un nuevo arsenal y ataques como el Clímax de Umbra en este apasionante juego de acción. Incluso puedes jugar con tus amigos en el modo cooperativo en línea o cooperativo local para dos jugadores. (Se requieren accesorios adicionales; se venden por separado). Bayonetta es una temible bruja que blande impresionantes armas como pistolas, látigos, martillos, lanzallamas y arcos envenenados. Pero no todo se trata de la fuerza: también importa el estilo. Bayonetta es letal pero elegante, con movimientos como el Tiempo Brujo, que ralentiza el propio tiempo, y el nuevo Clímax de Umbra, un ataque especial que invoca a demonios infernales para destrozar a enemigos. Bayonetta 2 también incluye el modo cooperativo en línea y cooperativo local para dos jugadores en los que se pueden apostar y ganar halos según el resultado. Los jugadores tendrán que trabajar juntos para sembrar el caos y conseguir tesoros."
+    },
+    {
+      "id": "41",
+      "title": "Bayonetta",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.1.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/41.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F2mhqjvii7xmno64%2FBayonetta%2B%2B%5Bv1.1%5D.xci%2Ffile",
+      "fileSize": 9429272064,
+      "filename": "Bayonetta [v1.1].xci",
+      "fileType": "xci",
+      "longDescription": "Siembra el caos como la atractiva bruja Bayonetta.\n\nBayonetta es una voraz y devastadora bruja, ella disparará, azotará y quemará angeles mientras descubre la verdad sobre su pasado. Sus armas y movimientos están por encima de la elegancia, y sus movimientos ofensivos desaceleran el tiempo para inflinjir ataques de tortura a sus enemigos. Esta es la precuela del juego Bayonetta™ 2, y es tan atrevido, destuctivo y épico como esperarías. Bayonetta es el fruto inpío y estilizado de una unión prohibida entre una Bruja Umbra y un Sabio de Lumen, y perdió su memoria después de haber dormido por mas de 500 años. Usa sus ataques maleficio para invocar a demonios infernales, detén el tiempo para esquivar enemigos y ataques peligrosos, y castiga a los angeles con mortales dispositivos. Puedes incluso vestir a Bayonetta con trajes inspirados en Nintendo, como la princesa Peach, la princesa Daisy, Link y Samus Aran."
     }
   ]
 }
