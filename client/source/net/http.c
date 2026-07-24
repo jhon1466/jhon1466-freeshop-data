@@ -190,7 +190,25 @@ HttpResult http_download_to_file(const char *url, const char *dest_path,
     }
 
     if (res != CURLE_OK) {
-        set_curl_error(err_buf, err_buf_size, res);
+        if (res == CURLE_WRITE_ERROR) {
+            // The single most common real-world cause on Switch: SD cards
+            // (especially ≤32GB ones) often ship, or get reformatted, as
+            // FAT32 - which caps any single file at 4GB, a completely
+            // ordinary size for an NSP/XCI game dump. Writing past that
+            // boundary fails right here with exactly this curl error.
+            // exFAT (what Nintendo's own format tool already uses for
+            // cards over 32GB, and can be forced on smaller ones from a
+            // PC) has no such limit.
+            if (err_buf) {
+                snprintf(err_buf, err_buf_size,
+                         "%s - si el archivo pesa más de 4GB, es probable que la tarjeta SD esté "
+                         "formateada en FAT32 (límite de 4GB por archivo); formatéala en exFAT desde una "
+                         "PC para poder instalar archivos grandes",
+                         curl_easy_strerror(res));
+            }
+        } else {
+            set_curl_error(err_buf, err_buf_size, res);
+        }
         remove(dest_path);
         return HTTP_ERR_REQUEST;
     }
