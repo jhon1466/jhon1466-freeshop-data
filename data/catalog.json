@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T22:34:55.272Z",
+  "generatedAt": "2026-07-24T23:16:15.140Z",
   "apps": [
     {
       "id": "3",
@@ -575,6 +575,20 @@
       "filename": "Tomodachi Life Living the Dream [v1.0.3].xci",
       "fileType": "xci",
       "longDescription": "Encárgate de una isla llena de travesuras, drama, amor ¡y otras sorpresas!\n\nUna gran cantidad de situaciones disparatadas te esperan a medida que llenas tu isla con personajes Mii™ basados en tus familiares, tus amigos o cualquier otra fuente de inspiración. Conócelos, diseña un mundo para que lo exploren y mira cómo cobran vida en el juego Tomodachi Life: Living the Dream para la consola Nintendo Switch."
+    },
+    {
+      "id": "43",
+      "title": "The Legend of Zelda: Echoes of Wisdom",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.1.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/43.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fvynk6lcwl2j1sh4%2FThe%2BLegend%2Bof%2BZelda%2BEchoes%2Bof%2BWisdom%2B%5Bv1.1.0%5D.xci%2Ffile",
+      "fileSize": 6006280192,
+      "filename": "The Legend of Zelda Echoes of Wisdom [v1.1.0].xci",
+      "fileType": "xci",
+      "longDescription": "Los habitantes de Hyrule se están desvaneciendo por culpa de unas extrañas brechas y, como entre los desaparecidos se cuenta cierto espadachín, ahora depende de la princesa Zelda salvar su reino."
     }
   ]
 }
