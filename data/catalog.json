@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T23:16:15.140Z",
+  "generatedAt": "2026-07-24T23:18:39.993Z",
   "apps": [
     {
       "id": "3",
@@ -589,6 +589,20 @@
       "filename": "The Legend of Zelda Echoes of Wisdom [v1.1.0].xci",
       "fileType": "xci",
       "longDescription": "Los habitantes de Hyrule se están desvaneciendo por culpa de unas extrañas brechas y, como entre los desaparecidos se cuenta cierto espadachín, ahora depende de la princesa Zelda salvar su reino."
+    },
+    {
+      "id": "44",
+      "title": "The Legend of Zelda: Link's Awakening",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.1.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/44.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fpwj22g5optitwil%2FThe%2BLegend%2Bof%2BZelda%2BLink's%2BAwakening%2B%5Bv1.1.0%5D.xci%2Ffile",
+      "fileSize": 6314471936,
+      "filename": "The Legend of Zelda Link's Awakening [v1.1.0].xci",
+      "fileType": "xci",
+      "longDescription": "Ayuda a Link a escapar de una tierra extraña en The Legend of Zelda: Link's Awakening para Nintendo Switch. Entabla amistad con un elenco de personajes de lo más variopinto, combate montones de monstruos y explora peligrosas mazmorras en esta aventura clásica con un nuevo estilo artístico."
     }
   ]
 }
