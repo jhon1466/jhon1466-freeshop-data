@@ -36,7 +36,7 @@
 // "v<this value>" (a leading "v" is stripped before comparing, either form
 // works), and attach the built freeshop-client.nro as a release asset named
 // exactly "freeshop-client.nro".
-#define CLIENT_VERSION "1.2.0"
+#define CLIENT_VERSION "1.2.1"
 
 // GitHub Releases API endpoint checked for a new client version - see
 // update/self_update.c.
