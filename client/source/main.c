@@ -265,19 +265,37 @@ int main(int argc, char **argv) {
     // case the console behaves as if this call was never made).
     appletSetAutoSleepDisabled(true);
 
-    // socketInitializeDefault()'s stock buffer sizes are tuned for small
-    // LAN traffic and are a known source of stalls on real hardware once
-    // TLS is involved: a big CDN's handshake (cert chain, etc.) can arrive
-    // in a burst larger than the default TCP receive buffer, and everything
-    // after that stalls until curl's own timeout gives up. Bump them well
-    // above the defaults before doing anything HTTPS.
+    // socketInitializeDefault()'s stock TCP receive buffer (0x40000 max) is
+    // the download-speed ceiling for a distant server: TCP throughput is
+    // capped at roughly (receive window / round-trip time), and window
+    // scaling can only grow the window up to tcp_rx_buf_max_size. At
+    // ~150-200ms RTT to a far CDN, a 256-512KB window caps you near
+    // ~1-3 MB/s no matter how fast the server or SD card is - which matches
+    // the "most downloads sit at ~0.8 MB/s" reports. Raising the max window
+    // to 2MB lifts that ceiling to ~10 MB/s+ at those RTTs. sb_efficiency
+    // (buffers per socket) bumped too so a single download socket can keep
+    // more data in flight. These bigger buffers grow the transfer-memory
+    // pool socketInitialize allocates, so if that allocation fails (tighter
+    // applet-mode memory), fall back to the modest config that was working
+    // before rather than leaving networking dead.
     SocketInitConfig socket_config = *socketGetDefaultInitConfig();
-    socket_config.tcp_tx_buf_size = 0x25000;
-    socket_config.tcp_rx_buf_size = 0x25000;
-    socket_config.tcp_tx_buf_max_size = 0x80000;
-    socket_config.tcp_rx_buf_max_size = 0x80000;
+    socket_config.tcp_tx_buf_size = 0x8000;
+    socket_config.tcp_rx_buf_size = 0x100000;      // 1 MB initial
+    socket_config.tcp_tx_buf_max_size = 0x40000;
+    socket_config.tcp_rx_buf_max_size = 0x200000;  // 2 MB max window
+    socket_config.sb_efficiency = 8;
 
     Result rc = socketInitialize(&socket_config);
+    if (R_FAILED(rc)) {
+        // Fall back to the previous, smaller config (still above the stock
+        // defaults) before giving up entirely.
+        SocketInitConfig fallback = *socketGetDefaultInitConfig();
+        fallback.tcp_tx_buf_size = 0x25000;
+        fallback.tcp_rx_buf_size = 0x25000;
+        fallback.tcp_tx_buf_max_size = 0x80000;
+        fallback.tcp_rx_buf_max_size = 0x80000;
+        rc = socketInitialize(&fallback);
+    }
     if (R_FAILED(rc)) {
         ui_app_show_message("No se pudo iniciar la red.");
         appletSetAutoSleepDisabled(false);
