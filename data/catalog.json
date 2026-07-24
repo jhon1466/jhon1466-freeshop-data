@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T07:08:31.555Z",
+  "generatedAt": "2026-07-24T07:09:42.091Z",
   "apps": [
     {
       "id": "3",
@@ -122,7 +122,7 @@
       "description": "",
       "version": "1.3.1",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/11.jpeg",
-      "downloadUrl": "https://download1586.mediafire.com/ftl5rgpzru8gWbrwyzPMPpVShWhzLbEfi70SrOD0SjRrWVDaonmJ0FeJzhhoe7zMGxILmm_c_LuoAGQy-3cJ_Mv_KpWJZdkgJjd9gV5ioqRjNP2AVbKVoAphm48z8OLvkjuJDs177vBsWWHCk1CHkvbSb-LZQA2zF4llX23hEoD4SFE/nu255n9g2aur5l4/Super+Mario+Galaxy+%5Bv1.3.1%5D.xci",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fnu255n9g2aur5l4%2FSuper%2BMario%2BGalaxy%2B%255Bv1.3.1%255D.xci",
       "fileSize": 3893030912,
       "filename": "Super Mario Galaxy .xci",
       "fileType": "xci",
