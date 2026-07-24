@@ -159,6 +159,41 @@ int ui_draw_text_wrapped(TTF_Font *font, int x, int y, int max_width, int line_h
     return y;
 }
 
+// Screen is 1280 wide (see e.g. ui_list.c's SCREEN_W) - 80px margin on each
+// side to match the x=80 these dialogs already draw at.
+#define UI_APP_MSG_MAX_WIDTH (1280 - 80 * 2)
+#define UI_APP_MSG_LINE_HEIGHT 30
+
+// Splits `msg` on '\n' (each resulting paragraph word-wrapped to
+// UI_APP_MSG_MAX_WIDTH via ui_draw_text_wrapped - unlike the plain
+// ui_draw_text these dialogs used to call per line, which doesn't wrap and
+// silently ran text off the right edge of the screen for anything long
+// without its own line breaks, e.g. a GitHub release's one-paragraph body
+// text) and draws them starting at `y`, preserving blank lines (an empty
+// "line" between two '\n's, from something like "...\n\n...") as vertical
+// spacing rather than collapsing them the way strtok_r would. Returns the y
+// position just after the last line drawn.
+static int draw_wrapped_message(int x, int y, SDL_Color color, const char *msg) {
+    char buf[512];
+    snprintf(buf, sizeof(buf), "%s", msg);
+
+    char *cursor = buf;
+    while (*cursor) {
+        char *newline = strchr(cursor, '\n');
+        if (newline) *newline = '\0';
+
+        if (*cursor) {
+            y = ui_draw_text_wrapped(g_font_body, x, y, UI_APP_MSG_MAX_WIDTH, UI_APP_MSG_LINE_HEIGHT, color, cursor);
+        } else {
+            y += UI_APP_MSG_LINE_HEIGHT;
+        }
+
+        if (!newline) break;
+        cursor = newline + 1;
+    }
+    return y;
+}
+
 void ui_app_show_message(const char *msg) {
     PadState pad;
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
@@ -175,16 +210,7 @@ void ui_app_show_message(const char *msg) {
         SDL_SetRenderDrawColor(g_renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, COLOR_BG.a);
         SDL_RenderClear(g_renderer);
 
-        char buf[512];
-        snprintf(buf, sizeof(buf), "%s", msg);
-        int y = 300;
-        char *saveptr = NULL;
-        char *line = strtok_r(buf, "\n", &saveptr);
-        while (line) {
-            ui_draw_text(g_font_body, 80, y, COLOR_TEXT, line);
-            y += 30;
-            line = strtok_r(NULL, "\n", &saveptr);
-        }
+        int y = draw_wrapped_message(80, 300, COLOR_TEXT, msg);
         ui_draw_text(g_font_small, 80, y + 20, COLOR_TEXT_DIM, "Presiona A o + para continuar");
 
         SDL_RenderPresent(g_renderer);
@@ -206,16 +232,7 @@ bool ui_app_show_confirm(const char *msg) {
         SDL_SetRenderDrawColor(g_renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, COLOR_BG.a);
         SDL_RenderClear(g_renderer);
 
-        char buf[512];
-        snprintf(buf, sizeof(buf), "%s", msg);
-        int y = 300;
-        char *saveptr = NULL;
-        char *line = strtok_r(buf, "\n", &saveptr);
-        while (line) {
-            ui_draw_text(g_font_body, 80, y, COLOR_TEXT, line);
-            y += 30;
-            line = strtok_r(NULL, "\n", &saveptr);
-        }
+        int y = draw_wrapped_message(80, 300, COLOR_TEXT, msg);
         ui_draw_text(g_font_small, 80, y + 20, COLOR_TEXT_DIM, "A o +: sí    B: no");
 
         SDL_RenderPresent(g_renderer);
