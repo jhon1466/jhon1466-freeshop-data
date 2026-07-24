@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T15:45:04.518Z",
+  "generatedAt": "2026-07-24T18:06:24.190Z",
   "apps": [
     {
       "id": "3",
@@ -520,6 +520,20 @@
       "filename": "Super Mario 3D World + Bowser's Fury [v1.2.2].xci",
       "fileType": "xci",
       "longDescription": "¡Activa mejoras, trabaja en equipo y salva el Reino de las hadas!\n\n¡Araña y trepa a través de docenas de coloridos niveles! Multiplica la diversión al formar un equipo o compitiendo con tus amigos mediante el juego local* o en línea** para alcanzar el objetivo de cada etapa. ¡Trabajen juntos para explorar y descubrir los objetos coleccionables, o compitan por la corona obteniendo la puntuación más alta, creando así un frenesí amistoso! Mario y sus amigos pueden utilizar una variedad de mejoras, como la supercampana que otorga habilidades felinas como trepar y arañar. ¡Aplica las mejoras, completa los niveles y llévate la corona"
+    },
+    {
+      "id": "40",
+      "title": "NieR: Automata - The End of YoRHa Edition",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.2",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/40.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fkjhcndtyzb7rhdy%2FNieR_Automata_The_End_of_YoRHa_Edition_%25255B1.0.2%25255D.nsp%2Ffile",
+      "fileSize": 11688595672,
+      "filename": "NieR Automata The End of YoRHa Edition [1.0.2].nsp",
+      "fileType": "nsp",
+      "longDescription": "NieR:Automata The End of YoRHa Edition es la versión para Nintendo Switch™ de NieR:Automata, el premiado juego de rol y acción postapocalíptico que ha alcanzado una popularidad asombrosa en todo el mundo.\n\nEn un futuro lejano…\n\nUnos invasores de otro mundo han atacado inesperadamente desplegando su arma secreta: unas formas de vida mecánicas. En vista de semejante amenaza, la humanidad se ve obligada a abandonar la Tierra y refugiarse en la Luna. Adéntrate en una feroz batalla para recuperar el planeta en el papel de 2B, que pertenece a la nueva unidad de infantería androide denominada YoRHa.\n\nDescubre una fascinante historia que va más allá del mero entretenimiento al inspirar un sinfín de emociones mientras la acción se desarrolla en un hermoso y desolado mundo abierto.\n\nEste producto incluye el DLC 3C3C1D119440927*.\n\nIncluye tres tipos de coliseos y tres tipos de atuendos inspirados en los personajes del título relacionado NieR Replicant que se pueden conseguir como recompensa."
     }
   ]
 }
