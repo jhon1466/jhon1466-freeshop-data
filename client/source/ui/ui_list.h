@@ -9,6 +9,9 @@
 // Returned by ui_show_list() when the user asks to open the "Acerca de"
 // screen (the "L" button) instead of selecting an entry.
 #define UI_LIST_OPEN_ABOUT (-3)
+// Returned by ui_show_list() when the user asks to open the SD card file
+// explorer (right stick click) instead of selecting an entry.
+#define UI_LIST_OPEN_EXPLORER (-4)
 
 // Renders a full-screen scrollable list/grid of `entries` (toggle with Y,
 // cycle sort with X - both re-sort/redisplay `entries` in place) and blocks

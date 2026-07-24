@@ -4,6 +4,7 @@
 #include "ui_status.h"
 #include "ui_icons.h"
 #include "ui_prefs.h"
+#include "ui_nav.h"
 
 #include <switch.h>
 #include <stdio.h>
@@ -48,45 +49,6 @@
 #define COL_VERSION_X 780
 #define COL_CATEGORY_X 900
 #define COL_SIZE_X 1080
-
-// Directional navigation (D-Pad or left stick) auto-repeats while held,
-// instead of requiring a fresh press per step - the classic "tap to move
-// one, hold to fast-scroll" pattern. First step is immediate on press; once
-// held past NAV_REPEAT_DELAY_NS it repeats every NAV_REPEAT_INTERVAL_NS.
-#define NAV_REPEAT_DELAY_NS 350000000ULL
-#define NAV_REPEAT_INTERVAL_NS 120000000ULL
-// How far the left stick has to be pushed (of a ~32767 max) before it counts
-// as "held" in that direction - well past resting/drift noise, well short
-// of needing a full-deflection press.
-#define NAV_STICK_DEADZONE 13000
-
-typedef struct {
-    bool was_held;
-    u64 next_repeat_tick;
-} NavRepeatState;
-
-// Returns true once for a "step" in this direction: immediately on the
-// press (was_held transitioning false -> true), then repeatedly while held,
-// starting NAV_REPEAT_DELAY_NS after the press and every
-// NAV_REPEAT_INTERVAL_NS after that. `state` is one direction's own
-// persisted timing (see the four NavRepeatState statics in ui_show_list) -
-// each direction repeats independently of the others.
-static bool nav_repeat_step(NavRepeatState *state, bool held, u64 now_tick) {
-    if (!held) {
-        state->was_held = false;
-        return false;
-    }
-    if (!state->was_held) {
-        state->was_held = true;
-        state->next_repeat_tick = now_tick + armNsToTicks(NAV_REPEAT_DELAY_NS);
-        return true;
-    }
-    if (now_tick >= state->next_repeat_tick) {
-        state->next_repeat_tick = now_tick + armNsToTicks(NAV_REPEAT_INTERVAL_NS);
-        return true;
-    }
-    return false;
-}
 
 // Grid view (Y toggles list <-> grid). Fixed constants tuned for the fixed
 // 1280x720 layout this whole screen already assumes (see SCREEN_W/H above) -
@@ -606,6 +568,9 @@ int ui_show_list(AppEntry *entries, int count) {
             if (kDown & HidNpadButton_L) {
                 return UI_LIST_OPEN_ABOUT;
             }
+            if (kDown & HidNpadButton_StickR) {
+                return UI_LIST_OPEN_EXPLORER;
+            }
             if ((kDown & HidNpadButton_B) || (kDown & HidNpadButton_Plus)) {
                 return UI_LIST_EXIT;
             }
@@ -767,13 +732,23 @@ int ui_show_list(AppEntry *entries, int count) {
         }
 
         ui_draw_rect(LEFT_EDGE, FOOTER_Y - 10, RIGHT_EDGE - LEFT_EDGE, 1, COLOR_PANEL);
-        char footer[220];
-        snprintf(footer, sizeof(footer),
-                 "D-Pad: navegar    A: instalar    ZL/ZR: categoría    R: buscar%s    Y: vista %s    "
-                 "X: ordenar (%s)    -: fuentes    L: acerca de    B/+: salir",
-                 search_query[0] ? " (activa)" : "", view_mode == VIEW_LIST ? "cuadrícula" : "lista",
-                 sort_mode_label(sort_mode));
-        ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y, COLOR_TEXT_DIM, footer);
+        // Split across two lines - all of this crammed onto one (as it used
+        // to be) ran wide enough to overflow past RIGHT_EDGE at 1280px,
+        // silently clipping whatever came after the overflow point off the
+        // edge of the screen (ui_draw_text doesn't wrap or clip-warn) -
+        // that's what made "Stick R: explorador" undiscoverable, not the
+        // button itself.
+        char footer1[160];
+        snprintf(footer1, sizeof(footer1),
+                 "D-Pad: navegar    A: instalar    ZL/ZR: categoría    Y: vista %s    X: ordenar (%s)",
+                 view_mode == VIEW_LIST ? "cuadrícula" : "lista", sort_mode_label(sort_mode));
+        ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y, COLOR_TEXT_DIM, footer1);
+
+        char footer2[160];
+        snprintf(footer2, sizeof(footer2),
+                 "R: buscar%s    -: fuentes    L: acerca de    Stick R: explorador    B/+: salir",
+                 search_query[0] ? " (activa)" : "");
+        ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y + 20, COLOR_TEXT_DIM, footer2);
 
         SDL_RenderPresent(g_renderer);
     }

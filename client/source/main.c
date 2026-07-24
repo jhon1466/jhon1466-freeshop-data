@@ -15,11 +15,13 @@
 #include "ui/ui_sources.h"
 #include "ui/ui_icons.h"
 #include "ui/ui_about.h"
+#include "ui/ui_explorer.h"
 #include "install/install.h"
 #include "install/install_nsp.h"
 #include "install/install_nsp_native.h"
 #include "install/install_xci_native.h"
 #include "install/install_port.h"
+#include "install/install_local.h"
 #include "update/self_update.h"
 
 // Diagnostic-only: appends one line to sdmc:/switch/freeshop/update_debug.log
@@ -550,6 +552,43 @@ int main(int argc, char **argv) {
 
         if (selected == UI_LIST_OPEN_ABOUT) {
             ui_show_about();
+            continue;
+        }
+
+        if (selected == UI_LIST_OPEN_EXPLORER) {
+            char local_path[512];
+            bool local_is_xci = false;
+            UiExplorerAction eaction = ui_show_explorer(local_path, sizeof(local_path), &local_is_xci);
+            if (eaction != UI_EXPLORER_INSTALL) {
+                continue;
+            }
+
+            char local_msg[512];
+            PadState local_pad;
+            padConfigureInput(1, HidNpadStyleSet_NpadStandard);
+            padInitializeDefault(&local_pad);
+            // A local install never has a separate download step - starting
+            // the phase at INSTALLING (instead of DOWNLOADING, like the
+            // catalog install path below) makes the progress screen show
+            // "Instalando..." from the first frame instead of briefly
+            // (and wrongly) claiming to be downloading.
+            InstallProgressCtx local_ctx = { .pad = &local_pad, .start_tick = 0, .started = false,
+                                              .phase = INSTALL_PHASE_INSTALLING };
+
+            InstallLocalResult lres = local_is_xci
+                ? install_xci_from_local_file(local_path, install_progress_cb, on_install_phase, &local_ctx,
+                                               err_buf, sizeof(err_buf))
+                : install_nsp_from_local_file(local_path, install_progress_cb, on_install_phase, &local_ctx,
+                                               err_buf, sizeof(err_buf));
+
+            if (lres == INSTALL_LOCAL_OK) {
+                ui_app_show_message("Instalado correctamente.\n\nVuelve al hbmenu para iniciarlo.");
+            } else if (lres == INSTALL_LOCAL_ERR_CANCELED) {
+                ui_app_show_message("Instalación cancelada.");
+            } else {
+                snprintf(local_msg, sizeof(local_msg), "Error de instalación: %s", err_buf);
+                ui_app_show_message(local_msg);
+            }
             continue;
         }
 
