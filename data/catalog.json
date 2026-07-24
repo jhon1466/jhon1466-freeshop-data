@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T14:16:46.867Z",
+  "generatedAt": "2026-07-24T14:17:17.821Z",
   "apps": [
     {
       "id": "3",
@@ -333,7 +333,7 @@
       "description": "",
       "version": "1.0.2",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/26.jpg",
-      "downloadUrl": "https://download1980.mediafire.com/cv16ifcylrxgN065AgLWIiY-6L7eeVtZ8xN8GhH5dLuXzkuokrNzRADP0-AX5A1NaEAZWD921jHHmHRDk4Ne_V5eKmK8M4h4T9wPMEHl-THMNnXESv3mzBzlSJzGOGQeHDpt9FDuaI6o_o1aJZAJc0KPr5uotx3v5mPYPpES7mLJw70/gyal65vpj8iouqx/Pikmin+4+%5Bv1.0.2%5D.xci",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fgyal65vpj8iouqx%2FPikmin%2B4%2B%255Bv1.0.2%255D.xci",
       "fileSize": 11248022016,
       "filename": "Pikmin 4 [v1.0.2].xci",
       "fileType": "xci",
