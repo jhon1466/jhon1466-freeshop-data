@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T19:46:07.830Z",
+  "generatedAt": "2026-07-24T19:56:40.644Z",
   "apps": [
     {
       "id": "3",
@@ -561,6 +561,20 @@
       "filename": "Bayonetta [v1.1].xci",
       "fileType": "xci",
       "longDescription": "Siembra el caos como la atractiva bruja Bayonetta.\n\nBayonetta es una voraz y devastadora bruja, ella disparará, azotará y quemará angeles mientras descubre la verdad sobre su pasado. Sus armas y movimientos están por encima de la elegancia, y sus movimientos ofensivos desaceleran el tiempo para inflinjir ataques de tortura a sus enemigos. Esta es la precuela del juego Bayonetta™ 2, y es tan atrevido, destuctivo y épico como esperarías. Bayonetta es el fruto inpío y estilizado de una unión prohibida entre una Bruja Umbra y un Sabio de Lumen, y perdió su memoria después de haber dormido por mas de 500 años. Usa sus ataques maleficio para invocar a demonios infernales, detén el tiempo para esquivar enemigos y ataques peligrosos, y castiga a los angeles con mortales dispositivos. Puedes incluso vestir a Bayonetta con trajes inspirados en Nintendo, como la princesa Peach, la princesa Daisy, Link y Samus Aran."
+    },
+    {
+      "id": "42",
+      "title": "Tomodachi Life Living the Dream",
+      "author": "Unknown",
+      "category": "Gane",
+      "description": "",
+      "version": "1.0.3",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/42.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fxoej61xtjjkorw4%2FTomodachi%2BLife%2BLiving%2Bthe%2BDream%2B%5Bv1.0.3%5D.xci%2Ffile",
+      "fileSize": 6753464832,
+      "filename": "Tomodachi Life Living the Dream [v1.0.3].xci",
+      "fileType": "xci",
+      "longDescription": "Encárgate de una isla llena de travesuras, drama, amor ¡y otras sorpresas!\n\nUna gran cantidad de situaciones disparatadas te esperan a medida que llenas tu isla con personajes Mii™ basados en tus familiares, tus amigos o cualquier otra fuente de inspiración. Conócelos, diseña un mundo para que lo exploren y mira cómo cobran vida en el juego Tomodachi Life: Living the Dream para la consola Nintendo Switch."
     }
   ]
 }
