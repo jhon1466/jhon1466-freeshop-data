@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-23T22:43:22.868Z",
+  "generatedAt": "2026-07-24T00:28:01.108Z",
   "apps": [
     {
       "id": "3",
@@ -283,6 +283,20 @@
       "filename": "Splatoon 3 [Update 11.2.0 + 3 DLCs].xci",
       "fileType": "xci",
       "longDescription": "Splatoon 3\nTe damos la bienvenida a Tintelia, en la abrasadora región del mismo nombre, ¡donde te esperan nuevas armas, habilidades, escenarios e indumentaria de lo más novedoso!\n\nEnfréntate a rivales en combates en línea a tope de tinta, repele ofensivas de salmónidos y evita una invasión de octarianos."
+    },
+    {
+      "id": "23",
+      "title": "Plants vs. Zombies Replanted",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.3.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/23.jpg",
+      "downloadUrl": "https://download1339.mediafire.com/6rx2wfco4t3gbrZASZWet5sVNaoK55GMYqX4NZMBFViM6bUZSzQJQkuiallUH-NwLbvu-uKvRfPCE9twuJ4tNF4un3lOWvW8u-vf_ZGOO63CtoWLn5sNnG8KkURNQVwTyc9sR-LATvkCaNt7TYSEmmkalSbB6R6P8HLoCgMhptOoMhU/xsid3o1m7bmo50o/Plants+vs.+Zombies+Trasplantado+%5Bv1.3.0+%2B+DLC%5D.xci",
+      "fileSize": 3000908800,
+      "filename": "Plants vs. Zombies Trasplantado [v1.3.0 + DLC].xci",
+      "fileType": "xci",
+      "longDescription": "¡Vuelve a tus raíces!\n\n¡El clásico Plants vs. Zombies regresa esplendoroso en HD! ¡GUAU! Después de años en el ático de Dave el Loco, la batalla original entre plantas y zombis regresó: ¡más grande, más brillante y más alocada que nunca! Disfruta del juego que lo inició todo, ahora remasterizado con gráficos en HD mejorados y repleto de nuevos secretos por descubrir."
     }
   ]
 }
