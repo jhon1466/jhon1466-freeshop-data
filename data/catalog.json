@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T15:41:10.758Z",
+  "generatedAt": "2026-07-24T15:45:04.518Z",
   "apps": [
     {
       "id": "3",
@@ -506,6 +506,20 @@
       "filename": "Hollow Knight Silksong [v1.0.3].xci",
       "fileType": "xci",
       "longDescription": "Asciende a la cima de un reino encantado\n\nHollow Knight: Silksong es la épica secuela de Hollow Knight, la galardonada aventura de acción. Viaja a tierras inexploradas, descubre poderes nuevos, lucha contra vastas hordas de bichos y bestias y descubre secretos relacionados con tu naturaleza y tu pasado."
+    },
+    {
+      "id": "39",
+      "title": "Super Mario 3D World + Bowser's Fury",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.2.2",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/39.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F9f7gzfunotpythc%2FSuper_Mario_3D_World_%25252B_Bowser%252527s_Fury_%25255Bv1.2.2%25255D.xci%2Ffile",
+      "fileSize": 3177048064,
+      "filename": "Super Mario 3D World + Bowser's Fury [v1.2.2].xci",
+      "fileType": "xci",
+      "longDescription": "¡Activa mejoras, trabaja en equipo y salva el Reino de las hadas!\n\n¡Araña y trepa a través de docenas de coloridos niveles! Multiplica la diversión al formar un equipo o compitiendo con tus amigos mediante el juego local* o en línea** para alcanzar el objetivo de cada etapa. ¡Trabajen juntos para explorar y descubrir los objetos coleccionables, o compitan por la corona obteniendo la puntuación más alta, creando así un frenesí amistoso! Mario y sus amigos pueden utilizar una variedad de mejoras, como la supercampana que otorga habilidades felinas como trepar y arañar. ¡Aplica las mejoras, completa los niveles y llévate la corona"
     }
   ]
 }
