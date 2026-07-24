@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T02:35:59.566Z",
+  "generatedAt": "2026-07-24T02:55:01.744Z",
   "apps": [
     {
       "id": "3",
@@ -52,7 +52,7 @@
       "description": "",
       "version": "4.5.4",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/6.jpg",
-      "downloadUrl": "https://download1652.mediafire.com/5gbppz23jrvgqBeSdBweA7aXPtZ7j1XANwRtfID45uPFcIaDGVOhaXrcbNTkNI5zvBv4euBbbBSuSmKk-WzHWeKQYjdKdC3yVOOhAOhCwPW19veAfv-ddZAdnIner6rRsDUtjYNIXsRpBubrrLoYsMpf41gpoXXkOLJFgJlsXOcPJ3E/ffc1l0gh2osomo6/Terraria+%5Bv4.5.4%5D.xci",
+      "downloadUrl": "https://download1652.mediafire.com/ziw0qsl8rfugeuc-dyki9nApAO_5i9zgIMe8k3beU8ohlX1JpBEwM5fBr_6TQGJsl7TPy_PmkdnL2qMgiJjIej-RV4Vf-vmzojOeqNssx4Xjnf_dZwUP62huQMJUT8NzITInGMKVqlgaGZbZqF3eZPKli5vzApcRVX6a-XYHLd8U6qY/ffc1l0gh2osomo6/Terraria+%5Bv4.5.4%5D.xci",
       "fileSize": 513157632,
       "filename": "Terraria.xci",
       "fileType": "xci",
