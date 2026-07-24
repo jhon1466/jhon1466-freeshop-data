@@ -1,5 +1,6 @@
 #include "http.h"
 
+#include <switch.h>
 #include <curl/curl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -349,42 +350,65 @@ HttpResult http_download_to_file(const char *url, const char *dest_path,
     return HTTP_OK;
 }
 
-// ---- Non-blocking GET (curl's multi interface) ----
-
+// ---- Non-blocking GET (a real background thread running a blocking
+// curl_easy_perform(), not curl's multi/non-blocking-socket interface) ----
+//
+// This used to be built on curl_multi - curl_multi_perform() driven a
+// little at a time from the render loop, relying on curl's non-blocking
+// socket support to make incremental progress each call. In practice icons
+// loaded inconsistently ("some load, some don't", reported after this had
+// already shipped) even after adding retries, which pointed at the
+// mechanism itself rather than at any individual failure: a single stuck
+// connection holds curl_multi's non-blocking read pending indefinitely with
+// no way to tell "still working" from "stalled" apart from the 60s
+// CURLOPT_TIMEOUT - and since ui_icons.c only ever runs one fetch at a
+// time, one stuck icon blocked every icon behind it for up to a minute.
+// libnx's non-blocking socket support isn't guaranteed to behave like a
+// desktop OS's, which curl_multi's model assumes.
+//
+// A real OS thread doing the exact same blocking curl_easy_perform() that
+// http_get()/http_download_to_file() already use successfully sidesteps
+// that assumption entirely - the network I/O genuinely blocks, just on a
+// thread that isn't the render loop's, so nothing about the request's
+// timing is any different from a normal blocking fetch, and the main
+// thread only ever does a cheap atomic flag check to poll it.
 struct HttpAsyncRequest {
-    CURL *easy;
+    Thread thread;
+    char url[900];
     MemBuffer buf;
-    bool done;
     CURLcode result;
+    bool done;    // written with release semantics by the worker, read with acquire by the poller
+    bool started; // threadCreate+threadStart both succeeded - only then is `thread` valid to wait on/close
 };
 
-// One shared multi handle for the whole process - every async request gets
-// added to (and, once finished, removed from) this. Created lazily on first
-// use; this app is single-threaded, so no locking is needed around it.
-static CURLM *s_multi = NULL;
+// Icons are small - if a connection hasn't even finished by this point,
+// something is wrong with that host/link specifically, and it's better to
+// fail fast (ui_icons.c retries a failed fetch a few times on its own) than
+// to sit on the request for the full minute http_get()'s general-purpose
+// timeout allows.
+#define HTTP_ASYNC_CONNECT_TIMEOUT_S 10L
+#define HTTP_ASYNC_TOTAL_TIMEOUT_S 20L
+// mbedtls's TLS handshake plus libpng/libjpeg-turbo decoding elsewhere on
+// this same stack easily fit in a fraction of this; generous headroom costs
+// nothing (SD-card-backed heap, not a tightly limited real stack budget).
+#define HTTP_ASYNC_STACK_SIZE (64 * 1024)
 
-HttpAsyncRequest *http_get_async_start(const char *url) {
-    if (!s_multi) {
-        s_multi = curl_multi_init();
-        if (!s_multi) return NULL;
-    }
+static void http_async_thread_func(void *arg) {
+    HttpAsyncRequest *req = (HttpAsyncRequest *)arg;
 
     CURL *curl = curl_easy_init();
-    if (!curl) return NULL;
-
-    HttpAsyncRequest *req = (HttpAsyncRequest *)calloc(1, sizeof(HttpAsyncRequest));
-    if (!req) {
-        curl_easy_cleanup(curl);
-        return NULL;
+    if (!curl) {
+        req->result = CURLE_FAILED_INIT;
+        __atomic_store_n(&req->done, true, __ATOMIC_RELEASE);
+        return;
     }
-    req->easy = curl;
 
-    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_URL, req->url);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, mem_write_cb);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &req->buf);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30L);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, HTTP_ASYNC_CONNECT_TIMEOUT_S);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, HTTP_ASYNC_TOTAL_TIMEOUT_S);
     // See http_get() above for why this UA string, and why peer/host
     // verification is off, IPv4 is forced, and a minimum TLS version is pinned.
     curl_easy_setopt(curl, CURLOPT_USERAGENT,
@@ -395,37 +419,43 @@ HttpAsyncRequest *http_get_async_start(const char *url) {
     curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
     curl_easy_setopt(curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
 
-    if (curl_multi_add_handle(s_multi, curl) != CURLM_OK) {
-        curl_easy_cleanup(curl);
+    CURLcode res = curl_easy_perform(curl);
+    curl_easy_cleanup(curl);
+
+    req->result = res;
+    // Release-store: everything written above (req->buf, req->result) must
+    // be visible to whichever core later observes `done == true` via the
+    // matching acquire-load in http_async_poll().
+    __atomic_store_n(&req->done, true, __ATOMIC_RELEASE);
+}
+
+HttpAsyncRequest *http_get_async_start(const char *url) {
+    HttpAsyncRequest *req = (HttpAsyncRequest *)calloc(1, sizeof(HttpAsyncRequest));
+    if (!req) return NULL;
+    snprintf(req->url, sizeof(req->url), "%s", url);
+
+    // Default priority/core (0x2C, -2) - same as every other thread this
+    // app creates implicitly via libnx's own defaults; nothing about a
+    // small icon fetch needs different scheduling treatment.
+    Result rc = threadCreate(&req->thread, http_async_thread_func, req, NULL, HTTP_ASYNC_STACK_SIZE, 0x2C, -2);
+    if (R_FAILED(rc)) {
         free(req);
         return NULL;
     }
-
+    rc = threadStart(&req->thread);
+    if (R_FAILED(rc)) {
+        threadClose(&req->thread);
+        free(req);
+        return NULL;
+    }
+    req->started = true;
     return req;
 }
 
 HttpAsyncState http_async_poll(HttpAsyncRequest *req) {
-    if (!req || !s_multi) return HTTP_ASYNC_DONE_ERROR;
-    if (req->done) return req->result == CURLE_OK ? HTTP_ASYNC_DONE_OK : HTTP_ASYNC_DONE_ERROR;
-
-    int still_running = 0;
-    curl_multi_perform(s_multi, &still_running);
-
-    // Multiple async requests could in principle be in flight at once (this
-    // is a general-purpose API, even though today's only caller - ui_icons.c
-    // - only ever runs one at a time), so match the completion message
-    // against *this* request's handle rather than assuming it's the first
-    // one in the queue.
-    int msgs_left = 0;
-    CURLMsg *msg;
-    while ((msg = curl_multi_info_read(s_multi, &msgs_left)) != NULL) {
-        if (msg->msg == CURLMSG_DONE && msg->easy_handle == req->easy) {
-            req->done = true;
-            req->result = msg->data.result;
-        }
-    }
-
-    if (!req->done) return HTTP_ASYNC_RUNNING;
+    if (!req) return HTTP_ASYNC_DONE_ERROR;
+    bool done = __atomic_load_n(&req->done, __ATOMIC_ACQUIRE);
+    if (!done) return HTTP_ASYNC_RUNNING;
     return req->result == CURLE_OK ? HTTP_ASYNC_DONE_OK : HTTP_ASYNC_DONE_ERROR;
 }
 
@@ -433,7 +463,15 @@ void http_async_finish(HttpAsyncRequest *req, char **out_buf, size_t *out_len,
                         char *err_buf, size_t err_buf_size) {
     if (!req) return;
 
-    if (req->done && req->result == CURLE_OK) {
+    // Only ever called after http_async_poll() reported a DONE_* state, so
+    // the thread has already returned (or is about to) - this join is not
+    // a meaningful wait, just releasing the kernel resources.
+    if (req->started) {
+        threadWaitForExit(&req->thread);
+        threadClose(&req->thread);
+    }
+
+    if (req->result == CURLE_OK) {
         *out_buf = req->buf.data ? req->buf.data : strdup("");
         *out_len = req->buf.len;
     } else {
@@ -443,15 +481,23 @@ void http_async_finish(HttpAsyncRequest *req, char **out_buf, size_t *out_len,
         set_curl_error(err_buf, err_buf_size, req->result);
     }
 
-    curl_multi_remove_handle(s_multi, req->easy);
-    curl_easy_cleanup(req->easy);
     free(req);
 }
 
 void http_async_cancel(HttpAsyncRequest *req) {
     if (!req) return;
-    curl_multi_remove_handle(s_multi, req->easy);
-    curl_easy_cleanup(req->easy);
+    // Unlike http_async_finish(), this can be called before the thread has
+    // finished (e.g. switching catalog sources mid-fetch) - there's no safe
+    // way to forcibly kill it mid curl_easy_perform (mbedtls/curl state
+    // would be left in an unknown state), so this waits for it to finish on
+    // its own. Bounded by HTTP_ASYNC_CONNECT_TIMEOUT_S/HTTP_ASYNC_TOTAL_TIMEOUT_S
+    // (20s worst case) - not instant, but a source switch is rare enough
+    // that this is an acceptable trade-off against the complexity of a
+    // proper fire-and-forget abandon path.
+    if (req->started) {
+        threadWaitForExit(&req->thread);
+        threadClose(&req->thread);
+    }
     free(req->buf.data);
     free(req);
 }
