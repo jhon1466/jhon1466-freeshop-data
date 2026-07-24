@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T06:58:57.582Z",
+  "generatedAt": "2026-07-24T07:05:09.243Z",
   "apps": [
     {
       "id": "3",
@@ -10,7 +10,7 @@
       "description": "3.0.3 + 3 DLCs",
       "version": "3.0.3",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/3.jpeg",
-      "downloadUrl": "https://download1072.mediafire.com/fd1a2qm0vjfgsoDEYgTUoVsqljH0fkKWBMhPuQbhxGQsoaTnWFdYotsoCVUa7UQ3yu_HzJMCSA2ZbU78RvJ0OWIDRvxFhSBMZxv2G0PALU25nkv-VmzeORi2NptZBk0yEcDteB-zXuVo0KELMREtjuVKCANdAefbfOxGSmHtMu7J_wo/hmzskn5sp8nrn45/Animal+Crossing+New+Horizons+%5Bv3.0.3+%2B+3+DLCs%5D.xci",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fhmzskn5sp8nrn45%2FAnimal%2BCrossing%2BNew%2BHorizons%2B%255Bv3.0.3%2B%252B%2B3%2BDLCs%255D.xci",
       "fileSize": 11969644544,
       "filename": "Animal Crossing New Horizons.xci",
       "fileType": "xci",
