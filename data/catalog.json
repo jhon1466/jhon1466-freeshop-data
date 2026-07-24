@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T07:05:50.029Z",
+  "generatedAt": "2026-07-24T07:06:29.167Z",
   "apps": [
     {
       "id": "3",
@@ -38,7 +38,7 @@
       "description": "v3.0.5 + DLC",
       "version": "3.0.5",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/5.jpg",
-      "downloadUrl": "https://download1350.mediafire.com/7jrnbyzrfb3gqOd9PadeCfScHu7xs7ssR0ICzBUbdV_rJ7FlAUt55QV7g-taDDBvNOgTOSxzIkLusCBALkUxVjGqPcjxLRnk8YxSOH3ZKV-byFaIBjx2AEa61T5l4M97RrIFRCPhYqTgiaE0fZV1uKzWbmpQhG0kBprQPQHHFsjSVg4/0a5wlr0h9irtgfv/Mario+Kart+8+Deluxe+%5Bv3.0.5+%2B+DLC%5D.xci",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F0a5wlr0h9irtgfv%2FMario%2BKart%2B8%2BDeluxe%2B%255Bv3.0.5%2B%252B%2BDLC%255D.xci",
       "fileSize": 12068741632,
       "filename": "Mario Kart 8 Deluxe.xci",
       "fileType": "xci",
