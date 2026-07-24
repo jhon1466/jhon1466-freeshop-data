@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T14:15:54.261Z",
+  "generatedAt": "2026-07-24T14:16:46.867Z",
   "apps": [
     {
       "id": "3",
@@ -319,7 +319,7 @@
       "description": "",
       "version": "2.1.0",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/25.jpg",
-      "downloadUrl": "https://download2295.mediafire.com/r3li0x68bzugKkmhC1H4aoBYYfx8p87J_7WVu_1FZAf3Fu4l0xAuIHnxtmnS8efkLjFVZagwqvFFvntIuEc2yPY_Kcc4iaZi7SsmFT6GmvndFt9XAFwmvGWR8fZJpaL9sVYcMyr7IRIFXreWKYIBxbG3I9l5MFI4p3G8B2ar6Qb3SVE/vegifp5y36tsgyr/Metroid+Dread+%5Bv2.1.0%5D.xci",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fvegifp5y36tsgyr%2FMetroid%2BDread%2B%255Bv2.1.0%255D.xci",
       "fileSize": 4580459008,
       "filename": "Metroid Dread [v2.1.0].xci",
       "fileType": "xci",
