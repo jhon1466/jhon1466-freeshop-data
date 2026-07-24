@@ -92,6 +92,139 @@ HttpResult http_get(const char *url, char **out_buf, size_t *out_len,
     return HTTP_OK;
 }
 
+HttpResult http_get_range(const char *url, uint64_t offset, uint64_t length,
+                           char **out_buf, size_t *out_len,
+                           char *effective_url_out, size_t effective_url_out_size,
+                           char *err_buf, size_t err_buf_size) {
+    CURL *curl = curl_easy_init();
+    if (!curl) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "curl_easy_init falló");
+        return HTTP_ERR_INIT;
+    }
+
+    MemBuffer buf = {0};
+    char range[64];
+    snprintf(range, sizeof(range), "%llu-%llu",
+             (unsigned long long)offset, (unsigned long long)(offset + length - 1));
+
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_RANGE, range);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, mem_write_cb);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buf);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT,
+                      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/124.0.0.0 Safari/537.36");
+    // See http_get() above for why peer/host verification is off, IPv4 is
+    // forced, and a minimum TLS version is pinned.
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+    curl_easy_setopt(curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
+
+    CURLcode res = curl_easy_perform(curl);
+
+    if (res != CURLE_OK) {
+        curl_easy_cleanup(curl);
+        free(buf.data);
+        set_curl_error(err_buf, err_buf_size, res);
+        return HTTP_ERR_REQUEST;
+    }
+
+    if (effective_url_out) {
+        char *effective_url = NULL;
+        curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &effective_url);
+        snprintf(effective_url_out, effective_url_out_size, "%s", effective_url ? effective_url : url);
+    }
+    curl_easy_cleanup(curl);
+
+    *out_buf = buf.data ? buf.data : strdup("");
+    *out_len = buf.len;
+    return HTTP_OK;
+}
+
+HttpResult http_get_range_streamed(const char *url, uint64_t offset, uint64_t length,
+                                    HttpRangeWriteCallback write_cb, void *write_userdata,
+                                    char *effective_url_out, size_t effective_url_out_size,
+                                    char *err_buf, size_t err_buf_size) {
+    if (length == 0) return HTTP_OK;
+
+    CURL *curl = curl_easy_init();
+    if (!curl) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "curl_easy_init falló");
+        return HTTP_ERR_INIT;
+    }
+
+    char range[64];
+    snprintf(range, sizeof(range), "%llu-%llu",
+             (unsigned long long)offset, (unsigned long long)(offset + length - 1));
+
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_RANGE, range);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, write_userdata);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30L);
+    // No CURLOPT_TIMEOUT here on purpose - unlike http_get_range's small
+    // bounded reads, this streams potentially GB-sized content, exactly
+    // like http_download_to_file below.
+    curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 512L * 1024L);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT,
+                      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/124.0.0.0 Safari/537.36");
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+    curl_easy_setopt(curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
+    curl_easy_setopt(curl, CURLOPT_SSL_CIPHER_LIST,
+                      "TLS-ECDHE-RSA-WITH-CHACHA20-POLY1305-SHA256:"
+                      "TLS-ECDHE-ECDSA-WITH-CHACHA20-POLY1305-SHA256:"
+                      "TLS-ECDHE-RSA-WITH-AES-128-GCM-SHA256:"
+                      "TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384:"
+                      "TLS-ECDHE-ECDSA-WITH-AES-128-GCM-SHA256:"
+                      "TLS-ECDHE-ECDSA-WITH-AES-256-GCM-SHA384");
+
+    CURLcode res = curl_easy_perform(curl);
+    long status = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+    if (res == CURLE_OK && status == 206 && effective_url_out) {
+        char *effective_url = NULL;
+        curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &effective_url);
+        snprintf(effective_url_out, effective_url_out_size, "%s", effective_url ? effective_url : url);
+    }
+    curl_easy_cleanup(curl);
+
+    if (res == CURLE_WRITE_ERROR) {
+        // write_cb returning short is how it signals both "canceled" and
+        // "the real failure was on the write_cb side" (e.g.
+        // ncm_install_content_from_url's own ncmContentStorageWritePlaceHolder
+        // error) - callers that care about *why* get that from their own
+        // write_cb context, not from this function's err_buf, so leave it
+        // untouched here instead of overwriting it with a generic message.
+        return HTTP_ERR_REQUEST;
+    }
+    if (res != CURLE_OK) {
+        set_curl_error(err_buf, err_buf_size, res);
+        return HTTP_ERR_REQUEST;
+    }
+    // A server that ignores Range entirely answers 200 with the WHOLE body
+    // instead of 206 with just the requested slice - by the time we get
+    // here write_cb has already received (and written) that wrong data, so
+    // this is only a best-effort check for hosts that reject Range outright
+    // (e.g. a plain 416/404) rather than a hard guarantee. Every host this
+    // project actually talks to (the catalog's own /api/dl/mediafire
+    // resolver, MediaFire's CDN behind it, GitHub raw, and this server's own
+    // static file serving) honors Range.
+    if (status != 206) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "el servidor no soporta descargas por rango (HTTP %ld)", status);
+        return HTTP_ERR_REQUEST;
+    }
+
+    return HTTP_OK;
+}
+
 typedef struct {
     HttpProgressCallback cb;
     void *userdata;

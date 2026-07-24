@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include "install.h"
+#include "install_common.h"
 
 // A single parsed CNMT (content meta): identity plus every content record it
 // lists (the Meta/cnmt record itself is added back explicitly by the caller
@@ -43,6 +44,28 @@ bool ncm_install_content(NcmContentStorage *cs, const NcmContentId *content_id,
                           FILE *src, uint64_t file_offset, uint64_t size,
                           InstallProgressCallback cb, void *userdata,
                           char *err_buf, size_t err_buf_size);
+
+// Same contract as ncm_install_content, but sources `size` bytes starting at
+// `file_offset` from an HTTP Range request against `ru` instead of a local
+// FILE*, streaming each chunk directly into the placeholder as it arrives -
+// the (potentially multi-GB) source is never written to the SD card as a
+// single file. Used by install_nsp_native.c and install_xci_native.c. This
+// is what lets a >4GB NSP/XCI install on a FAT32-formatted SD card (which
+// caps any *single* file at 4GB): NCM already splits install content into
+// separate per-NCA placeholder files, each ordinarily well under 4GB even
+// for huge games - skipping the old "download the whole NSP/XCI to one file
+// first" step means that per-NCA split is the only file size that matters
+// anymore. A single NCA bigger than 4GB (rare) would still fail on FAT32;
+// there's no way around that short of reformatting.
+//
+// Takes a ResolvedUrl* (not a raw URL string) so a whole install - one
+// request per NCA - only pays a self-resolving proxy's resolve cost once
+// instead of on every single content piece; see ResolvedUrl's doc comment
+// in install_common.h.
+bool ncm_install_content_from_url(NcmContentStorage *cs, const NcmContentId *content_id,
+                                   ResolvedUrl *ru, uint64_t file_offset, uint64_t size,
+                                   InstallProgressCallback cb, void *userdata,
+                                   char *err_buf, size_t err_buf_size);
 
 // Reads the CNMT out of the just-installed `cnmt_content_id` by mounting it
 // through fsOpenFileSystemWithId(..., FsFileSystemType_ContentMeta, ...) -

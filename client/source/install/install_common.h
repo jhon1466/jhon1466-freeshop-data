@@ -1,6 +1,8 @@
 #pragma once
 #include "install.h"
+#include "../net/http.h"
 #include <stddef.h>
+#include <stdint.h>
 
 // Creates dir if missing. Real failures (e.g. read-only SD, invalid path)
 // surface later when the caller tries to open a file inside this directory
@@ -36,3 +38,28 @@ typedef struct {
 // its bool return (false = cancel) unchanged. Pass as the HttpProgressCallback
 // to http_download_to_file with an InstallProgressThunkCtx as userdata.
 bool install_common_progress_thunk(long dltotal, long dlnow, void *userdata);
+
+// Wraps a URL that might be a self-resolving proxy (e.g. this catalog's own
+// /api/dl/mediafire, which re-resolves MediaFire's page to a fresh direct
+// CDN link on every single request it gets) so a multi-request install
+// (install_nsp_native.c/install_xci_native.c do one HTTP request per NCA)
+// doesn't pay that resolve cost - and, worse, doesn't re-trigger MediaFire's
+// own page fetch and a fresh TLS handshake to it - on every single content
+// piece. The first successful fetch remembers curl's CURLINFO_EFFECTIVE_URL
+// (the actual link reached after following the resolver's redirect) in
+// `direct_url`; every later call tries that directly first, only falling
+// back to re-resolving through `proxy_url` if the cached direct link stops
+// working (e.g. it expired partway through a very large install).
+typedef struct {
+    char proxy_url[900];
+    char direct_url[900]; // empty until the first successful resolve
+} ResolvedUrl;
+
+void resolved_url_init(ResolvedUrl *r, const char *proxy_url);
+
+// Same contract as http_get_range, sourced from `r` instead of a raw URL -
+// see ResolvedUrl's doc comment above for the try-direct-then-fall-back
+// behavior.
+HttpResult resolved_url_get_range(ResolvedUrl *r, uint64_t offset, uint64_t length,
+                                   char **out_buf, size_t *out_len,
+                                   char *err_buf, size_t err_buf_size);

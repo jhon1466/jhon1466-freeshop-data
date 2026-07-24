@@ -93,3 +93,24 @@ bool install_common_progress_thunk(long dltotal, long dlnow, void *userdata) {
     if (!ctx->cb) return true;
     return ctx->cb(dltotal, dlnow, ctx->userdata);
 }
+
+void resolved_url_init(ResolvedUrl *r, const char *proxy_url) {
+    snprintf(r->proxy_url, sizeof(r->proxy_url), "%s", proxy_url);
+    r->direct_url[0] = '\0';
+}
+
+HttpResult resolved_url_get_range(ResolvedUrl *r, uint64_t offset, uint64_t length,
+                                   char **out_buf, size_t *out_len,
+                                   char *err_buf, size_t err_buf_size) {
+    if (r->direct_url[0]) {
+        HttpResult hres = http_get_range(r->direct_url, offset, length, out_buf, out_len,
+                                          NULL, 0, err_buf, err_buf_size);
+        if (hres == HTTP_OK) return HTTP_OK;
+        // The cached direct link stopped working (expired, host hiccup,
+        // etc.) - fall through to a fresh resolve instead of failing
+        // outright.
+        r->direct_url[0] = '\0';
+    }
+    return http_get_range(r->proxy_url, offset, length, out_buf, out_len,
+                           r->direct_url, sizeof(r->direct_url), err_buf, err_buf_size);
+}

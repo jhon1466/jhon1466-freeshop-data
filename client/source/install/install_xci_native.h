@@ -14,21 +14,30 @@ typedef enum {
     XCI_INSTALL_ERR_CANCELED,
 } XciInstallResult;
 
-// Installs entry->filename (an XCI downloaded from
-// "<base_url><entry->download_url>") directly into the console's own title
-// database - no DBI hand-off. Locates the XCI's "secure" partition (see
-// xci_container.h), then does exactly what install_nsp_native does from
-// there: streams every referenced NCA into NcmContentStorage, commits the
-// content-meta record, imports the ticket/cert if present, and pushes the
-// application record.
+// Installs entry->filename (an XCI at "<base_url><entry->download_url>")
+// directly into the console's own title database - no DBI hand-off, and no
+// intermediate download either. Locates the XCI's "secure" partition over
+// the network (two small, bounded Range requests: the root partition table
+// at the fixed XCI_ROOT_HFS0_OFFSET, then the "secure" entry's own nested
+// header - see xci_container.h/install_xci_native.c's
+// xci_open_secure_partition_from_url), then does exactly what
+// install_nsp_native does from there: streams every referenced NCA straight
+// from the network into NcmContentStorage via ncm_install_content_from_url,
+// commits the content-meta record, imports the ticket/cert if present, and
+// pushes the application record. The XCI itself is never written to the SD
+// as a single file, which is what lets this install files bigger than 4GB
+// even on a FAT32-formatted card.
 //
-// Downloads to the same sdmc:/switch/DBI/nsp-repo/ folder DBI itself reads
-// from - on failure, the file is left there so "Instalar vía DBI" can be
-// used as an immediate fallback. On success the file is deleted to reclaim
-// SD space.
+// Because there's no longer a downloaded copy of the XCI sitting on the SD
+// card, a failure here does NOT leave anything behind for "Instalar vía
+// DBI" (see install_nsp_and_launch_dbi - it works for any file type despite
+// the name) to pick up - that fallback does its own full download from
+// scratch if used after this fails.
 //
-// `phase_cb` (may be NULL) is called once, right before content starts
-// being written to NCM content storage - see InstallPhaseCallback.
+// `phase_cb` (may be NULL) is called once, right after the secure
+// partition's header is parsed and before any content install begins - see
+// InstallPhaseCallback. Note that unlike the old file-then-install flow,
+// "installing" here also covers the network transfer itself.
 //
 // Only handles entry->file_type == APP_FILE_TYPE_XCI.
 XciInstallResult install_xci_native(const AppEntry *entry, const char *base_url,

@@ -1,4 +1,5 @@
 #include "ncm_install.h"
+#include "../net/http.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -145,6 +146,204 @@ bool ncm_install_content(NcmContentStorage *cs, const NcmContentId *content_id,
 
     // Register moves/consumes the placeholder in the common case - this is
     // just a harmless best-effort cleanup in case anything was left behind.
+    ncmContentStorageDeletePlaceHolder(cs, &placeholder_id);
+
+    return true;
+}
+
+typedef struct {
+    NcmContentStorage *cs;
+    NcmPlaceHolderId *placeholder_id;
+    uint64_t flushed;      // bytes already handed to NCM (= offset for the next flush)
+    uint64_t total_size;
+    uint8_t *buf;          // accumulates incoming network chunks before flushing
+    size_t buf_cap;
+    size_t buf_len;        // bytes currently sitting in buf, not yet flushed
+    InstallProgressCallback cb;
+    void *userdata;
+    bool canceled;
+    bool ncm_failed;
+    char *err_buf;
+    size_t err_buf_size;
+} NcaNetworkWriteCtx;
+
+// Flushes whatever's buffered into the placeholder in one ncm write, then
+// empties the buffer. Batching matters a lot here: TLS hands curl's write
+// callback data in small (~16KB) records, and each ncmContentStorageWrite-
+// PlaceHolder is an IPC round-trip to the NCM service backed by an SD write,
+// which has far higher per-call latency than the network delivering the
+// bytes - writing per-record instead of per-4MB was pinning installs at
+// ~1MB/s even though the same link pulls 15-23MB/s on a PC. This mirrors the
+// 4MB batching the local-file path (ncm_install_content) already does.
+static bool nca_flush(NcaNetworkWriteCtx *ctx) {
+    if (ctx->buf_len == 0) return true;
+    Result rc = ncmContentStorageWritePlaceHolder(ctx->cs, ctx->placeholder_id,
+                                                   (s64)ctx->flushed, ctx->buf, ctx->buf_len);
+    if (R_FAILED(rc)) {
+        if (ctx->err_buf) snprintf(ctx->err_buf, ctx->err_buf_size, "ncmContentStorageWritePlaceHolder falló (0x%x)", rc);
+        ctx->ncm_failed = true;
+        return false;
+    }
+    ctx->flushed += ctx->buf_len;
+    ctx->buf_len = 0;
+    return true;
+}
+
+static size_t nca_network_write_cb(void *ptr, size_t size, size_t nmemb, void *userdata) {
+    NcaNetworkWriteCtx *ctx = (NcaNetworkWriteCtx *)userdata;
+    size_t add = size * nmemb;
+
+    // A well-behaved Range response never sends more than what was asked
+    // for - if it does, refuse it outright rather than silently truncating
+    // (truncating would register a placeholder full of wrong/incomplete
+    // data without ever surfacing an error).
+    if (ctx->flushed + ctx->buf_len + add > ctx->total_size) {
+        if (ctx->err_buf) snprintf(ctx->err_buf, ctx->err_buf_size,
+                                    "el servidor envió más datos de los esperados para este contenido");
+        ctx->ncm_failed = true;
+        return 0;
+    }
+
+    const uint8_t *in = (const uint8_t *)ptr;
+    size_t remaining = add;
+    while (remaining > 0) {
+        size_t space = ctx->buf_cap - ctx->buf_len;
+        size_t take = remaining < space ? remaining : space;
+        memcpy(ctx->buf + ctx->buf_len, in, take);
+        ctx->buf_len += take;
+        in += take;
+        remaining -= take;
+        if (ctx->buf_len == ctx->buf_cap && !nca_flush(ctx)) {
+            return 0; // ncm_failed already set + err_buf filled by nca_flush
+        }
+    }
+
+    if (ctx->cb && !ctx->cb((long)ctx->total_size, (long)(ctx->flushed + ctx->buf_len), ctx->userdata)) {
+        ctx->canceled = true;
+        return 0;
+    }
+
+    return add;
+}
+
+bool ncm_install_content_from_url(NcmContentStorage *cs, const NcmContentId *content_id,
+                                   ResolvedUrl *ru, uint64_t file_offset, uint64_t size,
+                                   InstallProgressCallback cb, void *userdata,
+                                   char *err_buf, size_t err_buf_size) {
+    bool already_has = false;
+    Result rc = ncmContentStorageHas(cs, &already_has, content_id);
+    if (R_SUCCEEDED(rc) && already_has) {
+        return true;
+    }
+
+    NcmPlaceHolderId placeholder_id;
+    rc = ncmContentStorageGeneratePlaceHolderId(cs, &placeholder_id);
+    if (R_FAILED(rc)) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "ncmContentStorageGeneratePlaceHolderId falló (0x%x)", rc);
+        return false;
+    }
+
+    // Clear out any stale placeholder left behind by a previous failed attempt.
+    ncmContentStorageDeletePlaceHolder(cs, &placeholder_id);
+
+    rc = ncmContentStorageCreatePlaceHolder(cs, content_id, &placeholder_id, (s64)size);
+    if (R_FAILED(rc)) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "ncmContentStorageCreatePlaceHolder falló (0x%x)", rc);
+        return false;
+    }
+
+    rc = ncmContentStorageSetPlaceHolderSize(cs, &placeholder_id, (s64)size);
+    if (R_FAILED(rc)) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "ncmContentStorageSetPlaceHolderSize falló (0x%x)", rc);
+        ncmContentStorageDeletePlaceHolder(cs, &placeholder_id);
+        return false;
+    }
+
+    // 4MB flush buffer, matching the local-file path's NCM_INSTALL_CHUNK_SIZE.
+    // static (not on the stack) because it's far too big for a thread stack,
+    // and safe to share because installs run one NCA at a time, serially.
+    static uint8_t nca_flush_buf[NCM_INSTALL_CHUNK_SIZE];
+
+    NcaNetworkWriteCtx ctx = {
+        .cs = cs,
+        .placeholder_id = &placeholder_id,
+        .flushed = 0,
+        .total_size = size,
+        .buf = nca_flush_buf,
+        .buf_cap = sizeof(nca_flush_buf),
+        .buf_len = 0,
+        .cb = cb,
+        .userdata = userdata,
+        .canceled = false,
+        .ncm_failed = false,
+        .err_buf = err_buf,
+        .err_buf_size = err_buf_size,
+    };
+
+    HttpResult hres = HTTP_OK;
+    char net_err[160] = {0};
+    if (size > 0) {
+        // Try the cached direct link first (skips re-resolving through the
+        // proxy on every single content piece - see ResolvedUrl's doc
+        // comment in install_common.h). If that fails outright (not a
+        // cancel, not an NCM-side failure), the cached link most likely
+        // stopped working (expired, host hiccup) - reset what's been
+        // written so far (ncmContentStorageWritePlaceHolder is a plain
+        // offset write, safe to redo from scratch) and retry once through
+        // the proxy, which re-resolves to a fresh direct link and re-seeds
+        // the cache for the NCAs still to come.
+        bool had_cached = ru->direct_url[0] != '\0';
+        const char *first_url = had_cached ? ru->direct_url : ru->proxy_url;
+        char *first_effective_out = had_cached ? NULL : ru->direct_url;
+        size_t first_effective_out_size = had_cached ? 0 : sizeof(ru->direct_url);
+
+        hres = http_get_range_streamed(first_url, file_offset, size, nca_network_write_cb, &ctx,
+                                        first_effective_out, first_effective_out_size, net_err, sizeof(net_err));
+        // Flush whatever's left in the buffer from a successful transfer
+        // (the last chunk almost never lands exactly on a 4MB boundary).
+        if (hres == HTTP_OK && !ctx.canceled && !ctx.ncm_failed) {
+            nca_flush(&ctx);
+        }
+
+        if (hres != HTTP_OK && !ctx.canceled && !ctx.ncm_failed && had_cached) {
+            ru->direct_url[0] = '\0';
+            ctx.flushed = 0;
+            ctx.buf_len = 0;
+            net_err[0] = '\0';
+            hres = http_get_range_streamed(ru->proxy_url, file_offset, size, nca_network_write_cb, &ctx,
+                                            ru->direct_url, sizeof(ru->direct_url), net_err, sizeof(net_err));
+            if (hres == HTTP_OK && !ctx.canceled && !ctx.ncm_failed) {
+                nca_flush(&ctx);
+            }
+        }
+    }
+
+    if (ctx.canceled) {
+        ncmContentStorageDeletePlaceHolder(cs, &placeholder_id);
+        if (err_buf) snprintf(err_buf, err_buf_size, "instalación cancelada");
+        return false;
+    }
+    if (ctx.ncm_failed) {
+        // err_buf was already filled in by nca_network_write_cb / nca_flush.
+        ncmContentStorageDeletePlaceHolder(cs, &placeholder_id);
+        return false;
+    }
+    if (hres != HTTP_OK || ctx.flushed != size) {
+        ncmContentStorageDeletePlaceHolder(cs, &placeholder_id);
+        if (err_buf) {
+            if (net_err[0]) snprintf(err_buf, err_buf_size, "descarga falló: %s", net_err);
+            else snprintf(err_buf, err_buf_size, "descarga de red incompleta");
+        }
+        return false;
+    }
+
+    rc = ncmContentStorageRegister(cs, content_id, &placeholder_id);
+    if (R_FAILED(rc)) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "ncmContentStorageRegister falló (0x%x)", rc);
+        ncmContentStorageDeletePlaceHolder(cs, &placeholder_id);
+        return false;
+    }
+
     ncmContentStorageDeletePlaceHolder(cs, &placeholder_id);
 
     return true;
