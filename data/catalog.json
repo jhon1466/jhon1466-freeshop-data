@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T14:28:43.950Z",
+  "generatedAt": "2026-07-24T14:28:59.149Z",
   "apps": [
     {
       "id": "3",
@@ -386,7 +386,7 @@
       "title": "Xenoblade Chronicles X: Definitive Edition",
       "author": "Unknown",
       "category": "Game",
-      "description": "",
+      "description": "Update 1.0.2 + DLC",
       "version": "1.0.2",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/30.jpg",
       "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fl7gjfnrya00lv9v%2FXenoblade%2BChronicles%2BX%2BDefinitive%2BEdition%2B%5Bv1.0.2%2B%2B%2BDLC%5D.xci%2Ffile",
