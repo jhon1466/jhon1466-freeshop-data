@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T14:31:51.014Z",
+  "generatedAt": "2026-07-24T14:54:46.050Z",
   "apps": [
     {
       "id": "3",
@@ -422,6 +422,20 @@
       "filename": "Xenoblade Chronicles 3 [v2.2.1 + 4 DLCs].xci",
       "fileType": "xci",
       "longDescription": "Una historia sobre la vida en la que el pasado y el futuro se entrelazan\n\nDescubre Xenoblade Chronicles 3, un emocionante juego de rol para Nintendo Switch. Únete a Noah, Mio y sus amigos mientras recorren paisajes majestuosos, se enfrentan a bestias feroces y luchan para romper el ciclo de violencia sin fin que asola sus tierras."
+    },
+    {
+      "id": "33",
+      "title": "Dark Souls Remastered",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.3",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/33.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fluq241i8syqqq73%2FDARK_SOULS_REMASTERED_%25255Bv1.0.3%25255D.xci%2Ffile",
+      "fileSize": 4267821568,
+      "filename": "DARK SOULS REMASTERED [v1.0.3].xci",
+      "fileType": "xci",
+      "longDescription": "Tu destino te aguarda en Lordran\n\nÁrmate de valor, llena tus frascos de Estus y encara desafíos imposibles en Dark Souls™: Remastered para Nintendo Switch.\n\nEres el elegido de los no muertos y debes peregrinar a Lordran, una tierra marcada por una oscura maldición. Aprende a dominar el complejo sistema de combate de Dark Souls a medida que te enfrentas a Huecos, demonios y todo tipo de monstruos. Tu misión es tañer las Campanas del despertar y descubrir por qué el reino se ha sumido en la decadencia."
     }
   ]
 }
