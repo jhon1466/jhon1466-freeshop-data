@@ -273,6 +273,39 @@ int main(int argc, char **argv) {
     // case the console behaves as if this call was never made).
     appletSetAutoSleepDisabled(true);
 
+    // Second hop of a self-update (see update/self_update.h): this process
+    // is running from the ".update" staging file a previous launch
+    // downloaded and chain-loaded into specifically so it could safely
+    // replace the canonical path - confirmed on real hardware that a
+    // running .nro can't remove()/rename() *itself* (the very first
+    // diagnostic report after adding errno logging showed rename() failing
+    // with EEXIST on the same path remove() had just reported ENOENT for -
+    // nx-hbloader evidently keeps the file open/locked for the life of the
+    // process). Deliberately minimal here (no socket/curl init) - this
+    // hop's only job is the swap-and-relaunch, and the less it does before
+    // that, the less that can go wrong along the way.
+    if (self_update_is_staging_copy(self_path)) {
+        char canonical_path[512];
+        char swap_err[256];
+        if (self_update_finish_swap(self_path, canonical_path, sizeof(canonical_path),
+                                     swap_err, sizeof(swap_err)) == SELF_UPDATE_SWAP_OK) {
+            envSetNextLoad(canonical_path, canonical_path);
+            appletSetAutoSleepDisabled(false);
+            romfsExit();
+            ui_app_shutdown();
+            return 0;
+        }
+        // Couldn't finish the swap - rather than getting the user stuck (the
+        // staging file is itself a fully valid, working build, just not at
+        // hbmenu's "normal" filename), tell them and keep going as-is.
+        char msg[512];
+        snprintf(msg, sizeof(msg),
+                 "No se pudo completar la actualización: %s\n\nLa app sigue funcionando, pero puede que "
+                 "vuelva a pedir la actualización la próxima vez que la abras.",
+                 swap_err);
+        ui_app_show_message(msg);
+    }
+
     // socketInitializeDefault()'s stock TCP receive buffer (0x40000 max) is
     // the download-speed ceiling for a distant server: TCP throughput is
     // capped at roughly (receive window / round-trip time), and window
@@ -355,12 +388,25 @@ int main(int argc, char **argv) {
             padInitializeDefault(&update_pad);
             InstallProgressCtx update_ctx = { .pad = &update_pad, .start_tick = 0, .started = false,
                                                .phase = INSTALL_PHASE_DOWNLOADING };
+            char staging_path[512];
             char update_err[256];
-            SelfUpdateApplyResult ares = self_update_apply(self_path, asset_url, install_progress_cb, &update_ctx,
-                                                            update_err, sizeof(update_err));
+            SelfUpdateApplyResult ares = self_update_apply(self_path, asset_url, staging_path, sizeof(staging_path),
+                                                             install_progress_cb, &update_ctx,
+                                                             update_err, sizeof(update_err));
             if (ares == SELF_UPDATE_APPLY_OK) {
-                ui_app_show_message("Actualización descargada.\n\nCierra la app y ábrela de nuevo desde el "
-                                     "hbmenu para usar la nueva versión.");
+                // Chain-load straight into the staging copy and exit now -
+                // it finishes the update (see the staging-copy handling
+                // right after romfsInit above) and relaunches itself into
+                // the canonical path on its own, so the user just sees a
+                // couple of quick screen flashes rather than having to
+                // manually close and reopen the app.
+                envSetNextLoad(staging_path, staging_path);
+                curl_global_cleanup();
+                socketExit();
+                appletSetAutoSleepDisabled(false);
+                romfsExit();
+                ui_app_shutdown();
+                return 0;
             } else {
                 char err_msg[320];
                 snprintf(err_msg, sizeof(err_msg), "No se pudo actualizar: %s\n\nSigues usando la versión actual.",

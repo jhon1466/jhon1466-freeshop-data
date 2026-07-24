@@ -64,7 +64,14 @@ Homebrew Menu.
   launch it checks the data repo's GitHub Releases for a newer version
   (showing that release's own notes before asking for confirmation) and,
   if confirmed, downloads and replaces its own `.nro` - see
-  [Publishing a client update](#publishing-a-client-update) below.
+  [Publishing a client update](#publishing-a-client-update) below. The
+  replace itself is a two-hop chain-load (a running `.nro` can't
+  remove()/rename() itself on real hardware): the update downloads to a
+  `.update`-suffixed staging copy next to the current file, chain-loads into
+  it, and *that* process (now running from a different file) swaps the
+  staging copy onto the canonical path and chain-loads back - so from the
+  user's side it's just a couple of quick screen flashes, no manual
+  close/reopen needed.
 
 ## Quick start
 

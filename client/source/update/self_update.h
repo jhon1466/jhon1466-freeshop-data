@@ -30,15 +30,46 @@ typedef enum {
     SELF_UPDATE_APPLY_OK,
     SELF_UPDATE_APPLY_ERR_DOWNLOAD,
     SELF_UPDATE_APPLY_ERR_NO_SELF_PATH, // self_path wasn't usable (e.g. launched via nxlink, not hbmenu)
-    SELF_UPDATE_APPLY_ERR_REPLACE,
 } SelfUpdateApplyResult;
 
-// Downloads `asset_url` and overwrites `self_path` (the currently-running
-// .nro's own path - hbmenu passes this as argv[0]) with it. Safe to do while
-// still running: nx-hbloader loads the whole .nro into memory upfront and
-// doesn't keep the file open during execution, so this process keeps
-// working normally - the new version only takes effect the next time the
-// app is launched from hbmenu.
+// Suffix used for the staging copy self_update_apply() downloads to and
+// self_update_is_staging_copy()/self_update_finish_swap() look for. Exposed
+// so main() can build the same path both functions agree on.
+#define SELF_UPDATE_STAGING_SUFFIX ".update"
+
+// Downloads `asset_url` to `self_path` + SELF_UPDATE_STAGING_SUFFIX (does NOT
+// touch `self_path` itself - see the comment on self_update_finish_swap()
+// below for why not) and writes that staging path to out_staging_path. The
+// caller is expected to envSetNextLoad() into it and exit immediately so a
+// fresh process picks up the swap on its next launch.
 SelfUpdateApplyResult self_update_apply(const char *self_path, const char *asset_url,
+                                         char *out_staging_path, size_t out_staging_path_size,
                                          HttpProgressCallback cb, void *userdata,
                                          char *err_buf, size_t err_buf_size);
+
+// True if `self_path` is a SELF_UPDATE_STAGING_SUFFIX-suffixed staging copy
+// (i.e. this process was itself chain-loaded from self_update_apply()'s
+// output) rather than the app's normal, canonical launch path.
+bool self_update_is_staging_copy(const char *self_path);
+
+typedef enum {
+    SELF_UPDATE_SWAP_OK,
+    SELF_UPDATE_SWAP_ERR_REPLACE,
+} SelfUpdateSwapResult;
+
+// Second hop of an update, called (only) when self_update_is_staging_copy()
+// is true: copies this running staging file onto the canonical path (i.e.
+// `self_path` with the suffix stripped, written to out_canonical_path) and
+// deletes the staging file. Confirmed on real hardware that a running .nro
+// can't remove()/rename() *itself* (nx-hbloader appears to keep the file
+// open/locked for the life of the process, unlike the "loads fully into
+// memory upfront" assumption the old single-hop version of this code made) -
+// this function is only ever called from a process running out of the
+// staging file, so the canonical path it's replacing here is a different,
+// not-currently-executing file, which is safe. On success the caller should
+// envSetNextLoad() into out_canonical_path and exit so the final process
+// runs from the "real" filename hbmenu shows, rather than staying on the
+// staging copy forever.
+SelfUpdateSwapResult self_update_finish_swap(const char *self_path, char *out_canonical_path,
+                                              size_t out_canonical_path_size,
+                                              char *err_buf, size_t err_buf_size);
