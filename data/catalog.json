@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T15:38:50.634Z",
+  "generatedAt": "2026-07-24T15:41:10.758Z",
   "apps": [
     {
       "id": "3",
@@ -492,6 +492,20 @@
       "filename": "Hyrule Warriors Definitive Edition [v1.0.1].xci",
       "fileType": "xci",
       "longDescription": "Salva a Hyrule desde tu televisor o en el camino!\n\nDerrota enemigos con personajes de The Legend of Zelda, en el modo TV con resolución 1080p, ¡o con 1 consola y 2 jugadores! Link y Zelda lucharán en trajes inspirados en The Legend of Zelda: Breath of the Wild, y Tetra y el rey de Hyrule aparecerán en escenas basadas en The Legend of Zelda™: The Wind Waker. ¡Encuentra las hadas que te ayudarán! Todas las funciones y contenido adicional de las versiones anteriores, incluyendo el modo Hada y elementos de The Legend of Zelda: The Wind Waker, pueden disfrutarse en alta definición en la consola Nintendo Switch™. Esta vez, no te enfrentarás solo a la hechicera Cia. Comanda a legendarios héroes y villanos en la batalla para lograr objetivos desencadenando ataques especiales. Avanza en la historia para desbloquear personajes, cada uno de ellos con sus propios movimientos y armas. Recoge rupias y otros objetos para mejorar las armas e insignias, las cuales reforzarán las habilidades de tus guerreros. ¡El destino de Hyrule está en tus manos!"
+    },
+    {
+      "id": "38",
+      "title": "Hollow Knight: Silksong",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.28716",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/38.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Ffztani0ju76htur%2FHollow%2BKnight%2BSilksong%2B%5Bv1.0.3%5D.xci%2Ffile",
+      "fileSize": 3103912960,
+      "filename": "Hollow Knight Silksong [v1.0.3].xci",
+      "fileType": "xci",
+      "longDescription": "Asciende a la cima de un reino encantado\n\nHollow Knight: Silksong es la épica secuela de Hollow Knight, la galardonada aventura de acción. Viaja a tierras inexploradas, descubre poderes nuevos, lucha contra vastas hordas de bichos y bestias y descubre secretos relacionados con tu naturaleza y tu pasado."
     }
   ]
 }
