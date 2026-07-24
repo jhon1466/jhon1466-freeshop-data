@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T00:49:36.468Z",
+  "generatedAt": "2026-07-24T01:40:43.957Z",
   "apps": [
     {
       "id": "3",
@@ -297,6 +297,19 @@
       "filename": "Plants vs. Zombies Trasplantado [v1.3.0 + DLC].xci",
       "fileType": "xci",
       "longDescription": "¡Vuelve a tus raíces!\n\n¡El clásico Plants vs. Zombies regresa esplendoroso en HD! ¡GUAU! Después de años en el ático de Dave el Loco, la batalla original entre plantas y zombis regresó: ¡más grande, más brillante y más alocada que nunca! Disfruta del juego que lo inició todo, ahora remasterizado con gráficos en HD mejorados y repleto de nuevos secretos por descubrir."
+    },
+    {
+      "id": "24",
+      "title": "Minecraft Story Mode The Complete Adventure",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/24.jpg",
+      "downloadUrl": "https://download1479.mediafire.com/wvno6ibrglog9c-An5WFiORsZ3NCHCO97MoblWYICq0mRFgJTl6ce7wQymUQ391vcsFK4hJrOj1DojALLO5meoMcbeM4Maqj_uQYc_eabA6qz6OU_9Qvu99znMngio9ln-j9Ylch40roRQdFenW1bXr74t-oBadVun9uYSyzVQoAL58/mzimyww7n0o3hz4/Minecraft+Story+Mode+The+Complete+Adventure.xci",
+      "fileSize": 7985954816,
+      "filename": "Minecraft Story Mode The Complete Adventure.xci",
+      "fileType": "xci"
     }
   ]
 }
