@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T07:10:58.876Z",
+  "generatedAt": "2026-07-24T14:11:27.580Z",
   "apps": [
     {
       "id": "3",
@@ -165,7 +165,7 @@
       "description": "",
       "version": "1.1.1",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/14.jpg",
-      "downloadUrl": "https://download2273.mediafire.com/tlw26b7pgv9gEFwOSoK6BRWEzv7QcQCSHpJQ_bB8gEPxhgbztm_qbrOooVMhR47xgIt3idDDIw8vyJOpVWviws7mHJWN_Fkij6K03TSBnYjyV41_rPJPjoyoxVevc7Mr3Uc-zRBQHa-jhhFmfnxfIYKU2Z4_Hr_NeGZN2A0_v8P3rPA/kidsb5tlp2lbr9y/PK+Legends+Arceus+%5Bv1.1.1%5D.xci",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fkidsb5tlp2lbr9y%2FPK%2BLegends%2BArceus%2B%255Bv1.1.1%255D.xci",
       "fileSize": 6554127872,
       "filename": "Pokemon Legends Arceus.xci",
       "fileType": "xci",
