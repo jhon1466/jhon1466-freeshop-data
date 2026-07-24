@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T19:30:13.777Z",
+  "generatedAt": "2026-07-24T19:42:57.012Z",
   "apps": [
     {
       "id": "3",
@@ -533,6 +533,20 @@
       "filename": "Minecraft Dungeons [v1.17.0.0 + 7 DLCs].xci",
       "fileType": "xci",
       "longDescription": "¡Ábrete camino luchando en un juego de aventura y acción totalmente nuevo inspirado en los juegos de mazmorras clásicos y ambientado en el universo de Minecraft!"
+    },
+    {
+      "id": "2",
+      "title": "Bayonetta 2",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.2.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/2.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F5dall6bkuxsc5ql%2FBayonetta_2_%25255Bv1.2.0%25255D_.xci%2Ffile",
+      "fileSize": 13449756160,
+      "filename": "Bayonetta 2 [v1.2.0].xci",
+      "fileType": "xci",
+      "longDescription": "Bayonetta está de regreso, con movimientos elegantes y poderosas armas.\n\n¡Bayonetta está de regreso, más potente que nunca! Equípate de un nuevo arsenal y ataques como el Clímax de Umbra en este apasionante juego de acción. Incluso puedes jugar con tus amigos en el modo cooperativo en línea o cooperativo local para dos jugadores. (Se requieren accesorios adicionales; se venden por separado). Bayonetta es una temible bruja que blande impresionantes armas como pistolas, látigos, martillos, lanzallamas y arcos envenenados. Pero no todo se trata de la fuerza: también importa el estilo. Bayonetta es letal pero elegante, con movimientos como el Tiempo Brujo, que ralentiza el propio tiempo, y el nuevo Clímax de Umbra, un ataque especial que invoca a demonios infernales para destrozar a enemigos. Bayonetta 2 también incluye el modo cooperativo en línea y cooperativo local para dos jugadores en los que se pueden apostar y ganar halos según el resultado. Los jugadores tendrán que trabajar juntos para sembrar el caos y conseguir tesoros."
     }
   ]
 }
