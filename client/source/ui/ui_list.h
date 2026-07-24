@@ -12,6 +12,10 @@
 // Returned by ui_show_list() when the user asks to open the SD card file
 // explorer (right stick click) instead of selecting an entry.
 #define UI_LIST_OPEN_EXPLORER (-4)
+// Returned by ui_show_list() when the user asks to reload the catalog from
+// its sources (left stick click) - e.g. new apps were added since this
+// session started, without wanting to fully close and reopen the client.
+#define UI_LIST_RELOAD_CATALOG (-5)
 
 // Renders a full-screen scrollable list/grid of `entries` (toggle with Y,
 // cycle sort with X - both re-sort/redisplay `entries` in place) and blocks

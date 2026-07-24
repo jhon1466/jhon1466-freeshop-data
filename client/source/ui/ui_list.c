@@ -571,6 +571,9 @@ int ui_show_list(AppEntry *entries, int count) {
             if (kDown & HidNpadButton_StickR) {
                 return UI_LIST_OPEN_EXPLORER;
             }
+            if (kDown & HidNpadButton_StickL) {
+                return UI_LIST_RELOAD_CATALOG;
+            }
             if ((kDown & HidNpadButton_B) || (kDown & HidNpadButton_Plus)) {
                 return UI_LIST_EXIT;
             }
@@ -744,9 +747,9 @@ int ui_show_list(AppEntry *entries, int count) {
                  view_mode == VIEW_LIST ? "cuadrícula" : "lista", sort_mode_label(sort_mode));
         ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y, COLOR_TEXT_DIM, footer1);
 
-        char footer2[160];
+        char footer2[180];
         snprintf(footer2, sizeof(footer2),
-                 "R: buscar%s    -: fuentes    L: acerca de    Stick R: explorador    B/+: salir",
+                 "R: buscar%s    -: fuentes    L: acerca de    Stick R: explorador    Stick L: recargar    B/+: salir",
                  search_query[0] ? " (activa)" : "");
         ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y + 20, COLOR_TEXT_DIM, footer2);
 

@@ -550,6 +550,33 @@ int main(int argc, char **argv) {
             continue;
         }
 
+        if (selected == UI_LIST_RELOAD_CATALOG) {
+            // Re-fetches from the same sources as a normal launch - for new
+            // apps added to a source since this session started, without
+            // needing to fully close and reopen the client to see them.
+            // Unlike UI_LIST_OPEN_SOURCES's reload, ids of already-known
+            // apps don't change here, so cached icon textures stay valid -
+            // no ui_icons_clear() needed, only genuinely new ids will end
+            // up fetching anything.
+            AppEntry *new_entries = NULL;
+            int new_count = 0;
+            CatalogResult cres2 = fetch_merged_catalog(&sources, &new_entries, &new_count,
+                                                        err_buf, sizeof(err_buf));
+            if (cres2 != CATALOG_OK) {
+                char msg[640];
+                snprintf(msg, sizeof(msg), "No se pudo recargar el catálogo:\n%s\n\nSigues viendo la versión anterior.",
+                         err_buf);
+                ui_app_show_message(msg);
+            } else {
+                catalog_free(entries);
+                entries = new_entries;
+                count = new_count;
+                free(root_entries);
+                root_entries = build_root_entries(entries, count, &root_count);
+            }
+            continue;
+        }
+
         if (selected == UI_LIST_OPEN_ABOUT) {
             ui_show_about();
             continue;
