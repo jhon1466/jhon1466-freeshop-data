@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T14:17:17.821Z",
+  "generatedAt": "2026-07-24T14:17:50.098Z",
   "apps": [
     {
       "id": "3",
@@ -347,7 +347,7 @@
       "description": "Update 5.5.2 + 2 DLCs",
       "version": "5.5.2",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/27.jpg",
-      "downloadUrl": "https://download1582.mediafire.com/ntd5lt6g0flgPt7Swsw526y7tGgD2AJrhUZ89yjurmez7gVWQMNx-wq1zQtr0SvX-IRqnvOpsByr1hjMD_x2IIODaaz2zU8vhqCitP620q29vgEkKH0iQJZvGKm7FxuhH_8XGWSxyJmAJqUgV6G8RIYQMzlFAwIA7J7YuQeueg78nyI/c0ffuebpbxw9a91/Splatoon+2+%5BUpdate+5.5.2+%2B+2+DLCs%5D.xci",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fc0ffuebpbxw9a91%2FSplatoon%2B2%2B%255BUpdate%2B5.5.2%2B%252B%2B2%2BDLCs%255D.xci",
       "fileSize": 8711961600,
       "filename": "Splatoon 2 [Update 5.5.2 + 2 DLCs].xci",
       "fileType": "xci",
