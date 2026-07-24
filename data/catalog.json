@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T02:09:42.103Z",
+  "generatedAt": "2026-07-24T02:12:32.488Z",
   "apps": [
     {
       "id": "3",
@@ -338,6 +338,20 @@
       "filename": "Pikmin 4 [v1.0.2].xci",
       "fileType": "xci",
       "longDescription": "En un peculiar planeta lejano, un grupo de viajeros espaciales se encuentra varado y a la espera de ser rescatado. ¿Eres el rescatador indicado? Recibe sus señales de socorro y explora un mundo inexplorado habitado por una curiosa variedad de criaturas.\n\nPor suerte, ¡algunos son amigos, no enemigos! Conoce a los Pikmin: estos intrépidos ayudantes, aunque pequeños, son muy fuertes en grupo. Críalos, reúnelos y guíalos para que superen tareas grandes y pequeñas.\n\nExplora, busca tesoros en vastas áreas abiertas, lucha contra criaturas salvajes, resuelve acertijos y rescata juntos a los viajeros varados."
+    },
+    {
+      "id": "27",
+      "title": "Splatoon 2",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "Update 5.5.2 + 2 DLCs",
+      "version": "5.5.2",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/27.jpg",
+      "downloadUrl": "https://download1582.mediafire.com/ntd5lt6g0flgPt7Swsw526y7tGgD2AJrhUZ89yjurmez7gVWQMNx-wq1zQtr0SvX-IRqnvOpsByr1hjMD_x2IIODaaz2zU8vhqCitP620q29vgEkKH0iQJZvGKm7FxuhH_8XGWSxyJmAJqUgV6G8RIYQMzlFAwIA7J7YuQeueg78nyI/c0ffuebpbxw9a91/Splatoon+2+%5BUpdate+5.5.2+%2B+2+DLCs%5D.xci",
+      "fileSize": 8711961600,
+      "filename": "Splatoon 2 [Update 5.5.2 + 2 DLCs].xci",
+      "fileType": "xci",
+      "longDescription": "¡Presume de tus colores!\n\nConquista territorio cubriéndolo de tinta en apasionantes batallas de cuatro contra cuatro. ¡El equipo que cubra más terreno con su tinta gana! El trabajo en equipo y saber cuándo adoptar la forma de calamar te darán la ventaja necesaria para ganar. ¡Sal al campo de batalla y ve a por todas!"
     }
   ]
 }
