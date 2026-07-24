@@ -348,3 +348,110 @@ HttpResult http_download_to_file(const char *url, const char *dest_path,
 
     return HTTP_OK;
 }
+
+// ---- Non-blocking GET (curl's multi interface) ----
+
+struct HttpAsyncRequest {
+    CURL *easy;
+    MemBuffer buf;
+    bool done;
+    CURLcode result;
+};
+
+// One shared multi handle for the whole process - every async request gets
+// added to (and, once finished, removed from) this. Created lazily on first
+// use; this app is single-threaded, so no locking is needed around it.
+static CURLM *s_multi = NULL;
+
+HttpAsyncRequest *http_get_async_start(const char *url) {
+    if (!s_multi) {
+        s_multi = curl_multi_init();
+        if (!s_multi) return NULL;
+    }
+
+    CURL *curl = curl_easy_init();
+    if (!curl) return NULL;
+
+    HttpAsyncRequest *req = (HttpAsyncRequest *)calloc(1, sizeof(HttpAsyncRequest));
+    if (!req) {
+        curl_easy_cleanup(curl);
+        return NULL;
+    }
+    req->easy = curl;
+
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, mem_write_cb);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &req->buf);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
+    // See http_get() above for why this UA string, and why peer/host
+    // verification is off, IPv4 is forced, and a minimum TLS version is pinned.
+    curl_easy_setopt(curl, CURLOPT_USERAGENT,
+                      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/124.0.0.0 Safari/537.36");
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+    curl_easy_setopt(curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
+
+    if (curl_multi_add_handle(s_multi, curl) != CURLM_OK) {
+        curl_easy_cleanup(curl);
+        free(req);
+        return NULL;
+    }
+
+    return req;
+}
+
+HttpAsyncState http_async_poll(HttpAsyncRequest *req) {
+    if (!req || !s_multi) return HTTP_ASYNC_DONE_ERROR;
+    if (req->done) return req->result == CURLE_OK ? HTTP_ASYNC_DONE_OK : HTTP_ASYNC_DONE_ERROR;
+
+    int still_running = 0;
+    curl_multi_perform(s_multi, &still_running);
+
+    // Multiple async requests could in principle be in flight at once (this
+    // is a general-purpose API, even though today's only caller - ui_icons.c
+    // - only ever runs one at a time), so match the completion message
+    // against *this* request's handle rather than assuming it's the first
+    // one in the queue.
+    int msgs_left = 0;
+    CURLMsg *msg;
+    while ((msg = curl_multi_info_read(s_multi, &msgs_left)) != NULL) {
+        if (msg->msg == CURLMSG_DONE && msg->easy_handle == req->easy) {
+            req->done = true;
+            req->result = msg->data.result;
+        }
+    }
+
+    if (!req->done) return HTTP_ASYNC_RUNNING;
+    return req->result == CURLE_OK ? HTTP_ASYNC_DONE_OK : HTTP_ASYNC_DONE_ERROR;
+}
+
+void http_async_finish(HttpAsyncRequest *req, char **out_buf, size_t *out_len,
+                        char *err_buf, size_t err_buf_size) {
+    if (!req) return;
+
+    if (req->done && req->result == CURLE_OK) {
+        *out_buf = req->buf.data ? req->buf.data : strdup("");
+        *out_len = req->buf.len;
+    } else {
+        free(req->buf.data);
+        *out_buf = NULL;
+        *out_len = 0;
+        set_curl_error(err_buf, err_buf_size, req->result);
+    }
+
+    curl_multi_remove_handle(s_multi, req->easy);
+    curl_easy_cleanup(req->easy);
+    free(req);
+}
+
+void http_async_cancel(HttpAsyncRequest *req) {
+    if (!req) return;
+    curl_multi_remove_handle(s_multi, req->easy);
+    curl_easy_cleanup(req->easy);
+    free(req->buf.data);
+    free(req);
+}

@@ -3,18 +3,22 @@
 #include <SDL2/SDL.h>
 
 // Call once per rendered frame (grid view only - the list view doesn't show
-// icons) before requesting textures for that frame's visible cells. Bounds
-// icon loading to at most one new network fetch + decode per frame, so a
-// slow connection can't stall the whole render loop - cells not yet loaded
-// just get NULL back (draw a placeholder) and are retried on a later frame.
+// icons) before requesting textures for that frame's visible cells. Purely
+// a convenience hook to drive any in-flight icon fetch forward a step even
+// on a frame that doesn't end up calling ui_icons_get() for any cell -
+// ui_icons_get() itself already does this too, so skipping this call (as
+// ui_detail.c does, for its one icon) is harmless.
 void ui_icons_begin_frame(void);
 
-// Returns a cached texture for entry->id (decoded from entry->icon_url on
+// Returns a cached texture for entry->id (fetched from entry->icon_url on
 // first request - cached in memory afterwards, and on the SD card so future
 // launches skip the network fetch), or NULL if not yet available: loading
-// is pending (try again next frame), or the icon failed to fetch/decode
-// (won't be retried again this session). Caller must not destroy the
-// returned texture - ui_icons_clear() owns it.
+// is pending (try again next frame - the fetch itself never blocks, so the
+// render loop and input keep running while it's in flight), or the icon
+// failed to fetch/decode (won't be retried again this session). At most one
+// icon is fetched over the network at a time; requests for other not-yet-
+// cached icons just return NULL until it's their turn. Caller must not
+// destroy the returned texture - ui_icons_clear() owns it.
 SDL_Texture *ui_icons_get(const AppEntry *entry);
 
 // Destroys every cached texture. Call after catalog_free() when entries

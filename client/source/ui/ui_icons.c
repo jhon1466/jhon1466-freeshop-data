@@ -15,15 +15,27 @@
 #define ICON_CACHE_DIR "sdmc:/switch/freeshop/icon_cache"
 #define ICON_CACHE_MAX 128
 
+typedef enum {
+    ICON_LOADING,
+    ICON_READY,
+    ICON_FAILED,
+} IconState;
+
 typedef struct {
     char id[APP_ENTRY_ID_MAX];
-    SDL_Texture *texture; // NULL whenever failed is true
-    bool failed;
+    SDL_Texture *texture; // valid only once state == ICON_READY
+    IconState state;
+    HttpAsyncRequest *req; // non-NULL only while state == ICON_LOADING and a network fetch is in flight
 } IconCacheEntry;
 
 static IconCacheEntry s_cache[ICON_CACHE_MAX];
 static int s_cache_count = 0;
-static bool s_fetched_this_frame = false;
+// Index into s_cache of the one icon currently being fetched over the
+// network, or -1 - see pump_active_fetch(). Capped at one in flight at a
+// time (matching the old per-frame throttle's intent: don't open a pile of
+// simultaneous connections while the user scrolls through a big grid), the
+// difference now being that request doesn't block anything while it's out.
+static int s_active_index = -1;
 
 // ---- PNG decode (in-memory, via libpng's custom read callback) ----
 
@@ -234,62 +246,107 @@ static SDL_Texture *build_texture(unsigned char *pixels, int w, int h) {
     return tex;
 }
 
-void ui_icons_begin_frame(void) {
-    s_fetched_this_frame = false;
-}
+// Drives the one in-flight network fetch (if any) forward and, once it's
+// done, decodes/uploads it or marks it failed. Cheap and non-blocking -
+// curl_multi_perform() just checks already-readable sockets and returns;
+// safe to call from ui_icons_get() itself rather than needing a dedicated
+// once-per-frame hook, so callers that never call ui_icons_begin_frame()
+// (ui_detail.c's single icon) still drive it correctly.
+static void pump_active_fetch(void) {
+    if (s_active_index < 0) return;
+    IconCacheEntry *slot = &s_cache[s_active_index];
 
-SDL_Texture *ui_icons_get(const AppEntry *entry) {
-    for (int i = 0; i < s_cache_count; i++) {
-        if (strcmp(s_cache[i].id, entry->id) == 0) {
-            return s_cache[i].failed ? NULL : s_cache[i].texture;
-        }
-    }
+    if (http_async_poll(slot->req) == HTTP_ASYNC_RUNNING) return;
 
-    if (s_fetched_this_frame || s_cache_count >= ICON_CACHE_MAX || entry->icon_url[0] == '\0') {
-        return NULL; // try again next frame (or: cache full / no icon to fetch, give up silently)
-    }
-    s_fetched_this_frame = true;
+    char *net_buf = NULL;
+    size_t net_len = 0;
+    http_async_finish(slot->req, &net_buf, &net_len, NULL, 0);
+    slot->req = NULL;
+    s_active_index = -1;
 
-    IconCacheEntry *slot = &s_cache[s_cache_count++];
-    snprintf(slot->id, sizeof(slot->id), "%s", entry->id);
-    slot->texture = NULL;
-    slot->failed = true; // pessimistic default, cleared only on full success below
+    slot->state = ICON_FAILED; // pessimistic default, cleared only on full success below
 
-    char cache_path[300];
-    snprintf(cache_path, sizeof(cache_path), "%s/%s", ICON_CACHE_DIR, entry->id);
+    if (net_buf && net_len > 0) {
+        char cache_path[300];
+        snprintf(cache_path, sizeof(cache_path), "%s/%s", ICON_CACHE_DIR, slot->id);
+        write_cache_file(cache_path, (unsigned char *)net_buf, net_len);
 
-    size_t raw_len = 0;
-    unsigned char *raw = read_whole_file(cache_path, &raw_len);
-
-    if (!raw) {
-        char *net_buf = NULL;
-        size_t net_len = 0;
-        char err_buf[128];
-        if (http_get(entry->icon_url, &net_buf, &net_len, err_buf, sizeof(err_buf)) == HTTP_OK &&
-            net_len > 0) {
-            raw = (unsigned char *)net_buf;
-            raw_len = net_len;
-            write_cache_file(cache_path, raw, raw_len);
-        }
-    }
-
-    if (raw) {
         int w = 0, h = 0;
-        unsigned char *pixels = decode_icon(raw, raw_len, &w, &h);
-        free(raw);
+        unsigned char *pixels = decode_icon((unsigned char *)net_buf, net_len, &w, &h);
         if (pixels) {
             SDL_Texture *tex = build_texture(pixels, w, h);
             if (tex) {
                 slot->texture = tex;
-                slot->failed = false;
+                slot->state = ICON_READY;
             }
         }
     }
 
-    return slot->failed ? NULL : slot->texture;
+    free(net_buf);
+}
+
+void ui_icons_begin_frame(void) {
+    pump_active_fetch();
+}
+
+SDL_Texture *ui_icons_get(const AppEntry *entry) {
+    pump_active_fetch();
+
+    for (int i = 0; i < s_cache_count; i++) {
+        if (strcmp(s_cache[i].id, entry->id) == 0) {
+            return s_cache[i].state == ICON_READY ? s_cache[i].texture : NULL;
+        }
+    }
+
+    if (s_active_index >= 0 || s_cache_count >= ICON_CACHE_MAX || entry->icon_url[0] == '\0') {
+        return NULL; // an icon is already loading, cache is full, or nothing to fetch
+    }
+
+    int idx = s_cache_count++;
+    IconCacheEntry *slot = &s_cache[idx];
+    snprintf(slot->id, sizeof(slot->id), "%s", entry->id);
+    slot->texture = NULL;
+    slot->req = NULL;
+
+    // A local disk-cache hit is fast (no network involved) - decode it
+    // straight away instead of going through the async machinery below,
+    // which exists specifically to avoid blocking on slow *network* I/O.
+    char cache_path[300];
+    snprintf(cache_path, sizeof(cache_path), "%s/%s", ICON_CACHE_DIR, entry->id);
+    size_t raw_len = 0;
+    unsigned char *raw = read_whole_file(cache_path, &raw_len);
+    if (raw) {
+        int w = 0, h = 0;
+        unsigned char *pixels = decode_icon(raw, raw_len, &w, &h);
+        free(raw);
+        SDL_Texture *tex = pixels ? build_texture(pixels, w, h) : NULL;
+        if (tex) {
+            slot->texture = tex;
+            slot->state = ICON_READY;
+            return tex;
+        }
+        slot->state = ICON_FAILED;
+        return NULL;
+    }
+
+    // Not cached locally - kick off a non-blocking network fetch; pump_active_fetch()
+    // above (called every time anyone asks for an icon) picks up the result
+    // once it lands.
+    slot->req = http_get_async_start(entry->icon_url);
+    if (!slot->req) {
+        slot->state = ICON_FAILED;
+        return NULL;
+    }
+    slot->state = ICON_LOADING;
+    s_active_index = idx;
+    return NULL;
 }
 
 void ui_icons_clear(void) {
+    if (s_active_index >= 0 && s_cache[s_active_index].req) {
+        http_async_cancel(s_cache[s_active_index].req);
+    }
+    s_active_index = -1;
     for (int i = 0; i < s_cache_count; i++) {
         if (s_cache[i].texture) SDL_DestroyTexture(s_cache[i].texture);
     }

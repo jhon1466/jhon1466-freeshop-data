@@ -64,3 +64,45 @@ HttpResult http_get_range_streamed(const char *url, uint64_t offset, uint64_t le
                                     HttpRangeWriteCallback write_cb, void *write_userdata,
                                     char *effective_url_out, size_t effective_url_out_size,
                                     char *err_buf, size_t err_buf_size);
+
+// ---- Non-blocking GET (curl's multi interface) ----
+//
+// http_get() blocks the calling thread for the whole transfer, which is
+// fine for one-off catalog/admin requests but not for something driven from
+// inside a render loop (e.g. ui_icons.c fetching a grid's worth of icons) -
+// a single slow/stalled connection would freeze input handling and drawing
+// for as long as it takes. This variant is driven forward a little at a
+// time by calling http_async_poll() every frame instead - it never blocks.
+
+typedef struct HttpAsyncRequest HttpAsyncRequest;
+
+typedef enum {
+    HTTP_ASYNC_RUNNING,
+    HTTP_ASYNC_DONE_OK,
+    HTTP_ASYNC_DONE_ERROR,
+} HttpAsyncState;
+
+// Starts a GET of `url` without blocking - the request isn't necessarily
+// even connected yet by the time this returns. Returns NULL only on
+// immediate local failure (curl init/setup), which is rare and doesn't need
+// a detailed reason. Call http_async_poll() to drive it forward.
+HttpAsyncRequest *http_get_async_start(const char *url);
+
+// Advances the transfer (cheap, non-blocking - safe to call every frame,
+// even many times a frame). Once this returns a DONE_* state, call
+// http_async_finish() to collect the result; don't poll a request again
+// after that.
+HttpAsyncState http_async_poll(HttpAsyncRequest *req);
+
+// Only valid once http_async_poll() returned HTTP_ASYNC_DONE_OK or
+// HTTP_ASYNC_DONE_ERROR. On DONE_OK, fills *out_buf (caller must
+// free(*out_buf), NUL-terminated like http_get())/*out_len. On DONE_ERROR,
+// *out_buf is set to NULL and err_buf (may be NULL) gets a message. Either
+// way, frees `req` - it must not be touched again after this call.
+void http_async_finish(HttpAsyncRequest *req, char **out_buf, size_t *out_len,
+                        char *err_buf, size_t err_buf_size);
+
+// Abandons an in-flight request (e.g. its result is no longer needed)
+// without waiting for it to finish, and frees `req`. Only valid before
+// http_async_finish() has been called on it.
+void http_async_cancel(HttpAsyncRequest *req);
