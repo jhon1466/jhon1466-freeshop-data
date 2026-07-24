@@ -32,7 +32,8 @@
 // it (column header / grid) down from where it used to start.
 #define TAB_BAR_Y (PANEL_Y + PANEL_H + 4)
 #define TAB_BAR_H 40
-#define TAB_BAR_ARROW_W 32
+#define TAB_BAR_ARROW_BOX 30
+#define TAB_BAR_ARROW_W (TAB_BAR_ARROW_BOX + 16)
 #define TAB_BAR_PAD_X 18
 #define TAB_BAR_UNDERLINE_H 4
 
@@ -281,14 +282,15 @@ static void draw_grid_cell(int x, int y, const AppEntry *entry, bool is_selected
     ui_draw_text(g_font_small, x, y + GRID_ICON_SIZE + 6, title_color, title);
 }
 
-// 0 = "Todos", i+1 = categories[i] - the tab index for whatever
-// category_filter currently names (0 if it's empty or names something that
-// no longer exists in `categories`).
+// No "show everything" tab - a catalog is expected to always have at least
+// one category, so category_filter always names a real one (see the
+// still-valid check in ui_show_list, which defaults it to categories[0]
+// whenever it's empty or stale). Returns the matching tab index, or 0 as a
+// safe fallback if category_filter doesn't (yet) match anything.
 static int category_tab_index(const char categories[][APP_ENTRY_CATEGORY_MAX], int category_count,
                                const char *category_filter) {
-    if (category_filter[0] == '\0') return 0;
     for (int i = 0; i < category_count; i++) {
-        if (strcmp(categories[i], category_filter) == 0) return i + 1;
+        if (strcmp(categories[i], category_filter) == 0) return i;
     }
     return 0;
 }
@@ -297,15 +299,36 @@ static int category_tab_index(const char categories[][APP_ENTRY_CATEGORY_MAX], i
 // users reported categories were too easy to miss tucked behind a hidden
 // panel). The active tab gets a brighter label plus an accent underline so
 // it's unambiguous which catalog is showing, matching how a plain color
-// swatch could get lost at a glance. ZL/ZR step between tabs one at a time;
-// since more categories can exist than fit across 1280px, `tab_scroll_start`
-// (persisted by the caller across frames) tracks which tab the strip
-// currently starts rendering from, auto-advancing to keep the active tab in
-// view, with "<"/">" glyphs shown whenever there's more to either side.
-// Returns the (possibly adjusted) tab_scroll_start for the caller to keep.
+// swatch could get lost at a glance. ZL/ZR step between tabs one at a time -
+// button-hint boxes in both corners show which ones, since that's not
+// otherwise obvious from the tab strip alone. Since more categories can
+// exist than fit across 1280px, `tab_scroll_start` (persisted by the caller
+// across frames) tracks which tab the strip currently starts rendering
+// from, auto-advancing to keep the active tab in view. Returns the
+// (possibly adjusted) tab_scroll_start for the caller to keep.
 static int draw_category_tabs(const char categories[][APP_ENTRY_CATEGORY_MAX], int category_count,
                                const char *category_filter, int tab_scroll_start) {
-    int total_tabs = category_count + 1;
+    ui_draw_rect(LEFT_EDGE, TAB_BAR_Y, RIGHT_EDGE - LEFT_EDGE, TAB_BAR_H, COLOR_PANEL);
+
+    // ZL/ZR button-hint boxes, bordered like the old sidebar's selection
+    // box - always drawn the same way (not dimmed/disabled), since they
+    // always do something: cycling wraps around rather than stopping.
+    int box_y = TAB_BAR_Y + (TAB_BAR_H - TAB_BAR_ARROW_BOX) / 2;
+    int left_box_x = LEFT_EDGE + 6;
+    int right_box_x = RIGHT_EDGE - 6 - TAB_BAR_ARROW_BOX;
+    ui_draw_rect(left_box_x, box_y, TAB_BAR_ARROW_BOX, TAB_BAR_ARROW_BOX, COLOR_ACCENT);
+    ui_draw_rect(left_box_x + 2, box_y + 2, TAB_BAR_ARROW_BOX - 4, TAB_BAR_ARROW_BOX - 4, COLOR_PANEL);
+    ui_draw_text(g_font_small, left_box_x + 4, box_y + 7, COLOR_TEXT, "ZL");
+    ui_draw_rect(right_box_x, box_y, TAB_BAR_ARROW_BOX, TAB_BAR_ARROW_BOX, COLOR_ACCENT);
+    ui_draw_rect(right_box_x + 2, box_y + 2, TAB_BAR_ARROW_BOX - 4, TAB_BAR_ARROW_BOX - 4, COLOR_PANEL);
+    ui_draw_text(g_font_small, right_box_x + 4, box_y + 7, COLOR_TEXT, "ZR");
+
+    if (category_count == 0) {
+        ui_draw_text(g_font_small, left_box_x + TAB_BAR_ARROW_BOX + 16, TAB_BAR_Y + 8,
+                     COLOR_TEXT_DIM, "(sin categorías)");
+        return 0;
+    }
+
     int current_index = category_tab_index(categories, category_count, category_filter);
 
     int content_left = LEFT_EDGE + TAB_BAR_ARROW_W;
@@ -316,10 +339,9 @@ static int draw_category_tabs(const char categories[][APP_ENTRY_CATEGORY_MAX], i
     for (;;) {
         int x = 0;
         bool fits_current = false;
-        for (int i = tab_scroll_start; i < total_tabs; i++) {
-            const char *label = i == 0 ? "Todos" : categories[i - 1];
+        for (int i = tab_scroll_start; i < category_count; i++) {
             int w, h;
-            TTF_SizeUTF8(g_font_body, label, &w, &h);
+            TTF_SizeUTF8(g_font_body, categories[i], &w, &h);
             int tab_w = w + TAB_BAR_PAD_X * 2;
             if (x + tab_w > content_w) break;
             x += tab_w;
@@ -329,38 +351,24 @@ static int draw_category_tabs(const char categories[][APP_ENTRY_CATEGORY_MAX], i
         tab_scroll_start++;
     }
 
-    ui_draw_rect(LEFT_EDGE, TAB_BAR_Y, RIGHT_EDGE - LEFT_EDGE, TAB_BAR_H, COLOR_PANEL);
-
-    bool can_scroll_left = tab_scroll_start > 0;
-    ui_draw_text(g_font_body, LEFT_EDGE + 8, TAB_BAR_Y + 8,
-                 can_scroll_left ? COLOR_TEXT_DIM : COLOR_PANEL, "<");
-
     int x = content_left;
-    bool can_scroll_right = false;
-    for (int i = tab_scroll_start; i < total_tabs; i++) {
-        const char *label = i == 0 ? "Todos" : categories[i - 1];
+    for (int i = tab_scroll_start; i < category_count; i++) {
         int w, h;
-        TTF_SizeUTF8(g_font_body, label, &w, &h);
+        TTF_SizeUTF8(g_font_body, categories[i], &w, &h);
         int tab_w = w + TAB_BAR_PAD_X * 2;
-        if (x + tab_w > content_right) {
-            can_scroll_right = true;
-            break;
-        }
+        if (x + tab_w > content_right) break;
 
         bool is_active = (i == current_index);
         ui_draw_text(g_font_body, x + TAB_BAR_PAD_X, TAB_BAR_Y + 8,
-                     is_active ? COLOR_TEXT : COLOR_TEXT_DIM, label);
+                     is_active ? COLOR_TEXT : COLOR_TEXT_DIM, categories[i]);
         if (is_active) {
             ui_draw_rect(x, TAB_BAR_Y + TAB_BAR_H - TAB_BAR_UNDERLINE_H, tab_w, TAB_BAR_UNDERLINE_H, COLOR_ACCENT);
         }
-        if (i + 1 < total_tabs) {
+        if (i + 1 < category_count) {
             ui_draw_rect(x + tab_w, TAB_BAR_Y + 6, 1, TAB_BAR_H - 12, COLOR_BG);
         }
         x += tab_w;
     }
-
-    ui_draw_text(g_font_body, RIGHT_EDGE - 20, TAB_BAR_Y + 8,
-                 can_scroll_right ? COLOR_TEXT_DIM : COLOR_PANEL, ">");
 
     return tab_scroll_start;
 }
@@ -396,10 +404,12 @@ int ui_show_list(AppEntry *entries, int count) {
     char categories[MAX_CATEGORIES][APP_ENTRY_CATEGORY_MAX];
     int category_count = collect_categories(entries, count, categories);
 
-    // The catalog may have changed (sources reload) since category_filter
-    // was last set - drop it if it no longer names a real category rather
-    // than silently showing an empty list forever.
-    if (category_filter[0] != '\0') {
+    // No "Todos" tab - category_filter should always name a real category.
+    // Default it to the first one whenever it's empty (first launch, no
+    // saved preference yet) or stale (the catalog changed since - sources
+    // reload, or the category itself got renamed/removed) rather than
+    // leaving it pointing at nothing.
+    {
         bool still_valid = false;
         for (int i = 0; i < category_count; i++) {
             if (strcmp(categories[i], category_filter) == 0) {
@@ -407,7 +417,13 @@ int ui_show_list(AppEntry *entries, int count) {
                 break;
             }
         }
-        if (!still_valid) category_filter[0] = '\0';
+        if (!still_valid) {
+            if (category_count > 0) {
+                snprintf(category_filter, sizeof(category_filter), "%s", categories[0]);
+            } else {
+                category_filter[0] = '\0';
+            }
+        }
     }
 
     int visible[VISIBLE_MAX];
@@ -506,19 +522,13 @@ int ui_show_list(AppEntry *entries, int count) {
                 scroll_offset = 0;
                 save_prefs(view_mode, sort_mode, category_filter);
             }
-            if (kDown & (HidNpadButton_ZL | HidNpadButton_ZR)) {
-                // Steps directly to the next/previous category tab - no
-                // separate "open panel, navigate, confirm" step, matching
-                // how the always-visible tab strip itself works.
-                int total_tabs = category_count + 1;
+            if ((kDown & (HidNpadButton_ZL | HidNpadButton_ZR)) && category_count > 0) {
+                // Steps directly to the next/previous category tab, no
+                // "Todos" - wraps around at either end.
                 int current_index = category_tab_index(categories, category_count, category_filter);
                 int step = (kDown & HidNpadButton_ZL) ? -1 : 1;
-                int new_index = (current_index + step + total_tabs) % total_tabs;
-                if (new_index == 0) {
-                    category_filter[0] = '\0';
-                } else {
-                    snprintf(category_filter, sizeof(category_filter), "%s", categories[new_index - 1]);
-                }
+                int new_index = (current_index + step + category_count) % category_count;
+                snprintf(category_filter, sizeof(category_filter), "%s", categories[new_index]);
                 visible_count = build_visible(entries, count, category_filter, search_query, visible);
                 selected = 0;
                 scroll_offset = 0;

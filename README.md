@@ -47,9 +47,10 @@ Homebrew Menu.
   fresh on launch, so any edit made in `/admin` is picked up the next time
   the client is opened - no extra "update detection" logic needed. An
   always-visible category tab strip sits below the storage panels (built
-  from whatever `category` values are in the catalog); `ZL`/`ZR` step
-  between tabs directly, with the active one underlined so it's obvious
-  which catalog is showing. `R` opens the system keyboard to search by
+  from whatever `category` values are in the catalog, no "show everything"
+  tab - it always has one selected) with `ZL`/`ZR` button-hint boxes in each
+  corner; the active tab is underlined so it's obvious which catalog is
+  showing. `R` opens the system keyboard to search by
   title. View mode, sort mode, and the active category filter are
   saved to `sdmc:/switch/freeshop/prefs.json` and restored on the next
   launch (see [`ui_prefs.h`](client/source/ui/ui_prefs.h)). Holding the
