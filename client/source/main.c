@@ -1,5 +1,6 @@
 #include <switch.h>
 #include <curl/curl.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,6 +21,23 @@
 #include "install/install_xci_native.h"
 #include "install/install_port.h"
 #include "update/self_update.h"
+
+// Diagnostic-only: appends one line to sdmc:/switch/freeshop/update_debug.log
+// covering the self-update chain-load hops, which are otherwise near-
+// impossible to debug from a photo of a dialog that's already gone by the
+// time it's captured. A handful of short lines per launch - not worth
+// rotating/capping. Best-effort: a failure to open the log is silently
+// ignored rather than interrupting startup over a debug aid.
+static void update_debug_log(const char *fmt, ...) {
+    FILE *fp = fopen("sdmc:/switch/freeshop/update_debug.log", "a");
+    if (!fp) return;
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(fp, fmt, ap);
+    va_end(ap);
+    fputc('\n', fp);
+    fclose(fp);
+}
 
 // Fetches each enabled source's catalog and concatenates them into one
 // array. A source that fails to fetch is skipped rather than aborting the
@@ -249,6 +267,7 @@ int main(int argc, char **argv) {
     // launched that way (e.g. nxlink during development) - self-update just
     // skips itself in that case rather than failing outright.
     const char *self_path = (argc > 0 && argv && argv[0] && argv[0][0] != '\0') ? argv[0] : NULL;
+    update_debug_log("main() start: argc=%d argv[0]=%s", argc, self_path ? self_path : "(null)");
 
     char err_buf[256];
 
@@ -284,17 +303,22 @@ int main(int argc, char **argv) {
     // process). Deliberately minimal here (no socket/curl init) - this
     // hop's only job is the swap-and-relaunch, and the less it does before
     // that, the less that can go wrong along the way.
-    if (self_update_is_staging_copy(self_path)) {
+    bool is_staging = self_update_is_staging_copy(self_path);
+    update_debug_log("is_staging_copy(%s) = %s", self_path ? self_path : "(null)", is_staging ? "true" : "false");
+    if (is_staging) {
         char canonical_path[512];
         char swap_err[256];
-        if (self_update_finish_swap(self_path, canonical_path, sizeof(canonical_path),
-                                     swap_err, sizeof(swap_err)) == SELF_UPDATE_SWAP_OK) {
+        SelfUpdateSwapResult sres = self_update_finish_swap(self_path, canonical_path, sizeof(canonical_path),
+                                                              swap_err, sizeof(swap_err));
+        if (sres == SELF_UPDATE_SWAP_OK) {
+            update_debug_log("finish_swap OK -> canonical=%s, chain-loading and exiting", canonical_path);
             envSetNextLoad(canonical_path, canonical_path);
             appletSetAutoSleepDisabled(false);
             romfsExit();
             ui_app_shutdown();
             return 0;
         }
+        update_debug_log("finish_swap FAILED: %s", swap_err);
         // Couldn't finish the swap - rather than getting the user stuck (the
         // staging file is itself a fully valid, working build, just not at
         // hbmenu's "normal" filename), tell them and keep going as-is.
@@ -361,8 +385,16 @@ int main(int argc, char **argv) {
     char new_version[32];
     char asset_url[512];
     char release_notes[300];
-    if (self_update_check(new_version, sizeof(new_version), asset_url, sizeof(asset_url),
-                           release_notes, sizeof(release_notes), NULL, 0) == SELF_UPDATE_AVAILABLE) {
+    SelfUpdateCheckResult cres_update = self_update_check(new_version, sizeof(new_version), asset_url,
+                                                            sizeof(asset_url), release_notes, sizeof(release_notes),
+                                                            NULL, 0);
+    update_debug_log("self_update_check = %s (current=%s%s%s)",
+                      cres_update == SELF_UPDATE_AVAILABLE ? "AVAILABLE" :
+                          (cres_update == SELF_UPDATE_NONE ? "NONE" : "ERR"),
+                      CLIENT_VERSION,
+                      cres_update == SELF_UPDATE_AVAILABLE ? ", new=" : "",
+                      cres_update == SELF_UPDATE_AVAILABLE ? new_version : "");
+    if (cres_update == SELF_UPDATE_AVAILABLE) {
         char confirm_msg[512];
         if (release_notes[0]) {
             // GitHub's release "body" text - whatever changelog the release
@@ -393,7 +425,11 @@ int main(int argc, char **argv) {
             SelfUpdateApplyResult ares = self_update_apply(self_path, asset_url, staging_path, sizeof(staging_path),
                                                              install_progress_cb, &update_ctx,
                                                              update_err, sizeof(update_err));
+            update_debug_log("self_update_apply = %s (%s)",
+                              ares == SELF_UPDATE_APPLY_OK ? "OK" : "ERR",
+                              ares == SELF_UPDATE_APPLY_OK ? staging_path : update_err);
             if (ares == SELF_UPDATE_APPLY_OK) {
+                update_debug_log("chain-loading into staging=%s and exiting", staging_path);
                 // Chain-load straight into the staging copy and exit now -
                 // it finishes the update (see the staging-copy handling
                 // right after romfsInit above) and relaunches itself into
