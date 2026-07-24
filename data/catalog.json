@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T14:23:47.504Z",
+  "generatedAt": "2026-07-24T14:28:14.143Z",
   "apps": [
     {
       "id": "3",
@@ -394,6 +394,20 @@
       "filename": "Xenoblade Chronicles X Definitive Edition [v1.0.2 + DLC].xci",
       "fileType": "xci",
       "longDescription": "Explora sin límites y lucha por la humanidad.\n\nLucha para sobrevivir mientras exploras un inmenso mundo alienígena en Xenoblade Chronicles X: Definitive Edition para Nintendo Switch. Esta versión del épico juego de rol y ciencia ficción cuenta con gráficos mejorados y contenido adicional, incluidos nuevos elementos de la historia."
+    },
+    {
+      "id": "31",
+      "title": "Xenoblade Chronicles: Definitive Edition",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.1.2",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/31.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F7ii4mdfoqgyum2a%2FXenoblade%2BChronicles%2BDefinitive%2BEdition%2B%5Bv1.1.2%5D.xci%2Ffile",
+      "fileSize": 14716112384,
+      "filename": "Xenoblade Chronicles Definitive Edition [v1.1.2].xci",
+      "fileType": "xci",
+      "longDescription": "¡Desvela los secretos de Monado y salva el mundo!\n\nUn clásico de los juegos de rol renace como Xenoblade Chronicles: Definitive Edition para Nintendo Switch. A consecuencia de una invasión devastadora, deberás embarcarte en un viaje que te llevará más allá del horizonte. ¿Lograrás cambiar el futuro o se verá tu pueblo abocado a la extinción?"
     }
   ]
 }
