@@ -13,6 +13,7 @@
 #include "ui/ui_detail.h"
 #include "ui/ui_sources.h"
 #include "ui/ui_icons.h"
+#include "ui/ui_about.h"
 #include "install/install.h"
 #include "install/install_nsp.h"
 #include "install/install_nsp_native.h"
@@ -258,6 +259,13 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    // Mounts this .nro's embedded RomFS (client/romfs/ at build time) as
+    // romfs:/ - static assets that must always be available regardless of
+    // network (the donation QR shown in "Acerca de"). Best-effort: a
+    // failure here just means that one image doesn't load later, not worth
+    // aborting startup over.
+    romfsInit();
+
     // Without this, the console dims/sleeps on its own inactivity timer
     // regardless of what's happening in the app - including mid-download,
     // where curl keeps running but there's no controller input for
@@ -299,6 +307,7 @@ int main(int argc, char **argv) {
     if (R_FAILED(rc)) {
         ui_app_show_message("No se pudo iniciar la red.");
         appletSetAutoSleepDisabled(false);
+        romfsExit();
         ui_app_shutdown();
         return 1;
     }
@@ -375,6 +384,7 @@ int main(int argc, char **argv) {
         curl_global_cleanup();
         socketExit();
         appletSetAutoSleepDisabled(false);
+        romfsExit();
         ui_app_shutdown();
         return 1;
     }
@@ -410,6 +420,11 @@ int main(int argc, char **argv) {
                     root_entries = build_root_entries(entries, count, &root_count);
                 }
             }
+            continue;
+        }
+
+        if (selected == UI_LIST_OPEN_ABOUT) {
+            ui_show_about();
             continue;
         }
 
@@ -544,6 +559,7 @@ int main(int argc, char **argv) {
     // fresh applet session anyway, but this is cheap and leaves nothing to
     // chance either way).
     appletSetAutoSleepDisabled(false);
+    romfsExit();
     ui_app_shutdown();
     return 0;
 }

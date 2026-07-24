@@ -20,3 +20,8 @@ SDL_Texture *ui_icons_get(const AppEntry *entry);
 // Destroys every cached texture. Call after catalog_free() when entries
 // change (ids may now refer to different apps) and once more at shutdown.
 void ui_icons_clear(void);
+
+// Decodes a local PNG/JPEG file (e.g. romfs:/qr.jpg) into a new texture -
+// not cached/tracked by ui_icons_clear(), the caller owns the result and
+// must SDL_DestroyTexture() it. Returns NULL on any read/decode failure.
+SDL_Texture *ui_icons_load_local(const char *path);

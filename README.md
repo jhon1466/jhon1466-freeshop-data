@@ -51,9 +51,13 @@ Homebrew Menu.
   tab - it always has one selected) with `ZL`/`ZR` button-hint boxes in each
   corner; the active tab is underlined so it's obvious which catalog is
   showing. `R` opens the system keyboard to search by
-  title. View mode, sort mode, and the active category filter are
-  saved to `sdmc:/switch/freeshop/prefs.json` and restored on the next
-  launch (see [`ui_prefs.h`](client/source/ui/ui_prefs.h)). Holding the
+  title. `L` opens an "Acerca de" screen (app name/version, a short blurb,
+  and a donations panel with a PayPal QR + email) - the QR is bundled into
+  the `.nro` itself via RomFS (`client/romfs/qr.jpg`, mounted at `romfs:/`
+  in `main.c`), so it's shown without needing network. View mode, sort
+  mode, and the active category filter are saved to
+  `sdmc:/switch/freeshop/prefs.json` and restored on the next launch (see
+  [`ui_prefs.h`](client/source/ui/ui_prefs.h)). Holding the
   selection still for 1s reveals a title's full, untruncated name (grid
   cells especially cut long titles short). The install screen shows a live
   speed/time-remaining estimate. The client itself also self-updates: on

@@ -295,3 +295,16 @@ void ui_icons_clear(void) {
     }
     s_cache_count = 0;
 }
+
+SDL_Texture *ui_icons_load_local(const char *path) {
+    size_t raw_len = 0;
+    unsigned char *raw = read_whole_file(path, &raw_len);
+    if (!raw) return NULL;
+
+    int w = 0, h = 0;
+    unsigned char *pixels = decode_icon(raw, raw_len, &w, &h);
+    free(raw);
+    if (!pixels) return NULL;
+
+    return build_texture(pixels, w, h);
+}

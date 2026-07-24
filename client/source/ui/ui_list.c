@@ -60,6 +60,10 @@
 #define GRID_ICON_SIZE 168
 #define GRID_GAP 16
 #define GRID_TITLE_MAX_W (GRID_ICON_SIZE)
+// GRID_COLS * GRID_CELL_W (1120px) doesn't fill the full content width
+// (1240px) - centering the block instead of hugging LEFT_EDGE avoids the
+// lopsided look of empty space piling up on the right only.
+#define GRID_LEFT (LEFT_EDGE + ((RIGHT_EDGE - LEFT_EDGE) - GRID_COLS * GRID_CELL_W) / 2)
 
 #define FOOTER_Y (SCREEN_H - 46)
 
@@ -501,6 +505,9 @@ int ui_show_list(AppEntry *entries, int count) {
             if (kDown & HidNpadButton_Minus) {
                 return UI_LIST_OPEN_SOURCES;
             }
+            if (kDown & HidNpadButton_L) {
+                return UI_LIST_OPEN_ABOUT;
+            }
             if ((kDown & HidNpadButton_B) || (kDown & HidNpadButton_Plus)) {
                 return UI_LIST_EXIT;
             }
@@ -628,7 +635,7 @@ int ui_show_list(AppEntry *entries, int count) {
             if (selected_row >= scroll_offset + GRID_ROWS_VISIBLE) scroll_offset = selected_row - GRID_ROWS_VISIBLE + 1;
 
             if (visible_count == 0) {
-                ui_draw_text(g_font_body, LEFT_EDGE, GRID_TOP, COLOR_TEXT_DIM,
+                ui_draw_text(g_font_body, GRID_LEFT, GRID_TOP, COLOR_TEXT_DIM,
                              empty_state_message(count, category_filter, search_query));
             }
 
@@ -638,7 +645,7 @@ int ui_show_list(AppEntry *entries, int count) {
                 int i = visible[vi];
                 int row_in_view = (vi / GRID_COLS) - scroll_offset;
                 int col = vi % GRID_COLS;
-                int cell_x = LEFT_EDGE + col * GRID_CELL_W;
+                int cell_x = GRID_LEFT + col * GRID_CELL_W;
                 int cell_y = GRID_TOP + row_in_view * GRID_CELL_H;
                 draw_grid_cell(cell_x, cell_y, &entries[i], vi == selected);
             }
@@ -655,10 +662,10 @@ int ui_show_list(AppEntry *entries, int count) {
         }
 
         ui_draw_rect(LEFT_EDGE, FOOTER_Y - 10, RIGHT_EDGE - LEFT_EDGE, 1, COLOR_PANEL);
-        char footer[200];
+        char footer[220];
         snprintf(footer, sizeof(footer),
                  "D-Pad: navegar    A: instalar    ZL/ZR: categoría    R: buscar%s    Y: vista %s    "
-                 "X: ordenar (%s)    -: fuentes    B/+: salir",
+                 "X: ordenar (%s)    -: fuentes    L: acerca de    B/+: salir",
                  search_query[0] ? " (activa)" : "", view_mode == VIEW_LIST ? "cuadrícula" : "lista",
                  sort_mode_label(sort_mode));
         ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y, COLOR_TEXT_DIM, footer);

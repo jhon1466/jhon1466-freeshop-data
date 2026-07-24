@@ -17,12 +17,16 @@ include $(DEVKITPRO)/libnx/switch_rules
 # ICON is the filename of the icon (.jpg), relative to the project folder,
 #   embedded into the .nro via nacptool - this is NOT the catalog-listing
 #   icon served by the backend (that's server/public/icons/<id>.jpg).
+# ROMFS is a directory embedded into the .nro (mounted at romfs:/ at runtime
+#   via romfsInit() in main.c) - static assets that must always be available
+#   regardless of network, e.g. the donation QR shown in "Acerca de".
 #---------------------------------------------------------------------------------
 TARGET      :=  freeshop-client
 BUILD       :=  build
 SOURCES     :=  source source/net source/ui source/catalog source/install source/update
 INCLUDES    :=  source
 ICON        :=  icon.jpg
+ROMFS       :=  romfs
 
 APP_TITLE   := FreeShop
 APP_AUTHOR  := jhon1466
@@ -124,6 +128,10 @@ endif
 
 ifeq ($(strip $(NO_NACP)),)
     export NROFLAGS += --nacp=$(CURDIR)/$(TARGET).nacp
+endif
+
+ifneq ($(strip $(ROMFS)),)
+    export NROFLAGS += --romfsdir=$(CURDIR)/$(ROMFS)
 endif
 
 .PHONY: $(BUILD) clean all
