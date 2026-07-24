@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T23:22:46.218Z",
+  "generatedAt": "2026-07-24T23:25:35.480Z",
   "apps": [
     {
       "id": "3",
@@ -631,6 +631,20 @@
       "filename": "The Legend of Zelda Breath of the Wild [v1.9.0 + 2 DLCs].xci",
       "fileType": "xci",
       "longDescription": "Sin reino. Sin recuerdos. Después de un letargo que ha durado 100 años, Link se despierta solo en un mundo que ya no recuerda. Ahora, el héroe legendario debe explorar ese extenso y misterioso mundo y recuperar sus recuerdos antes de que Hyrule esté perdido para siempre. Armado únicamente con lo que encuentre a su paso, Link emprenderá una aventura para buscar respuestas y obtener los recursos que necesita para sobrevivir."
+    },
+    {
+      "id": "47",
+      "title": "Cadence of Hyrule: The Legend of Zelda",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "Update 1.5.0 + 4 DLCs",
+      "version": "1.5.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/47.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fkzxfu0oezb3exrd%2FCadence%2Bof%2BHyrule%2BCrypt%2B%5Bv1.5.0%2B%2B%2B4%2BDLCs%5D.xci%2Ffile",
+      "fileSize": 1786712064,
+      "filename": "Cadence of Hyrule Crypt [v1.5.0 + 4 DLCs].xci",
+      "fileType": "xci",
+      "longDescription": "Hyrule está en peligro\n\nEl rey de Hyrule se ha sumido en un profundo sueño por culpa de una temible amenaza cuyo objetivo es extender una auténtica cacofonía musical por todo el reino.\nComienza la aventura encarnando a la heroína de Crypt of the NecroDancer, Cadence; una vez que te familiarices con los aspectos básicos del juego, podrás jugar como Link o la princesa Zelda y seguir adelante con tu viaje. Explora un mundo y mazmorras generados de manera aleatoria y salva Hyrule de la destrucción en esta aventura repleta de acción con un toque rítmico."
     }
   ]
 }
