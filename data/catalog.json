@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T18:06:24.190Z",
+  "generatedAt": "2026-07-24T18:09:28.976Z",
   "apps": [
     {
       "id": "3",
@@ -534,6 +534,20 @@
       "filename": "NieR Automata The End of YoRHa Edition [1.0.2].nsp",
       "fileType": "nsp",
       "longDescription": "NieR:Automata The End of YoRHa Edition es la versión para Nintendo Switch™ de NieR:Automata, el premiado juego de rol y acción postapocalíptico que ha alcanzado una popularidad asombrosa en todo el mundo.\n\nEn un futuro lejano…\n\nUnos invasores de otro mundo han atacado inesperadamente desplegando su arma secreta: unas formas de vida mecánicas. En vista de semejante amenaza, la humanidad se ve obligada a abandonar la Tierra y refugiarse en la Luna. Adéntrate en una feroz batalla para recuperar el planeta en el papel de 2B, que pertenece a la nueva unidad de infantería androide denominada YoRHa.\n\nDescubre una fascinante historia que va más allá del mero entretenimiento al inspirar un sinfín de emociones mientras la acción se desarrolla en un hermoso y desolado mundo abierto.\n\nEste producto incluye el DLC 3C3C1D119440927*.\n\nIncluye tres tipos de coliseos y tres tipos de atuendos inspirados en los personajes del título relacionado NieR Replicant que se pueden conseguir como recompensa."
+    },
+    {
+      "id": "1",
+      "title": "Minecraft Dungeons",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "1.17.0.0 + 7 DLCs",
+      "version": "1.17.0.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/1.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fdtjbfnmsxjs5jx8%2FMinecraft_Dungeons_%25255Bv1.17.0.0_%25252B_7_DLCs%25255D.xci%2Ffile",
+      "fileSize": 7930147840,
+      "filename": "Minecraft Dungeons [v1.17.0.0 + 7 DLCs].xci",
+      "fileType": "xci",
+      "longDescription": "¡Ábrete camino luchando en un juego de aventura y acción totalmente nuevo inspirado en los juegos de mazmorras clásicos y ambientado en el universo de Minecraft!"
     }
   ]
 }
