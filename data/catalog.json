@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T23:20:56.279Z",
+  "generatedAt": "2026-07-24T23:22:46.218Z",
   "apps": [
     {
       "id": "3",
@@ -617,6 +617,20 @@
       "filename": "The Legend of Zelda Tears of the Kingdom [v1.4.3].xci",
       "fileType": "xci",
       "longDescription": "En esta secuela de The Legend of Zelda: Breath of the Wild, te embarcarás en una arriesgada misión para descubrir la causa del estremecedor evento que ha sumido el reino en el caos."
+    },
+    {
+      "id": "46",
+      "title": "The Legend of Zelda: Breath of the Wild",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "Update 1.9.0 + 2 DLCs",
+      "version": "1.9.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/46.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fanfj4q0v678d2z3%2FThe%2BLegend%2Bof%2BZelda%2BBreath%2Bof%2Bthe%2BWild%2B%5Bv1.9.0%2B%2B%2B2%2BDLCs%5D.xci%2Ffile",
+      "fileSize": 16861609984,
+      "filename": "The Legend of Zelda Breath of the Wild [v1.9.0 + 2 DLCs].xci",
+      "fileType": "xci",
+      "longDescription": "Sin reino. Sin recuerdos. Después de un letargo que ha durado 100 años, Link se despierta solo en un mundo que ya no recuerda. Ahora, el héroe legendario debe explorar ese extenso y misterioso mundo y recuperar sus recuerdos antes de que Hyrule esté perdido para siempre. Armado únicamente con lo que encuentre a su paso, Link emprenderá una aventura para buscar respuestas y obtener los recursos que necesita para sobrevivir."
     }
   ]
 }
