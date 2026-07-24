@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T14:13:32.974Z",
+  "generatedAt": "2026-07-24T14:14:10.739Z",
   "apps": [
     {
       "id": "3",
@@ -250,7 +250,7 @@
       "description": "",
       "version": "2.1.0",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/20.jpg",
-      "downloadUrl": "https://download1649.mediafire.com/2brmy729qftgizbX61bxd1tkTsysTEms2NeWS1yY4PVtFSmD9QemdwQOQD9gNP3AJITW0j8bu51nuJ2i_Hxn1DvKw0wjRubjETkvj7Kz4Zzn6Caq_v-N4eUxYFlKSgUEtpO1wptJb3Ueadcwq_hmbRCw4nsstd4HNt7ClDJBBAyLuWs/xqm6h9gl90sw9ii/Xenoblade+Chronicles+2+%5Bv2.1.0+%2B+7+DLCs%5D.xci",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fxqm6h9gl90sw9ii%2FXenoblade%2BChronicles%2B2%2B%255Bv2.1.0%2B%252B%2B7%2BDLCs%255D.xci",
       "fileSize": 19087005696,
       "filename": "Xenoblade Chronicles 2 [v2.1.0 + 7 DLCs].xci",
       "fileType": "xci",
