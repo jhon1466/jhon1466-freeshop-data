@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T14:17:50.098Z",
+  "generatedAt": "2026-07-24T14:23:47.504Z",
   "apps": [
     {
       "id": "3",
@@ -380,6 +380,20 @@
       "filename": "The Legend of Zelda Skyward Sword HD.nsp",
       "fileType": "nsp",
       "longDescription": "El primer relato de la línea temporal de The Legend of Zelda lo protagoniza un joven caballero que deberá atravesar el cielo sin fin y la tierra mítica bajo este para encontrar a su amiga de la infancia, Zelda. A medida que el destino de ambos se va forjando, un misterioso señor de los demonios pone en marcha un pérfido plan para resucitar a un mal atávico..."
+    },
+    {
+      "id": "30",
+      "title": "Xenoblade Chronicles X: Definitive Edition",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.2",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/30.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fl7gjfnrya00lv9v%2FXenoblade%2BChronicles%2BX%2BDefinitive%2BEdition%2B%5Bv1.0.2%2B%2B%2BDLC%5D.xci%2Ffile",
+      "fileSize": 14499853312,
+      "filename": "Xenoblade Chronicles X Definitive Edition [v1.0.2 + DLC].xci",
+      "fileType": "xci",
+      "longDescription": "Explora sin límites y lucha por la humanidad.\n\nLucha para sobrevivir mientras exploras un inmenso mundo alienígena en Xenoblade Chronicles X: Definitive Edition para Nintendo Switch. Esta versión del épico juego de rol y ciencia ficción cuenta con gráficos mejorados y contenido adicional, incluidos nuevos elementos de la historia."
     }
   ]
 }
