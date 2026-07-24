@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T07:06:29.167Z",
+  "generatedAt": "2026-07-24T07:07:32.854Z",
   "apps": [
     {
       "id": "3",
@@ -66,7 +66,7 @@
       "description": "",
       "version": "v1.1.0",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/7.jpeg",
-      "downloadUrl": "https://download1503.mediafire.com/8e63vhbakuygYTqVCTzNDJe9uoMTs5OMuJyXoISw98qkzMbLtwRy86pdDIRvplCnoiBMn4N_gJ740cUbFGsagKJBngp3OpF49MSiaDFukBs4Kv_Z_q8NRXfipahwOh0zUamMEccaV1CLoqZvdGY1dFUmLCCwgqJunJeW0P27eOKUEmI/2fyiytnzowjcis5/Super+Mario+Party+%5Bv1.1.0%5D.xci",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F2fyiytnzowjcis5%2FSuper%2BMario%2BParty%2B%255Bv1.1.0%255D.xci",
       "fileSize": 3106147328,
       "filename": "Super Mario Party.xci",
       "fileType": "xci",
