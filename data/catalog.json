@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T02:55:38.652Z",
+  "generatedAt": "2026-07-24T04:04:06.373Z",
   "apps": [
     {
       "id": "3",
@@ -319,7 +319,7 @@
       "description": "",
       "version": "2.1.0",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/25.jpg",
-      "downloadUrl": "https://download2295.mediafire.com/87m93mt27j6gT2wfX7vMrUW5kJjUZr_4n8-mWwYIFEF7uFvCVKCu26tB6UpkikXmrcE8VYhhBZUyQJ9jndod69gsFGmQYVUEjIKpqKNibCezqWswHjzelTJ4wjVNjPcKLHE1vUPALrlxD2kGrYpJm8XWy1arB9G1ct5tYv8Jd4Lj0bk/vegifp5y36tsgyr/Metroid+Dread+%5Bv2.1.0%5D.xci",
+      "downloadUrl": "https://download2295.mediafire.com/r3li0x68bzugKkmhC1H4aoBYYfx8p87J_7WVu_1FZAf3Fu4l0xAuIHnxtmnS8efkLjFVZagwqvFFvntIuEc2yPY_Kcc4iaZi7SsmFT6GmvndFt9XAFwmvGWR8fZJpaL9sVYcMyr7IRIFXreWKYIBxbG3I9l5MFI4p3G8B2ar6Qb3SVE/vegifp5y36tsgyr/Metroid+Dread+%5Bv2.1.0%5D.xci",
       "fileSize": 4580459008,
       "filename": "Metroid Dread [v2.1.0].xci",
       "fileType": "xci",
