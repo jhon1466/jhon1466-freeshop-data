@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T14:54:46.050Z",
+  "generatedAt": "2026-07-24T15:27:37.062Z",
   "apps": [
     {
       "id": "3",
@@ -436,6 +436,20 @@
       "filename": "DARK SOULS REMASTERED [v1.0.3].xci",
       "fileType": "xci",
       "longDescription": "Tu destino te aguarda en Lordran\n\nÁrmate de valor, llena tus frascos de Estus y encara desafíos imposibles en Dark Souls™: Remastered para Nintendo Switch.\n\nEres el elegido de los no muertos y debes peregrinar a Lordran, una tierra marcada por una oscura maldición. Aprende a dominar el complejo sistema de combate de Dark Souls a medida que te enfrentas a Huecos, demonios y todo tipo de monstruos. Tu misión es tañer las Campanas del despertar y descubrir por qué el reino se ha sumido en la decadencia."
+    },
+    {
+      "id": "34",
+      "title": "Resident Evil 4 HD",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.2",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/34.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fvs8tkrfagbp4mhb%2FResident%2BEvil%2B4%2B%5Bv1.0.2%5D.xci%2Ffile",
+      "fileSize": 12990040064,
+      "filename": "Resident Evil 4 [v1.0.2].xci",
+      "fileType": "xci",
+      "longDescription": "La obra maestra que consiguió casar el horror y la acción.\n\nEl juego que fue un punto y aparte en la serie Resident Evil se centra en los eventos que tuvieron lugar tras la disolución de Umbrella. La pionera perspectiva de cámara sobre el hombro supuso una novedad con respecto a la cámara fija de las entregas anteriores, lo que permitió una experiencia de juego sin igual aclamada universalmente.\n\nTras el desastre biológico sin precedentes ocurrido en Raccoon City, la corporación acusada de iniciar las atrocidades, Umbrella, ha sido disuelta."
     }
   ]
 }
