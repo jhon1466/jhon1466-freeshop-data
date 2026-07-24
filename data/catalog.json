@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T02:12:32.488Z",
+  "generatedAt": "2026-07-24T02:35:59.566Z",
   "apps": [
     {
       "id": "3",
@@ -352,6 +352,20 @@
       "filename": "Splatoon 2 [Update 5.5.2 + 2 DLCs].xci",
       "fileType": "xci",
       "longDescription": "¡Presume de tus colores!\n\nConquista territorio cubriéndolo de tinta en apasionantes batallas de cuatro contra cuatro. ¡El equipo que cubra más terreno con su tinta gana! El trabajo en equipo y saber cuándo adoptar la forma de calamar te darán la ventaja necesaria para ganar. ¡Sal al campo de batalla y ve a por todas!"
+    },
+    {
+      "id": "28",
+      "title": "Cuphead",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "v1.3.7 + DLC",
+      "version": "1.3.7",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/28.jpeg",
+      "downloadUrl": "https://download2301.mediafire.com/maqydkvfmnigSNCOQfVDfJw7YJgXdXxUBv6YDdHJxyjDRnU4IVQe1iomnfV8YZmvduo68Ys6Q2UKpnhCx8-inRYTTwGjotWasy3GNe1SWeMXqZ4m1FIm7A6Cim81BsXgIinpZQOqSnoa1CF7v4l0sHglxgyvQCTUwRPxInt9XTSX-II/jh424rtfsl117tj/Cuphead+%5Bv1.3.7+%2B+DLC%5D.xci",
+      "fileSize": 5491385344,
+      "filename": "Cuphead [v1.3.7 + DLC].xci",
+      "fileType": "xci",
+      "longDescription": "¡El maravilloso y mágico juego de dibujos animados!\n\nCuphead es un juego clásico de acción de disparos muy enfocado en batallas de jefes. Inspirado en las caricaturas de 1930, las imágenes y el audio se crearon de forma minuciosa con las mismas técnicas de la era, esto es, animación tradicional a mano, fondos de marca de agua y grabaciones originales de jazz."
     }
   ]
 }
