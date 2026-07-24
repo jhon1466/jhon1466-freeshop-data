@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T05:33:26.947Z",
+  "generatedAt": "2026-07-24T06:09:45.687Z",
   "apps": [
     {
       "id": "3",
@@ -366,6 +366,20 @@
       "filename": "Cuphead [v1.3.7 + DLC].xci",
       "fileType": "xci",
       "longDescription": "¡El maravilloso y mágico juego de dibujos animados!\n\nCuphead es un juego clásico de acción de disparos muy enfocado en batallas de jefes. Inspirado en las caricaturas de 1930, las imágenes y el audio se crearon de forma minuciosa con las mismas técnicas de la era, esto es, animación tradicional a mano, fondos de marca de agua y grabaciones originales de jazz."
+    },
+    {
+      "id": "29",
+      "title": "The Legend of Zelda Skyward Sword HD",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.1",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/29.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fzl5eumnm7kgq5iw%2FThe%2BLegend%2Bof%2BZelda%2BSkyward%2BSword%2BHD%2B%5Bv1.0.1%5D.nsp%2Ffile",
+      "fileSize": 7594683608,
+      "filename": "The Legend of Zelda Skyward Sword HD.nsp",
+      "fileType": "nsp",
+      "longDescription": "El primer relato de la línea temporal de The Legend of Zelda lo protagoniza un joven caballero que deberá atravesar el cielo sin fin y la tierra mítica bajo este para encontrar a su amiga de la infancia, Zelda. A medida que el destino de ambos se va forjando, un misterioso señor de los demonios pone en marcha un pérfido plan para resucitar a un mal atávico..."
     }
   ]
 }
