@@ -129,21 +129,33 @@ adminRouter.post(
       return;
     }
 
+    // A positive integer, or null. Rejects 0/negative/NaN - a real download
+    // is never 0 bytes, and some hosts answer HEAD (or a HEAD to a redirect
+    // hop) with Content-Length: 0 for a file that does have a body, so a 0
+    // must fall through to the ranged GET below instead of being reported.
+    const parseSize = (raw: string | null | undefined): number | null => {
+      if (!raw) return null;
+      const n = Number(raw);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    };
+
     try {
       const headRes = await fetch(url, { method: "HEAD" });
-      const headLen = headRes.headers.get("content-length");
-      if (headRes.ok && headLen) {
-        res.json({ fileSize: Number(headLen) });
+      const headSize = headRes.ok ? parseSize(headRes.headers.get("content-length")) : null;
+      if (headSize !== null) {
+        res.json({ fileSize: headSize });
         return;
       }
 
-      // Some hosts don't implement HEAD properly - ask for just the first
-      // byte instead and read the total size back out of Content-Range.
+      // Some hosts don't implement HEAD properly (or answer it with a bogus
+      // 0) - ask for just the first byte instead and read the total size
+      // back out of Content-Range.
       const rangeRes = await fetch(url, { headers: { Range: "bytes=0-0" } });
       const contentRange = rangeRes.headers.get("content-range"); // "bytes 0-0/12345"
       const total = contentRange?.split("/")[1];
-      if ((rangeRes.status === 206 || rangeRes.status === 200) && total && total !== "*") {
-        res.json({ fileSize: Number(total) });
+      const rangeSize = total && total !== "*" ? parseSize(total) : null;
+      if ((rangeRes.status === 206 || rangeRes.status === 200) && rangeSize !== null) {
+        res.json({ fileSize: rangeSize });
         return;
       }
 
