@@ -42,6 +42,20 @@ static uint64_t application_id_for_meta(const NcmContentMetaKey *key) {
     return key->id;
 }
 
+// Deletes every content_id this install attempt itself registered for the
+// cnmt currently being processed, before that cnmt's content-meta ever got
+// committed - i.e. it never became a real, usable install. Without this, a
+// download that fails or gets canceled partway through a multi-NCA title
+// (a common case - each NCA is its own network request) leaves those
+// already-registered NCAs sitting in NcmContentStorage forever: not visible
+// on hbmenu (no committed meta, no app record), not cleaned up by anything,
+// just permanently consuming SD space.
+static void rollback_registered(NcmContentStorage *cs, const NcmContentId *ids, int count) {
+    for (int i = 0; i < count; i++) {
+        ncmContentStorageDelete(cs, &ids[i]);
+    }
+}
+
 // Fetches a .tik/.cert pair's bytes directly over the network (a Range GET
 // each - these are always tiny, a few KB) and imports them. Mirrors the
 // local-file path's fseek+fread, just sourced from `ru` instead of `src`.
@@ -138,6 +152,16 @@ static NspInstallResult install_from_url(ResolvedUrl *ru, const Pfs0 *pfs0,
     if (result == NSP_INSTALL_OK && phase_cb) phase_cb(INSTALL_PHASE_INSTALLING, userdata);
 
     while (cnmt_index >= 0 && result == NSP_INSTALL_OK) {
+        // Content this iteration freshly registers (not content that was
+        // already there, shared from some other installed title - see
+        // ncm_install_content_from_url's out_registered doc comment) - rolled
+        // back with ncmContentStorageDelete if this cnmt doesn't make it to
+        // ncm_commit_content_meta. Once that commits, the content is real
+        // and nothing past that point rolls it back, even if pushing the
+        // hbmenu record afterward fails.
+        NcmContentId registered_ids[NCM_MAX_CONTENT_INFOS + 1];
+        int registered_count = 0;
+
         NcmContentId cnmt_id;
         if (!ncm_parse_content_id(pfs0->names[cnmt_index], &cnmt_id)) {
             if (err_buf) snprintf(err_buf, err_buf_size, "nombre de archivo cnmt.nca inválido: %s", pfs0->names[cnmt_index]);
@@ -148,17 +172,21 @@ static NspInstallResult install_from_url(ResolvedUrl *ru, const Pfs0 *pfs0,
         uint64_t cnmt_offset = pfs0_entry_file_offset(pfs0, cnmt_index);
         uint64_t cnmt_size = pfs0->entries[cnmt_index].file_size;
 
-        if (!ncm_install_content_from_url(&cs, &cnmt_id, ru, cnmt_offset, cnmt_size, cb, userdata, err_buf, err_buf_size)) {
+        bool cnmt_fresh = false;
+        if (!ncm_install_content_from_url(&cs, &cnmt_id, ru, cnmt_offset, cnmt_size, cb, userdata,
+                                           &cnmt_fresh, err_buf, err_buf_size)) {
             // ncm_install_content_from_url's own err_buf message distinguishes a
             // cancel from a real failure ("instalación cancelada" vs. an
             // ncm*/red failure) - map the former to NSP_INSTALL_ERR_CANCELED.
             result = (err_buf && strstr(err_buf, "cancel")) ? NSP_INSTALL_ERR_CANCELED : NSP_INSTALL_ERR_NCM;
-            break;
+            break; // nothing registered yet (a failed call cleans up its own placeholder) - no rollback needed
         }
+        if (cnmt_fresh) registered_ids[registered_count++] = cnmt_id;
 
         ContentMetaInfo meta;
         if (!ncm_read_content_meta(&cs, &cnmt_id, &meta, err_buf, err_buf_size)) {
             result = NSP_INSTALL_ERR_NCM;
+            rollback_registered(&cs, registered_ids, registered_count);
             break;
         }
 
@@ -182,14 +210,21 @@ static NspInstallResult install_from_url(ResolvedUrl *ru, const Pfs0 *pfs0,
 
             uint64_t nca_offset = pfs0_entry_file_offset(pfs0, nca_index);
             uint64_t nca_size = pfs0->entries[nca_index].file_size;
+            bool nca_fresh = false;
             if (!ncm_install_content_from_url(&cs, &meta.content_infos[i].content_id, ru, nca_offset, nca_size,
-                                               cb, userdata, err_buf, err_buf_size)) {
+                                               cb, userdata, &nca_fresh, err_buf, err_buf_size)) {
                 result = (err_buf && strstr(err_buf, "cancel")) ? NSP_INSTALL_ERR_CANCELED : NSP_INSTALL_ERR_NCM;
                 content_ok = false;
                 break;
             }
+            if (nca_fresh && registered_count < NCM_MAX_CONTENT_INFOS + 1) {
+                registered_ids[registered_count++] = meta.content_infos[i].content_id;
+            }
         }
-        if (!content_ok) break;
+        if (!content_ok) {
+            rollback_registered(&cs, registered_ids, registered_count);
+            break;
+        }
 
         NcmContentInfo cnmt_content_info;
         memset(&cnmt_content_info, 0, sizeof(cnmt_content_info));
@@ -199,6 +234,7 @@ static NspInstallResult install_from_url(ResolvedUrl *ru, const Pfs0 *pfs0,
 
         if (!ncm_commit_content_meta(&db, &meta, &cnmt_content_info, err_buf, err_buf_size)) {
             result = NSP_INSTALL_ERR_NCM;
+            rollback_registered(&cs, registered_ids, registered_count);
             break;
         }
 
@@ -212,7 +248,8 @@ static NspInstallResult install_from_url(ResolvedUrl *ru, const Pfs0 *pfs0,
             // Content + meta are already committed at this point - the title
             // is genuinely installed, it just won't show on hbmenu/home menu
             // yet. Surfaced as its own distinct error so this doesn't read
-            // like a full install failure.
+            // like a full install failure - and specifically NOT rolled
+            // back, unlike every break above: the content is real now.
             if (err_buf) snprintf(err_buf, err_buf_size,
                                    "el contenido se instaló, pero no se pudo registrar en el menú (0x%x)", rc);
             result = NSP_INSTALL_ERR_RECORD;

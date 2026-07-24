@@ -40,9 +40,17 @@ void ncm_format_content_id(const NcmContentId *id, char out_hex[33]);
 // false from `cb` aborts midway and the partial placeholder is deleted.
 // If `content_id` is already present in `cs`, returns true immediately
 // without re-writing it (base/update/DLC installs can share NCAs).
+//
+// `out_registered` (may be NULL) - same contract as
+// ncm_install_content_from_url's: true only if this call actually
+// registered new content, false if content_id was already present and
+// nothing was written - callers rolling back a failed/canceled install need
+// this to avoid deleting content that belongs to some other, already-
+// installed title.
 bool ncm_install_content(NcmContentStorage *cs, const NcmContentId *content_id,
                           FILE *src, uint64_t file_offset, uint64_t size,
                           InstallProgressCallback cb, void *userdata,
+                          bool *out_registered,
                           char *err_buf, size_t err_buf_size);
 
 // Same contract as ncm_install_content, but sources `size` bytes starting at
@@ -62,9 +70,17 @@ bool ncm_install_content(NcmContentStorage *cs, const NcmContentId *content_id,
 // request per NCA - only pays a self-resolving proxy's resolve cost once
 // instead of on every single content piece; see ResolvedUrl's doc comment
 // in install_common.h.
+//
+// `out_registered` (may be NULL) reports whether this call actually
+// registered new content (true) versus content_id was already present and
+// nothing was written (false) - callers rolling back a failed/canceled
+// install need this to know which content_ids are theirs to delete: rolling
+// back a shared NCA that already belonged to some other, already-installed
+// title would break that title too.
 bool ncm_install_content_from_url(NcmContentStorage *cs, const NcmContentId *content_id,
                                    ResolvedUrl *ru, uint64_t file_offset, uint64_t size,
                                    InstallProgressCallback cb, void *userdata,
+                                   bool *out_registered,
                                    char *err_buf, size_t err_buf_size);
 
 // Reads the CNMT out of the just-installed `cnmt_content_id` by mounting it

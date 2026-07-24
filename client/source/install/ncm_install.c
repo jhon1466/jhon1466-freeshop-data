@@ -65,11 +65,14 @@ void ncm_format_content_id(const NcmContentId *id, char out_hex[33]) {
 bool ncm_install_content(NcmContentStorage *cs, const NcmContentId *content_id,
                           FILE *src, uint64_t file_offset, uint64_t size,
                           InstallProgressCallback cb, void *userdata,
+                          bool *out_registered,
                           char *err_buf, size_t err_buf_size) {
+    if (out_registered) *out_registered = false;
+
     bool already_has = false;
     Result rc = ncmContentStorageHas(cs, &already_has, content_id);
     if (R_SUCCEEDED(rc) && already_has) {
-        return true;
+        return true; // already present (e.g. shared with another installed title) - not ours to roll back
     }
 
     NcmPlaceHolderId placeholder_id;
@@ -148,6 +151,7 @@ bool ncm_install_content(NcmContentStorage *cs, const NcmContentId *content_id,
     // just a harmless best-effort cleanup in case anything was left behind.
     ncmContentStorageDeletePlaceHolder(cs, &placeholder_id);
 
+    if (out_registered) *out_registered = true;
     return true;
 }
 
@@ -229,11 +233,14 @@ static size_t nca_network_write_cb(void *ptr, size_t size, size_t nmemb, void *u
 bool ncm_install_content_from_url(NcmContentStorage *cs, const NcmContentId *content_id,
                                    ResolvedUrl *ru, uint64_t file_offset, uint64_t size,
                                    InstallProgressCallback cb, void *userdata,
+                                   bool *out_registered,
                                    char *err_buf, size_t err_buf_size) {
+    if (out_registered) *out_registered = false;
+
     bool already_has = false;
     Result rc = ncmContentStorageHas(cs, &already_has, content_id);
     if (R_SUCCEEDED(rc) && already_has) {
-        return true;
+        return true; // already present (e.g. shared with another installed title) - not ours to roll back
     }
 
     NcmPlaceHolderId placeholder_id;
@@ -346,6 +353,7 @@ bool ncm_install_content_from_url(NcmContentStorage *cs, const NcmContentId *con
 
     ncmContentStorageDeletePlaceHolder(cs, &placeholder_id);
 
+    if (out_registered) *out_registered = true;
     return true;
 }
 
