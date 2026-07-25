@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-24T23:33:32.544Z",
+  "generatedAt": "2026-07-25T20:46:04.983Z",
   "apps": [
     {
       "id": "3",
@@ -645,6 +645,19 @@
       "filename": "Cadence of Hyrule Crypt [v1.5.0 + 4 DLCs].xci",
       "fileType": "xci",
       "longDescription": "Hyrule está en peligro\n\nEl rey de Hyrule se ha sumido en un profundo sueño por culpa de una temible amenaza cuyo objetivo es extender una auténtica cacofonía musical por todo el reino.\nComienza la aventura encarnando a la heroína de Crypt of the NecroDancer, Cadence; una vez que te familiarices con los aspectos básicos del juego, podrás jugar como Link o la princesa Zelda y seguir adelante con tu viaje. Explora un mundo y mazmorras generados de manera aleatoria y salva Hyrule de la destrucción en esta aventura repleta de acción con un toque rítmico."
+    },
+    {
+      "id": "48",
+      "title": "Crysis Remastered",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.8.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/48.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fi5bgno1afv75xia%2FCrysis%2BRemastered%2B%5Bv1.8.0%5D.xci%2Ffile",
+      "fileSize": 8251330560,
+      "filename": "Crysis Remastered [v1.8.0].xci",
+      "fileType": "xci"
     }
   ]
 }
