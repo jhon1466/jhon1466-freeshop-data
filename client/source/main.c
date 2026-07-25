@@ -16,12 +16,14 @@
 #include "ui/ui_icons.h"
 #include "ui/ui_about.h"
 #include "ui/ui_explorer.h"
+#include "ui/ui_queue.h"
 #include "install/install.h"
 #include "install/install_nsp.h"
 #include "install/install_nsp_native.h"
 #include "install/install_xci_native.h"
 #include "install/install_port.h"
 #include "install/install_local.h"
+#include "install/install_dispatch.h"
 #include "update/self_update.h"
 
 // Diagnostic-only: appends one line to sdmc:/switch/freeshop/update_debug.log
@@ -577,6 +579,15 @@ int main(int argc, char **argv) {
             continue;
         }
 
+        if (selected == UI_LIST_OPEN_QUEUE) {
+            // The queue can hold DLC/update ids too (queued from the detail
+            // screen), which aren't in root_entries - pass the full catalog
+            // so ui_show_queue can resolve every queued id. It handles
+            // browsing, starting, and installing the whole batch itself.
+            ui_show_queue(entries, count);
+            continue;
+        }
+
         if (selected == UI_LIST_OPEN_ABOUT) {
             ui_show_about();
             continue;
@@ -670,70 +681,19 @@ int main(int argc, char **argv) {
             continue;
         }
 
-        if (install_target->file_type == APP_FILE_TYPE_NSP) {
-            NspInstallResult nires = install_nsp_native(install_target, base_url,
-                                                          install_progress_cb, on_install_phase, &progress_ctx,
-                                                          err_buf, sizeof(err_buf));
-            if (nires == NSP_INSTALL_OK) {
-                snprintf(msg, sizeof(msg), "\"%s\" instalado correctamente.\n\nVuelve al hbmenu para iniciarlo.",
-                         install_target->title);
-                ui_app_show_message(msg);
-            } else if (nires == NSP_INSTALL_ERR_CANCELED) {
-                ui_app_show_message("Descarga cancelada.");
-            } else {
-                snprintf(msg, sizeof(msg),
-                         "Error de instalación: %s\n\nSi el problema persiste, prueba \"Instalar vía DBI\" (botón X) desde esta misma pantalla.",
-                         err_buf);
-                ui_app_show_message(msg);
-            }
-            continue;
-        }
-
-        if (install_target->file_type == APP_FILE_TYPE_XCI) {
-            XciInstallResult xires = install_xci_native(install_target, base_url,
-                                                          install_progress_cb, on_install_phase, &progress_ctx,
-                                                          err_buf, sizeof(err_buf));
-            if (xires == XCI_INSTALL_OK) {
-                snprintf(msg, sizeof(msg), "\"%s\" instalado correctamente.\n\nVuelve al hbmenu para iniciarlo.",
-                         install_target->title);
-                ui_app_show_message(msg);
-            } else if (xires == XCI_INSTALL_ERR_CANCELED) {
-                ui_app_show_message("Descarga cancelada.");
-            } else {
-                snprintf(msg, sizeof(msg),
-                         "Error de instalación: %s\n\nSi el problema persiste, prueba \"Instalar vía DBI\" (botón X) desde esta misma pantalla.",
-                         err_buf);
-                ui_app_show_message(msg);
-            }
-            continue;
-        }
-
-        if (install_target->file_type == APP_FILE_TYPE_PORT) {
-            PortInstallResult pres = install_port(install_target, base_url,
-                                                    install_progress_cb, on_install_phase, &progress_ctx,
-                                                    err_buf, sizeof(err_buf));
-            if (pres == PORT_INSTALL_OK) {
-                snprintf(msg, sizeof(msg), "\"%s\" instalado correctamente.\n\nVuelve al hbmenu para iniciarlo.",
-                         install_target->title);
-                ui_app_show_message(msg);
-            } else if (pres == PORT_INSTALL_ERR_CANCELED) {
-                ui_app_show_message("Descarga cancelada.");
-            } else {
-                snprintf(msg, sizeof(msg), "Error de instalación: %s", err_buf);
-                ui_app_show_message(msg);
-            }
-            continue;
-        }
-
-        InstallResult ires = install_app(install_target, base_url,
-                                          install_progress_cb, &progress_ctx, err_buf, sizeof(err_buf));
-
-        if (ires == INSTALL_OK) {
+        InstallOneResult ires = install_one_entry(install_target, install_progress_cb, on_install_phase,
+                                                  &progress_ctx, err_buf, sizeof(err_buf));
+        if (ires == INSTALL_ONE_OK) {
             snprintf(msg, sizeof(msg), "\"%s\" instalado correctamente.\n\nVuelve al hbmenu para iniciarlo.",
                      install_target->title);
             ui_app_show_message(msg);
-        } else if (ires == INSTALL_ERR_CANCELED) {
+        } else if (ires == INSTALL_ONE_CANCELED) {
             ui_app_show_message("Descarga cancelada.");
+        } else if (install_suggests_dbi_fallback(install_target->file_type)) {
+            snprintf(msg, sizeof(msg),
+                     "Error de instalación: %s\n\nSi el problema persiste, prueba \"Instalar vía DBI\" (botón X) desde esta misma pantalla.",
+                     err_buf);
+            ui_app_show_message(msg);
         } else {
             snprintf(msg, sizeof(msg), "Error de instalación: %s", err_buf);
             ui_app_show_message(msg);

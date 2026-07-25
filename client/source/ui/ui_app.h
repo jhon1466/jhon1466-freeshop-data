@@ -9,6 +9,10 @@
 #define COLOR_BG        ((SDL_Color){0x1b, 0x1f, 0x2a, 0xff})
 #define COLOR_PANEL     ((SDL_Color){0x24, 0x29, 0x38, 0xff})
 #define COLOR_ACCENT    ((SDL_Color){0x3a, 0x8f, 0xd8, 0xff})
+// Marks an entry queued for batch install (see ui_queue.h) - deliberately a
+// different hue from COLOR_ACCENT's selection highlight so the two are never
+// confused for one another.
+#define COLOR_QUEUED    ((SDL_Color){0x4a, 0xc4, 0x6a, 0xff})
 #define COLOR_TEXT      ((SDL_Color){0xe8, 0xea, 0xf0, 0xff})
 #define COLOR_TEXT_DIM  ((SDL_Color){0x8a, 0x90, 0xa0, 0xff})
 

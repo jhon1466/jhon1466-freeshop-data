@@ -5,6 +5,7 @@
 #include "ui_icons.h"
 #include "ui_prefs.h"
 #include "ui_nav.h"
+#include "ui_queue.h"
 
 #include <switch.h>
 #include <stdio.h>
@@ -89,6 +90,7 @@ typedef enum {
     SORT_VERSION,
     SORT_MODE_COUNT,
 } SortMode;
+
 
 static const char *sort_mode_label(SortMode mode) {
     switch (mode) {
@@ -259,6 +261,24 @@ static void truncate_to_width(TTF_Font *font, const char *text, int max_w, char 
 // below) plus roughly one g_font_small (16pt) line.
 #define GRID_SELECT_TITLE_H 28
 
+// Small "marked for the download queue" indicator - a filled square with a
+// checkmark drawn from line segments (each doubled up a pixel on either
+// side for a bolder stroke, since SDL_RenderDrawLine is always 1px) instead
+// of a font glyph, so it reads as an actual checkbox mark rather than a
+// stray "+" character sitting in a flat square.
+static void draw_queue_badge(int x, int y, int size) {
+    ui_draw_rect(x, y, size, size, COLOR_QUEUED);
+
+    SDL_SetRenderDrawColor(g_renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, COLOR_BG.a);
+    int x1 = x + size * 2 / 10, y1 = y + size * 5 / 10;
+    int x2 = x + size * 4 / 10, y2 = y + size * 7 / 10;
+    int x3 = x + size * 8 / 10, y3 = y + size * 3 / 10;
+    for (int off = -1; off <= 1; off++) {
+        SDL_RenderDrawLine(g_renderer, x1, y1 + off, x2, y2 + off);
+        SDL_RenderDrawLine(g_renderer, x2, y2 + off, x3, y3 + off);
+    }
+}
+
 // How much the selected cell's icon grows (12%) - GRID_CELL_W - GRID_ICON_SIZE
 // (56px) is the slack between icons before the next column starts, so this
 // has plenty of room without touching a neighboring cell.
@@ -297,6 +317,15 @@ static void draw_grid_cell(int x, int y, const AppEntry *entry, bool is_selected
         char initial[2] = { entry->title[0] ? entry->title[0] : '?', '\0' };
         ui_draw_text(g_font_title, icon_rect.x + icon_rect.w / 2 - 8, icon_rect.y + icon_rect.h / 2 - 16,
                      COLOR_TEXT_DIM, initial);
+    }
+
+    // Download-queue badge (hold A to toggle) - top-right corner, matching
+    // the usual "marked for multi-select" convention (Google Photos etc.).
+    // Anchored to the icon's original bounds (not `icon_rect`, which shifts
+    // during the selected icon's zoom-pop), so it stays put regardless of
+    // selection/zoom state.
+    if (ui_queue_contains(entry->id)) {
+        draw_queue_badge(x + GRID_ICON_SIZE - 20, y, 20);
     }
 
     char title[64];
@@ -574,8 +603,11 @@ int ui_show_list(AppEntry *entries, int count) {
             if (kDown & HidNpadButton_StickL) {
                 return UI_LIST_RELOAD_CATALOG;
             }
-            if ((kDown & HidNpadButton_B) || (kDown & HidNpadButton_Plus)) {
+            if (kDown & HidNpadButton_B) {
                 return UI_LIST_EXIT;
+            }
+            if (kDown & HidNpadButton_Plus) {
+                return UI_LIST_OPEN_QUEUE;
             }
             if (kDown & HidNpadButton_Y) {
                 // Same `entries`/`selected` index means the same app in both
@@ -687,6 +719,13 @@ int ui_show_list(AppEntry *entries, int count) {
                 char size_str[32];
                 format_size(entries[i].file_size, size_str, sizeof(size_str));
 
+                // Download-queue badge (hold A to toggle) - drawn in the
+                // margin between LEFT_EDGE and COL_NAME_X, same idea as the
+                // grid view's badge.
+                if (ui_queue_contains(entries[i].id)) {
+                    draw_queue_badge(LEFT_EDGE + 2, row_y - 3, 16);
+                }
+
                 ui_draw_text(g_font_body, COL_NAME_X, row_y, text_color, entries[i].title);
                 ui_draw_text(g_font_small, COL_TYPE_X, row_y + 2, dim_color, file_type_label(entries[i].file_type));
                 ui_draw_text(g_font_small, COL_VERSION_X, row_y + 2, dim_color, entries[i].version);
@@ -741,16 +780,25 @@ int ui_show_list(AppEntry *entries, int count) {
         // edge of the screen (ui_draw_text doesn't wrap or clip-warn) -
         // that's what made "Stick R: explorador" undiscoverable, not the
         // button itself.
-        char footer1[160];
+        char footer1[180];
         snprintf(footer1, sizeof(footer1),
                  "D-Pad: navegar    A: instalar    ZL/ZR: categoría    Y: vista %s    X: ordenar (%s)",
                  view_mode == VIEW_LIST ? "cuadrícula" : "lista", sort_mode_label(sort_mode));
         ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y, COLOR_TEXT_DIM, footer1);
 
-        char footer2[180];
-        snprintf(footer2, sizeof(footer2),
-                 "R: buscar%s    -: fuentes    L: acerca de    Stick R: explorador    Stick L: recargar    B/+: salir",
-                 search_query[0] ? " (activa)" : "");
+        int queue_n = ui_queue_count();
+        char footer2[210];
+        if (queue_n > 0) {
+            snprintf(footer2, sizeof(footer2),
+                     "R: buscar%s    -: fuentes    L: acerca de    Stick R: explorador    Stick L: recargar    "
+                     "+: cola (%d)    B: salir",
+                     search_query[0] ? " (activa)" : "", queue_n);
+        } else {
+            snprintf(footer2, sizeof(footer2),
+                     "R: buscar%s    -: fuentes    L: acerca de    Stick R: explorador    Stick L: recargar    "
+                     "+: cola    B: salir",
+                     search_query[0] ? " (activa)" : "");
+        }
         ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y + 20, COLOR_TEXT_DIM, footer2);
 
         SDL_RenderPresent(g_renderer);

@@ -1,6 +1,7 @@
 #include "ui_detail.h"
 #include "ui_app.h"
 #include "ui_icons.h"
+#include "ui_queue.h"
 
 #include <switch.h>
 #include <stdio.h>
@@ -52,6 +53,10 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
         padUpdate(&pad);
         u64 kDown = padGetButtonsDown(&pad);
 
+        // Whichever entry the current focus acts on (base or the selected
+        // DLC/update row) - what A installs and what + queues.
+        const AppEntry *focused = (focus == FOCUS_DLC_LIST) ? &dlc_entries[dlc_selected] : entry;
+
         if (focus == FOCUS_MAIN) {
             if (kDown & HidNpadButton_A) {
                 *out_target = entry;
@@ -83,6 +88,20 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
             }
         }
 
+        // + toggles the focused entry in/out of the download queue - stays
+        // on this screen (with an "En cola" indicator, see below) so several
+        // titles/DLCs can be queued without leaving, then installed together
+        // from the queue screen. Managed here directly rather than via a
+        // returned action - the queue is shared state (ui_queue.h), nothing
+        // for the caller to route.
+        if (kDown & HidNpadButton_Plus) {
+            if (ui_queue_contains(focused->id)) {
+                ui_queue_remove(focused->id);
+            } else {
+                ui_queue_add(focused->id);
+            }
+        }
+
         if (dlc_selected < dlc_scroll) dlc_scroll = dlc_selected;
         if (dlc_selected >= dlc_scroll + DLC_VISIBLE_ROWS) dlc_scroll = dlc_selected - DLC_VISIBLE_ROWS + 1;
 
@@ -101,6 +120,12 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
 
         ui_draw_text(g_font_title, text_x, 90, COLOR_TEXT, entry->title);
         ui_draw_text(g_font_body, text_x, 140, COLOR_TEXT_DIM, header);
+
+        // "En cola" indicator for whichever entry + would currently toggle.
+        if (ui_queue_contains(focused->id)) {
+            ui_draw_rect(text_x, 172, 90, 26, COLOR_QUEUED);
+            ui_draw_text(g_font_small, text_x + 8, 175, COLOR_BG, "En cola");
+        }
 
         int y = LEFT_EDGE + DETAIL_ICON_SIZE + 30;
         y = ui_draw_text_wrapped(g_font_body, LEFT_EDGE, y, SCREEN_W - 220, 28, COLOR_TEXT, entry->description);
@@ -146,7 +171,12 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
         } else {
             snprintf(hint, sizeof(hint), "A: instalar    B: volver");
         }
-        ui_draw_text(g_font_small, LEFT_EDGE, 680, COLOR_TEXT_DIM, hint);
+        ui_draw_text(g_font_small, LEFT_EDGE, 664, COLOR_TEXT_DIM, hint);
+
+        // Queue hint on its own line so appending it above wouldn't push the
+        // longest hint variant off the right edge (ui_draw_text doesn't wrap).
+        ui_draw_text(g_font_small, LEFT_EDGE, 688, COLOR_TEXT_DIM,
+                     ui_queue_contains(focused->id) ? "+: quitar de la cola" : "+: agregar a la cola");
 
         SDL_RenderPresent(g_renderer);
     }
