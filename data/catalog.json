@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-25T20:46:04.983Z",
+  "generatedAt": "2026-07-25T20:47:08.168Z",
   "apps": [
     {
       "id": "3",
@@ -657,7 +657,8 @@
       "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fi5bgno1afv75xia%2FCrysis%2BRemastered%2B%5Bv1.8.0%5D.xci%2Ffile",
       "fileSize": 8251330560,
       "filename": "Crysis Remastered [v1.8.0].xci",
-      "fileType": "xci"
+      "fileType": "xci",
+      "longDescription": "Equípese: La velocidad, la fuerza, el blindaje y la capacidad de camuflaje de su nanotraje le ofrecen soluciones creativas para cada tipo de combate.\n\nAdáptese: En un entorno cambiante, adapte sus tácticas para prevalecer en campos de batalla que van desde una selva congelada hasta entornos alienígenas.\n\nPersonalice: Un inmenso arsenal de armamento modular proporciona un control sin precedentes sobre el estilo de juego, con opciones que van desde armamento experimental hasta alienígena.\n\nConquiste: La IA de los enemigos, que parecen tener vida, requiere un estilo de juego estratégico y flexible, al tiempo que los nuevos retos, que incluyen un campo de batalla en gravedad cero, obligan a los jugadores a tomar la ofensiva de forma dinámica.\n\nExplore: Elija su propio camino a través del mundo abierto de Crysis, destruya obstáculos, conduzca vehículos y utilice el propio entorno contra sus enemigos.\n\nLo que comienza como una simple misión de rescate se transforma en un campo de batalla cuando los invasores alienígenas invaden un archipiélago norcoreano. Armados con un poderoso nanotraje, los jugadores pueden hacerse invisibles para acechar a patrullas enemigas o aumentar la fuerza para destruir vehículos. La velocidad, la fuerza, el blindaje y la capacidad de camuflaje del nanotraje ofrecen soluciones creativas para cada tipo de combate, al mismo tiempo que un inmenso arsenal de armamento modular proporciona un control sin precedentes sobre el estilo de juego. En un entorno tan cambiante, adapte las tácticas y el equipo para dominar a sus enemigos, en un enorme mundo abierto."
     }
   ]
 }
