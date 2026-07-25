@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-25T20:47:08.168Z",
+  "generatedAt": "2026-07-25T20:49:46.833Z",
   "apps": [
     {
       "id": "3",
@@ -659,6 +659,20 @@
       "filename": "Crysis Remastered [v1.8.0].xci",
       "fileType": "xci",
       "longDescription": "Equípese: La velocidad, la fuerza, el blindaje y la capacidad de camuflaje de su nanotraje le ofrecen soluciones creativas para cada tipo de combate.\n\nAdáptese: En un entorno cambiante, adapte sus tácticas para prevalecer en campos de batalla que van desde una selva congelada hasta entornos alienígenas.\n\nPersonalice: Un inmenso arsenal de armamento modular proporciona un control sin precedentes sobre el estilo de juego, con opciones que van desde armamento experimental hasta alienígena.\n\nConquiste: La IA de los enemigos, que parecen tener vida, requiere un estilo de juego estratégico y flexible, al tiempo que los nuevos retos, que incluyen un campo de batalla en gravedad cero, obligan a los jugadores a tomar la ofensiva de forma dinámica.\n\nExplore: Elija su propio camino a través del mundo abierto de Crysis, destruya obstáculos, conduzca vehículos y utilice el propio entorno contra sus enemigos.\n\nLo que comienza como una simple misión de rescate se transforma en un campo de batalla cuando los invasores alienígenas invaden un archipiélago norcoreano. Armados con un poderoso nanotraje, los jugadores pueden hacerse invisibles para acechar a patrullas enemigas o aumentar la fuerza para destruir vehículos. La velocidad, la fuerza, el blindaje y la capacidad de camuflaje del nanotraje ofrecen soluciones creativas para cada tipo de combate, al mismo tiempo que un inmenso arsenal de armamento modular proporciona un control sin precedentes sobre el estilo de juego. En un entorno tan cambiante, adapte las tácticas y el equipo para dominar a sus enemigos, en un enorme mundo abierto."
+    },
+    {
+      "id": "49",
+      "title": "Crysis 2 Remastered",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.3.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/49.jpeg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fxpbdpi08uzf8rwz%2FCrysis%2B2%2BRemastered%2B%5Bv1.3.0%5D.xci%2Ffile",
+      "fileSize": 12023796224,
+      "filename": "Crysis 2 Remastered [v1.3.0].xci",
+      "fileType": "xci",
+      "longDescription": "Después de los acontecimientos del apasionante Crysis original, los alienígenas han vuelto a un mundo arrasado por desastres climáticos. Mientras los invasores devastan Nueva York y empiezan un asalto que amenaza la aniquilación absoluta de la humanidad, solo tú tienes la tecnología para dirigir el contraataque. Jugando como un supersoldado equipado con el nanotraje mejorado 2.0, tienes que adaptarte al campo de batalla usando las decisivas habilidades de Sigilo, Armadura y Energía. Personaliza tu nanotraje y tus armas en tiempo real y desbloquea increíbles poderes nuevos mientras combates por la supervivencia de la humanidad."
     }
   ]
 }
