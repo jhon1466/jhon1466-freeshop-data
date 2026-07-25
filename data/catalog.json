@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-25T20:51:43.781Z",
+  "generatedAt": "2026-07-25T21:09:08.763Z",
   "apps": [
     {
       "id": "3",
@@ -687,6 +687,20 @@
       "filename": "Crysis 3 Remastered [v1.3.0].xci",
       "fileType": "xci",
       "longDescription": "En Crysis 3 Remastered, el destino del mundo está en tus manos una vez más. Volviendo al combate como un supersoldado Profeta, y esgrimiendo un potente Arco de depredador de recarga automática que dispara flechas eléctricas, explosivas y de carbón, abate enemigos viejos y nuevos que amenazan la paz para la que has trabajado tanto. Continúa la búsqueda de los alienígenas Alfa Céfalo, pero ahora también tienes que sacar a la luz la verdad sobre la corporación C.E.L.L., que ha convertido Nueva York en una floreciente selva urbana protegida por una nanocúpula gigante. Equipado con tu nanotraje legendario, debes planear, adaptarte y atacar mientras eliges tu camino y combates por siete distritos diferentes. Diezma a tus oponentes en una descarga de fuerza bruta usando la tecnología superior del nanotraje, o usa el sigilo para alcanzar tus objetivos y convertirte en el silencioso salvador de la humanidad. No hay ningún modo equivocado de salvar al mundo."
+    },
+    {
+      "id": "51",
+      "title": "Mario & Luigi: Brothership",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.1",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/51.jpeg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fjj4i9yy9s35zfud%2FMario%2B%26%2BLuigi%2BBrothership%2B%5Bv1.0.1%5D.xci%2Ffile",
+      "fileSize": 10711366144,
+      "filename": "Mario & Luigi Brothership [v1.0.1].xci",
+      "fileType": "xci",
+      "longDescription": "Leva las anclas y zarpa rumbo hacia una aventura en busca de islas con Mario y Luigi al timón\n\n¡Los hermanos bigotudos regresan en una nueva aventura en altamar! Cuando el Conectárbol es destruido y el mundo de Concordia se divide, Mario y Luigi deberán intentar volver a unir este continente fragmentado, isla por isla"
     }
   ]
 }
