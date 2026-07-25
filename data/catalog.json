@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-25T20:49:46.833Z",
+  "generatedAt": "2026-07-25T20:51:43.781Z",
   "apps": [
     {
       "id": "3",
@@ -673,6 +673,20 @@
       "filename": "Crysis 2 Remastered [v1.3.0].xci",
       "fileType": "xci",
       "longDescription": "Después de los acontecimientos del apasionante Crysis original, los alienígenas han vuelto a un mundo arrasado por desastres climáticos. Mientras los invasores devastan Nueva York y empiezan un asalto que amenaza la aniquilación absoluta de la humanidad, solo tú tienes la tecnología para dirigir el contraataque. Jugando como un supersoldado equipado con el nanotraje mejorado 2.0, tienes que adaptarte al campo de batalla usando las decisivas habilidades de Sigilo, Armadura y Energía. Personaliza tu nanotraje y tus armas en tiempo real y desbloquea increíbles poderes nuevos mientras combates por la supervivencia de la humanidad."
+    },
+    {
+      "id": "50",
+      "title": "Crysis 3 Remastered",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.3.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/50.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fwzjhojb2hk2ta8e%2FCrysis%2B3%2BRemastered%2B%5Bv1.3.0%5D.xci%2Ffile",
+      "fileSize": 11834209280,
+      "filename": "Crysis 3 Remastered [v1.3.0].xci",
+      "fileType": "xci",
+      "longDescription": "En Crysis 3 Remastered, el destino del mundo está en tus manos una vez más. Volviendo al combate como un supersoldado Profeta, y esgrimiendo un potente Arco de depredador de recarga automática que dispara flechas eléctricas, explosivas y de carbón, abate enemigos viejos y nuevos que amenazan la paz para la que has trabajado tanto. Continúa la búsqueda de los alienígenas Alfa Céfalo, pero ahora también tienes que sacar a la luz la verdad sobre la corporación C.E.L.L., que ha convertido Nueva York en una floreciente selva urbana protegida por una nanocúpula gigante. Equipado con tu nanotraje legendario, debes planear, adaptarte y atacar mientras eliges tu camino y combates por siete distritos diferentes. Diezma a tus oponentes en una descarga de fuerza bruta usando la tecnología superior del nanotraje, o usa el sigilo para alcanzar tus objetivos y convertirte en el silencioso salvador de la humanidad. No hay ningún modo equivocado de salvar al mundo."
     }
   ]
 }
