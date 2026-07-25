@@ -28,6 +28,23 @@ void install_common_resolve_url(const char *base_url, const char *download_url,
 // install doesn't fail outright just because the atomic rename didn't work.
 int install_common_copy_file(const char *src, const char *dst);
 
+// One shared 4MB staging buffer for the install paths that batch SD/NCM
+// writes (ncm_install.c's local-file and network paths, ncz.c's decompressed
+// output). Each of these used to carry its own private `static` buffer,
+// which meant ~12MB of BSS resident for the entire run even though installs
+// are strictly serial - only ever one of them is in use at a time. That
+// mattered: NSZ decompression asks zstd for a window buffer sized by
+// whatever compression level the file was made with (8MB at nsz's default,
+// far more at --ultra levels), and on a memory-constrained applet-mode
+// homebrew heap that allocation was failing outright with "not enough
+// memory". Sharing one buffer hands those megabytes back to the heap.
+//
+// Not reentrant, by design - callers must not hold this across a nested
+// install, and nothing in this project does (see install_dispatch.c: one
+// entry at a time, and the queue runs them sequentially).
+#define INSTALL_SCRATCH_SIZE (4 * 1024 * 1024)
+uint8_t *install_common_scratch(void);
+
 typedef struct {
     InstallProgressCallback cb;
     void *userdata;

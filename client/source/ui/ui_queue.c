@@ -82,6 +82,7 @@ static const char *type_label(AppFileType t) {
         case APP_FILE_TYPE_NSP: return "NSP";
         case APP_FILE_TYPE_XCI: return "XCI";
         case APP_FILE_TYPE_PORT: return "Port";
+        case APP_FILE_TYPE_NSZ: return "NSZ";
         default: return "NRO";
     }
 }
@@ -253,6 +254,13 @@ static void run_queue_install(AppEntry *entries, int entry_count) {
     int ok_count = 0;
     bool canceled = false;
     char err_buf[256];
+
+    // Free every cached icon texture before the batch starts - same reason
+    // as main.c's single-install path: these are the app's biggest memory
+    // consumer and installs (NSZ decompression especially) need that room.
+    // The rows below draw their icon via ui_icons_get, which simply
+    // re-reads from the on-SD cache as each one comes back into view.
+    ui_icons_clear();
 
     for (int i = 0; i < total_items; i++) {
         const AppEntry *e = resolve(entries, entry_count, s_ids[i]);

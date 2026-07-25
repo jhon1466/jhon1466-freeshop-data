@@ -23,6 +23,20 @@ typedef bool (*HttpProgressCallback)(long dltotal, long dlnow, void *userdata);
 HttpResult http_get(const char *url, char **out_buf, size_t *out_len,
                      char *err_buf, size_t err_buf_size);
 
+// Looks up `url`'s size without downloading it - tries a real HTTP HEAD
+// first, and if the server doesn't answer that usefully (many minimal
+// static-file servers don't), falls back to a GET that's aborted the
+// instant any response body byte arrives, reading the size from whichever
+// header actually came back (Content-Length, or Content-Range for a 206).
+// *out_size is the result, or -1 if neither ever gave a usable size - not
+// treated as a failure (returns HTTP_OK either way; err_buf is unused and
+// may be NULL/0). Used for a quick per-file size lookup (e.g. a raw HTTP
+// directory listing source, which has no catalog.json to state sizes up
+// front - see catalog.c's try_fetch_raw_directory) without downloading the
+// whole file.
+HttpResult http_head_content_length(const char *url, int64_t *out_size,
+                                     char *err_buf, size_t err_buf_size);
+
 // GETs `url` and streams the response body directly to `dest_path`
 // (overwriting it if present). Does not do any renaming/atomicity - callers
 // that need atomic installs should download to a temp path and rename after

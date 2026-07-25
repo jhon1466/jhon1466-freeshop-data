@@ -46,6 +46,10 @@
 #define VISIBLE_ROWS 9
 
 #define COL_NAME_X 40
+// Names have to stop short of the "Tipo" column - titles from a raw-folder
+// source are filenames, which are routinely long enough to run straight
+// through every column to its right.
+#define COL_NAME_MAX_W (COL_TYPE_X - COL_NAME_X - 20)
 #define COL_TYPE_X 660
 #define COL_VERSION_X 780
 #define COL_CATEGORY_X 900
@@ -213,10 +217,24 @@ static void draw_storage_panel(int x, int y, int w, int h, const char *label, bo
 static const char *file_type_label(AppFileType type) {
     if (type == APP_FILE_TYPE_NSP) return "NSP";
     if (type == APP_FILE_TYPE_XCI) return "XCI";
+    if (type == APP_FILE_TYPE_NSZ) return "NSZ";
+    if (type == APP_FILE_TYPE_PORT) return "Port";
     return "NRO";
 }
 
 static void format_size(long bytes, char *out, size_t out_size) {
+    // A raw-directory source can legitimately not know a file's size (the
+    // server answered neither a HEAD nor a ranged GET with one - see
+    // catalog.c's try_fetch_raw_directory). Showing "0.0 MB" there reads as
+    // "this file is empty" rather than "not reported".
+    if (bytes <= 0) {
+        snprintf(out, out_size, "-");
+        return;
+    }
+    if (bytes >= 1024L * 1024L * 1024L) {
+        snprintf(out, out_size, "%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0));
+        return;
+    }
     snprintf(out, out_size, "%.1f MB", bytes / (1024.0 * 1024.0));
 }
 
@@ -726,7 +744,9 @@ int ui_show_list(AppEntry *entries, int count) {
                     draw_queue_badge(LEFT_EDGE + 2, row_y - 3, 16);
                 }
 
-                ui_draw_text(g_font_body, COL_NAME_X, row_y, text_color, entries[i].title);
+                char row_title[160];
+                truncate_to_width(g_font_body, entries[i].title, COL_NAME_MAX_W, row_title, sizeof(row_title));
+                ui_draw_text(g_font_body, COL_NAME_X, row_y, text_color, row_title);
                 ui_draw_text(g_font_small, COL_TYPE_X, row_y + 2, dim_color, file_type_label(entries[i].file_type));
                 ui_draw_text(g_font_small, COL_VERSION_X, row_y + 2, dim_color, entries[i].version);
                 ui_draw_text(g_font_small, COL_CATEGORY_X, row_y + 2, dim_color, entries[i].category);

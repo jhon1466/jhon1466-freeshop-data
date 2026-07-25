@@ -38,8 +38,12 @@ typedef enum {
 // "installing" here also covers the network transfer itself (there's no
 // separate whole-file download phase anymore).
 //
-// Only handles entry->file_type == APP_FILE_TYPE_NSP - see install_nsp.h for
-// XCI, which still goes through DBI.
+// Handles entry->file_type == APP_FILE_TYPE_NSP and APP_FILE_TYPE_NSZ (an
+// NSZ is the same PFS0/CNMT/ticket structure as an NSP - some content pieces
+// are just a compressed ".ncz" instead of a plain ".nca", which this
+// function's content loop detects per-entry and routes through
+// ncm_install_ncz_content_from_url, see ncz.h). See install_xci_native.h for
+// XCI.
 NspInstallResult install_nsp_native(const AppEntry *entry, const char *base_url,
                                      InstallProgressCallback cb, InstallPhaseCallback phase_cb, void *userdata,
                                      char *err_buf, size_t err_buf_size);

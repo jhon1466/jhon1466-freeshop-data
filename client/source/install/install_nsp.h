@@ -17,10 +17,11 @@ typedef enum {
 } NspHandoffResult;
 
 // This project doesn't reimplement NSP/XCI title installation (NCM/ES
-// services, ticket handling) - too easy to get wrong in a way that corrupts
-// a NAND/SD install. Instead: downloads entry's .nsp or .xci from
-// "<base_url><entry->download_url>" to sdmc:/switch/DBI/nsp-repo/<entry->filename>
-// (same folder for both - DBI installs either format from there), verifies
+// services, ticket handling) or NSZ decompression - too easy to get wrong in
+// a way that corrupts a NAND/SD install. Instead: downloads entry's .nsp,
+// .xci, or .nsz from "<base_url><entry->download_url>" to
+// sdmc:/switch/DBI/nsp-repo/<entry->filename> (same folder for all three -
+// DBI installs any of them from there, decompressing NSZ itself), verifies
 // entry->sha256 if present, then arms a chain-load into
 // sdmc:/switch/DBI/dbi.nro via envSetNextLoad.
 //

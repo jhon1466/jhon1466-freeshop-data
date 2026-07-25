@@ -656,6 +656,16 @@ int main(int argc, char **argv) {
         // not a single global one - see AppEntry.source_base_url.
         const char *base_url = install_target->source_base_url;
 
+        // Drop every cached icon texture before installing. A full grid of
+        // them is by far this app's largest memory consumer (up to
+        // ICON_CACHE_MAX 256x256 RGBA textures - see ui_icons.c), and an
+        // install is precisely when that memory is needed elsewhere: NSZ
+        // decompression asks zstd for a multi-MB window buffer and was
+        // failing outright with "not enough memory" on real hardware. The
+        // install screen draws no icons anyway, and the list re-populates
+        // from the on-SD icon cache (no refetch) on the way back.
+        ui_icons_clear();
+
         // UI_DETAIL_INSTALL_DBI is the explicit manual fallback offered for
         // both NSP and XCI (see ui_detail.c) - only that goes through the
         // DBI hand-off now.

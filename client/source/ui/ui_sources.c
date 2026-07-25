@@ -1,5 +1,6 @@
 #include "ui_sources.h"
 #include "ui_app.h"
+#include "../catalog/catalog.h"
 
 #include <switch.h>
 #include <stdio.h>
@@ -112,9 +113,34 @@ bool ui_show_sources(SourceList *list) {
                 visible_count = build_visible_index(list, visible);
                 selected = visible_count - 1;
                 changed = true;
+
+                // Fetch it right now and say exactly what happened.
+                // catalog_fetch tries a few things silently (catalog.json,
+                // then /api/apps, then a raw HTTP directory listing - see
+                // catalog.c) and fetch_merged_catalog() in main.c swallows a
+                // failing source's error entirely so one bad source can't
+                // sink the whole catalog load. Without this check here, a
+                // typo'd URL or unreachable server just looks like "nothing
+                // happened" with no way to tell why.
+                CatalogSource *added = &list->items[visible[selected]];
+                AppEntry *test_entries = NULL;
+                int test_count = 0;
+                char err[200];
+                CatalogResult r = catalog_fetch(added->base_url, &test_entries, &test_count,
+                                                 err, sizeof(err));
+                char msg[300];
+                if (r == CATALOG_OK) {
+                    snprintf(msg, sizeof(msg), "Fuente agregada: se encontraron %d app%s.",
+                             test_count, test_count == 1 ? "" : "s");
+                    catalog_free(test_entries);
+                } else {
+                    snprintf(msg, sizeof(msg), "Fuente agregada, pero no se pudo leer el catálogo:\n%s", err);
+                }
+                ui_app_show_message(msg);
             }
-            // swkbd's applet takeover means whatever was physically held
-            // when it closed would otherwise look "freshly pressed" here.
+            // swkbd's (and, if a source was added, ui_app_show_message's)
+            // applet takeover means whatever was physically held when it
+            // closed would otherwise look "freshly pressed" here.
             padUpdate(&pad);
         }
         if ((kDown & HidNpadButton_X) && visible_count > 0) {

@@ -64,7 +64,7 @@ LDFLAGS  =  -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir 
 # into the real project.
 LIBS    :=  -Wl,--start-group -lSDL2_ttf -lSDL2 -lEGL -lstdc++ -lglapi -ldrm_nouveau \
             -lfreetype -lbz2 -lpng16 -lharfbuzz -lz -lm -lpthread \
-            -lcurl -lmbedtls -lmbedx509 -lmbedcrypto -ljansson -ljpeg \
+            -lcurl -lmbedtls -lmbedx509 -lmbedcrypto -ljansson -ljpeg -lzstd \
             -Wl,--end-group -lnx
 
 #---------------------------------------------------------------------------------

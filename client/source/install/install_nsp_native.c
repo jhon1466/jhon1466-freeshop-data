@@ -2,6 +2,7 @@
 #include "install_common.h"
 #include "pfs0.h"
 #include "ncm_install.h"
+#include "ncz.h"
 #include "es_ticket.h"
 #include "ns_record.h"
 #include "../config.h"
@@ -201,6 +202,20 @@ static NspInstallResult install_from_url(ResolvedUrl *ru, const Pfs0 *pfs0,
             for (int j = 0; j < pfs0->count; j++) {
                 if (strcmp(pfs0->names[j], nca_filename) == 0) { nca_index = j; break; }
             }
+
+            // Not found as a plain .nca - an NSZ replaces some content
+            // pieces (typically everything but the tiny Meta NCA) with a
+            // compressed ".ncz" of the same content id (see ncz.h). Either
+            // way this loop doesn't care - it's the exact same PFS0/CNMT
+            // structure either format uses.
+            bool is_ncz = false;
+            if (nca_index < 0) {
+                char ncz_filename[40];
+                snprintf(ncz_filename, sizeof(ncz_filename), "%s.ncz", hex);
+                for (int j = 0; j < pfs0->count; j++) {
+                    if (strcmp(pfs0->names[j], ncz_filename) == 0) { nca_index = j; is_ncz = true; break; }
+                }
+            }
             if (nca_index < 0) {
                 if (err_buf) snprintf(err_buf, err_buf_size, "el NSP no incluye %s (referenciado por su .cnmt)", nca_filename);
                 result = NSP_INSTALL_ERR_PARSE;
@@ -211,8 +226,19 @@ static NspInstallResult install_from_url(ResolvedUrl *ru, const Pfs0 *pfs0,
             uint64_t nca_offset = pfs0_entry_file_offset(pfs0, nca_index);
             uint64_t nca_size = pfs0->entries[nca_index].file_size;
             bool nca_fresh = false;
-            if (!ncm_install_content_from_url(&cs, &meta.content_infos[i].content_id, ru, nca_offset, nca_size,
-                                               cb, userdata, &nca_fresh, err_buf, err_buf_size)) {
+            bool content_installed;
+            if (is_ncz) {
+                u64 final_size = 0;
+                ncmContentInfoSizeToU64(&meta.content_infos[i], &final_size);
+                content_installed = ncm_install_ncz_content_from_url(&cs, &meta.content_infos[i].content_id, ru,
+                                                                       nca_offset, nca_size, final_size,
+                                                                       cb, userdata, &nca_fresh, err_buf, err_buf_size);
+            } else {
+                content_installed = ncm_install_content_from_url(&cs, &meta.content_infos[i].content_id, ru,
+                                                                   nca_offset, nca_size, cb, userdata, &nca_fresh,
+                                                                   err_buf, err_buf_size);
+            }
+            if (!content_installed) {
                 result = (err_buf && strstr(err_buf, "cancel")) ? NSP_INSTALL_ERR_CANCELED : NSP_INSTALL_ERR_NCM;
                 content_ok = false;
                 break;

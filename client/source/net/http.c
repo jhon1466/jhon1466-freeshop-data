@@ -93,6 +93,113 @@ HttpResult http_get(const char *url, char **out_buf, size_t *out_len,
     return HTTP_OK;
 }
 
+typedef struct {
+    int64_t content_length;
+    int64_t range_total;
+} SizeProbeHeaders;
+
+static size_t size_probe_header_cb(char *buffer, size_t size, size_t nitems, void *userdata) {
+    SizeProbeHeaders *h = (SizeProbeHeaders *)userdata;
+    size_t len = size * nitems;
+
+    // A status line starts a NEW response - a redirect hop, or a 1xx
+    // interim - so anything captured from the previous one is stale.
+    // Deliberately keyed on this and NOT on the blank line that terminates
+    // a header block: that blank line also arrives for the final response,
+    // where resetting wipes the values immediately after parsing them.
+    // (That was exactly the bug that made every size probe come back empty.)
+    if (len >= 5 && strncasecmp(buffer, "HTTP/", 5) == 0) {
+        h->content_length = -1;
+        h->range_total = -1;
+        return len;
+    }
+
+    if (len > 15 && strncasecmp(buffer, "content-length:", 15) == 0) {
+        h->content_length = strtoll(buffer + 15, NULL, 10);
+    } else if (len > 14 && strncasecmp(buffer, "content-range:", 14) == 0) {
+        // "Content-Range: bytes 0-0/123456" - the total is after the slash.
+        const char *slash = memchr(buffer, '/', len);
+        if (slash) h->range_total = strtoll(slash + 1, NULL, 10);
+    }
+    return len;
+}
+
+// Deliberately refuses every byte of body - the transfer is only ever kept
+// alive long enough for curl to finish parsing headers (which happens
+// before this is ever called), then aborted. Used so a size probe never
+// actually downloads a server's response body, however big it is.
+static size_t size_probe_abort_write_cb(void *ptr, size_t size, size_t nmemb, void *userdata) {
+    (void)ptr; (void)size; (void)nmemb; (void)userdata;
+    return 0;
+}
+
+// Shared driver for both probe styles. `use_head` picks a real HTTP HEAD
+// (cheapest, when the server implements it properly); otherwise it's a GET
+// carrying a throwaway Range hint, aborted the instant a body byte would be
+// written. Either way the answer is read out of the response headers rather
+// than curl_easy_getinfo, so a 206's Content-Range total is usable too.
+//
+// Timeouts are deliberately much tighter than the rest of this file's: this
+// runs once per file while building a raw-directory catalog (see catalog.c),
+// so a slow or unresponsive host has to fail fast rather than stall the
+// whole catalog load for minutes.
+static void size_probe(const char *url, bool use_head, int64_t *out_size) {
+    *out_size = -1;
+
+    CURL *curl = curl_easy_init();
+    if (!curl) return;
+
+    SizeProbeHeaders headers = { .content_length = -1, .range_total = -1 };
+
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    if (use_head) {
+        curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
+    } else {
+        curl_easy_setopt(curl, CURLOPT_RANGE, "0-0");
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, size_probe_abort_write_cb);
+    }
+    curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, size_probe_header_cb);
+    curl_easy_setopt(curl, CURLOPT_HEADERDATA, &headers);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 8L);
+    curl_easy_setopt(curl, CURLOPT_USERAGENT,
+                      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/124.0.0.0 Safari/537.36");
+    // See http_get() above for why peer/host verification is off, IPv4 is
+    // forced, and a minimum TLS version is pinned.
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+    curl_easy_setopt(curl, CURLOPT_SSLVERSION, CURL_SSLVERSION_TLSv1_2);
+
+    // The return value is intentionally ignored: CURLE_WRITE_ERROR is
+    // size_probe_abort_write_cb doing its job, and any genuine error just
+    // leaves both header fields at -1 below.
+    curl_easy_perform(curl);
+    curl_easy_cleanup(curl);
+
+    // Content-Range's total wins over Content-Length: on a 206 the latter
+    // is only the single byte that was asked for, not the file's size.
+    if (headers.range_total > 0) *out_size = headers.range_total;
+    else if (headers.content_length > 0) *out_size = headers.content_length;
+}
+
+HttpResult http_head_content_length(const char *url, int64_t *out_size,
+                                     char *err_buf, size_t err_buf_size) {
+    (void)err_buf;
+    (void)err_buf_size;
+
+    size_probe(url, true, out_size);
+    if (*out_size > 0) return HTTP_OK;
+
+    // HEAD gave nothing usable - plenty of minimal static-file servers
+    // (exactly the kind a raw folder source points at) either reject it
+    // outright or answer it without a Content-Length. A GET always works.
+    size_probe(url, false, out_size);
+    return HTTP_OK;
+}
+
 HttpResult http_get_range(const char *url, uint64_t offset, uint64_t length,
                            char **out_buf, size_t *out_len,
                            char *effective_url_out, size_t effective_url_out_size,

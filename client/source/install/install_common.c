@@ -6,6 +6,14 @@
 #include <string.h>
 #include <sys/stat.h>
 
+uint8_t *install_common_scratch(void) {
+    // Deliberately BSS rather than a lazy malloc: this is needed at the
+    // exact moments memory is tightest (mid-install), where a failed
+    // allocation would be far worse than reserving it up front.
+    static uint8_t buf[INSTALL_SCRATCH_SIZE];
+    return buf;
+}
+
 static bool is_absolute_url(const char *url) {
     return strncmp(url, "http://", 7) == 0 || strncmp(url, "https://", 8) == 0;
 }

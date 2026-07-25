@@ -1,4 +1,5 @@
 #include "ncm_install.h"
+#include "install_common.h"
 #include "../net/http.h"
 
 #include <stdlib.h>
@@ -59,8 +60,9 @@ void ncm_format_content_id(const NcmContentId *id, char out_hex[33]) {
 // for the same file, which the install phase (re-reading the whole
 // downloaded file off SD and writing it back into content storage) is
 // dominated by. 4 MB balances that against how often the cancel check /
-// progress update below runs (once per chunk).
-#define NCM_INSTALL_CHUNK_SIZE (4 * 1024 * 1024)
+// progress update below runs (once per chunk). Backed by the shared
+// install scratch buffer - see install_common.h.
+#define NCM_INSTALL_CHUNK_SIZE INSTALL_SCRATCH_SIZE
 
 bool ncm_install_content(NcmContentStorage *cs, const NcmContentId *content_id,
                           FILE *src, uint64_t file_offset, uint64_t size,
@@ -104,7 +106,7 @@ bool ncm_install_content(NcmContentStorage *cs, const NcmContentId *content_id,
         return false;
     }
 
-    static uint8_t chunk[NCM_INSTALL_CHUNK_SIZE];
+    uint8_t *chunk = install_common_scratch();
     uint64_t written = 0;
     bool canceled = false;
 
@@ -267,9 +269,9 @@ bool ncm_install_content_from_url(NcmContentStorage *cs, const NcmContentId *con
     }
 
     // 4MB flush buffer, matching the local-file path's NCM_INSTALL_CHUNK_SIZE.
-    // static (not on the stack) because it's far too big for a thread stack,
+    // Shared (not on the stack) because it's far too big for a thread stack,
     // and safe to share because installs run one NCA at a time, serially.
-    static uint8_t nca_flush_buf[NCM_INSTALL_CHUNK_SIZE];
+    uint8_t *nca_flush_buf = install_common_scratch();
 
     NcaNetworkWriteCtx ctx = {
         .cs = cs,
@@ -277,7 +279,7 @@ bool ncm_install_content_from_url(NcmContentStorage *cs, const NcmContentId *con
         .flushed = 0,
         .total_size = size,
         .buf = nca_flush_buf,
-        .buf_cap = sizeof(nca_flush_buf),
+        .buf_cap = INSTALL_SCRATCH_SIZE,
         .buf_len = 0,
         .cb = cb,
         .userdata = userdata,

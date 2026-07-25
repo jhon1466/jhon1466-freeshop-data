@@ -25,6 +25,12 @@ typedef enum {
     APP_FILE_TYPE_NSP,
     APP_FILE_TYPE_XCI,
     APP_FILE_TYPE_PORT,
+    // Compressed NSP (see nsz/NCZ format) - this project deliberately never
+    // decompresses these itself (same reasoning as not reimplementing
+    // NSP/XCI's NCM install - see install_nsp.h): they can only be handed
+    // off to DBI, which already knows how to install them. See
+    // ui_detail.c/has_native_install and install_dispatch.c.
+    APP_FILE_TYPE_NSZ,
 } AppFileType;
 
 // Mirrors AppEntry from shared/catalog.schema.json. Fixed-size buffers are
