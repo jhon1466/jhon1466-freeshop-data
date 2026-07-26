@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-26T22:56:41.590Z",
+  "generatedAt": "2026-07-26T22:59:40.185Z",
   "apps": [
     {
       "id": "3",
@@ -715,6 +715,20 @@
       "filename": "Resident Evil 6 [v1.0.2].xci",
       "fileType": "xci",
       "longDescription": "Con su combinación de acción y survival horror, en Resident Evil 6 vivirás una apasionante experiencia de terror que no podrás olvidar. El juego transcurre en varios lugares de todo el mundo con múltiples jugadores jugables, incluidos clásicos y caras nuevas. Lánzate a la acción solo o en cooperativo de hasta 4 jugadores en los 4 emocionantes capítulos de la campaña o elige uno de los múltiples modos extras como Survivor, donde hasta 6 jugadores compiten entre sí en una encarnizada batalla. Esta edición incluye todos los DLC, así como dos atuendos por cada personaje principal anteriormente desbloqueables en Residentevil.net y que ahora podrás desbloquear jugando."
+    },
+    {
+      "id": "53",
+      "title": "Resident Evil 5",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.3",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/53.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F5iiuvbsqhic00oj%2FResident%2BEvil%2B5%2B%5B1.0.3%5D.xci%2Ffile",
+      "fileSize": 20082690048,
+      "filename": "Resident Evil 5 [1.0.3].xci",
+      "fileType": "xci",
+      "longDescription": "Ahora puedes llevar contigo adonde quieras uno de los títulos más populares de Resident Evil, con Chris Redfield y su compañera Sheva Alomar en un viaje al corazón de África para investigar una epidemia. Con modos de un jugador y cooperativo, esta masiva edición incluye todos los DLC publicados (ampliaciones de historia Lost in Nightmares y Desperate Escape, modo Versus, figuras extras y 4 atuendos), el modo No Mercy y el flamante nuevo modo «The Mercenaries United» que combina dos modos muy populares, The Mercenaries y The Mercenaries Reunion, para una experiencia aún más intensa."
     }
   ]
 }
