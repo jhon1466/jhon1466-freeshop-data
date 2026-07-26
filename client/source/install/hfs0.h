@@ -39,6 +39,14 @@ typedef struct {
 // magic, more entries than HFS0_MAX_ENTRIES, or a malformed string table).
 int hfs0_parse_at(FILE *fp, uint64_t header_offset, Hfs0 *out);
 
+// Same as hfs0_parse_at, but reading from `buf` (the file's first buf_len
+// bytes, starting at byte 0) instead of a FILE*. Used for the root
+// partition table, which callers have already fetched and validated in
+// memory - re-reading those same bytes from the network just to parse them
+// risks the second read disagreeing with the first, which is exactly the
+// kind of failure that's near-impossible to diagnose from the outside.
+int hfs0_parse_buffer(const uint8_t *buf, size_t buf_len, uint64_t header_offset, Hfs0 *out);
+
 // Same contract as pfs0_find_by_suffix/pfs0_find_by_name.
 int hfs0_find_by_suffix(const Hfs0 *p, const char *suffix, int start_from);
 int hfs0_find_by_name(const Hfs0 *p, const char *name);

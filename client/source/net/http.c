@@ -241,6 +241,33 @@ HttpResult http_get_range(const char *url, uint64_t offset, uint64_t length,
         return HTTP_ERR_REQUEST;
     }
 
+    // A server that doesn't support (or outright ignores) Range answers 200
+    // with the WHOLE body instead of 206 with just the requested slice -
+    // curl_easy_perform above still reports CURLE_OK either way, since as
+    // far as it's concerned the request completed normally. Every caller of
+    // this function (hfs0_parse_at_url/pfs0 equivalents, ticket/cert
+    // fetches) treats whatever comes back as if it were exactly the
+    // requested [offset, offset+length) slice, so a 200 here would get
+    // silently parsed as if it were that slice - garbage read from the
+    // wrong file position, surfacing as a confusing "not a valid NSP/XCI"
+    // or "'secure' partition not found" instead of the real cause. Checking
+    // this explicitly matches http_get_range_streamed's existing check;
+    // this one, unlike that one, was missing it.
+    long status = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+    if (status != 206) {
+        curl_easy_cleanup(curl);
+        free(buf.data);
+        if (err_buf) {
+            snprintf(err_buf, err_buf_size,
+                     "el servidor no soporta descargas por rango (HTTP %ld) - los archivos NSP/XCI grandes "
+                     "necesitan esto para instalarse sin descargar el archivo completo primero; usa "
+                     "\"Instalar vía DBI\" en su lugar",
+                     status);
+        }
+        return HTTP_ERR_REQUEST;
+    }
+
     if (effective_url_out) {
         char *effective_url = NULL;
         curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &effective_url);

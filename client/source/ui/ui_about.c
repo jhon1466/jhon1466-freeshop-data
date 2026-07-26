@@ -2,6 +2,7 @@
 #include "ui_app.h"
 #include "ui_icons.h"
 #include "../config.h"
+#include "../i18n.h"
 
 #include <switch.h>
 #include <stdio.h>
@@ -40,7 +41,7 @@ void ui_show_about(void) {
         SDL_RenderClear(g_renderer);
 
         ui_draw_text(g_font_title, LEFT_EDGE, HEADER_Y, COLOR_TEXT, "FreeShop");
-        ui_draw_text(g_font_body, 210, HEADER_Y + 4, COLOR_TEXT_DIM, "- Acerca de");
+        ui_draw_text(g_font_body, 210, HEADER_Y + 4, COLOR_TEXT_DIM, tr(STR_ABOUT_HEADER));
 
         ui_draw_rect(LEFT_EDGE, PANEL_TOP, RIGHT_EDGE - LEFT_EDGE, PANEL_BOTTOM - PANEL_TOP, COLOR_PANEL);
 
@@ -52,13 +53,11 @@ void ui_show_about(void) {
         // depending on how many lines it happened to wrap to.
         int y = PANEL_TOP + 24;
         char version_line[64];
-        snprintf(version_line, sizeof(version_line), "Versión %s", CLIENT_VERSION);
+        snprintf(version_line, sizeof(version_line), tr(STR_ABOUT_VERSION_TEMPLATE), CLIENT_VERSION);
         ui_draw_text(g_font_body, CONTENT_X, y, COLOR_TEXT, version_line);
         y += 34;
         y = ui_draw_text_wrapped(g_font_small, CONTENT_X, y, CONTENT_RIGHT - CONTENT_X, 22, COLOR_TEXT_DIM,
-                                  "Catálogo de homebrew para Nintendo Switch - lista, descarga e instala "
-                                  "juegos, ports, DLC/actualizaciones y updates de la propia app, todo desde "
-                                  "aquí mismo.");
+                                  tr(STR_ABOUT_DESCRIPTION));
         y += 36;
 
         // Donations
@@ -73,20 +72,17 @@ void ui_show_about(void) {
         int donate_x = qr_x + QR_SIZE + 50;
         int donate_w = CONTENT_RIGHT - donate_x;
         int ty = qr_y;
-        ui_draw_text(g_font_body, donate_x, ty, COLOR_TEXT, "¿Te sirvió FreeShop?");
+        ui_draw_text(g_font_body, donate_x, ty, COLOR_TEXT, tr(STR_ABOUT_DONATE_QUESTION));
         ty += 34;
         ty = ui_draw_text_wrapped(g_font_small, donate_x, ty, donate_w, 24, COLOR_TEXT_DIM,
-                                   "Este proyecto lo mantengo en mi tiempo libre, sin nada a cambio - si te "
-                                   "ha gustado y quieres ayudarme a seguir dedicándole horas (y café), "
-                                   "cualquier aporte por PayPal se agradece muchísimo. No es obligatorio, "
-                                   "pero sí que se siente. ¡Gracias por usar la app!");
+                                   tr(STR_ABOUT_DONATE_TEXT));
         ty += 18;
-        ui_draw_text(g_font_small, donate_x, ty, COLOR_ACCENT, "Escanea el QR o dona por PayPal a:");
+        ui_draw_text(g_font_small, donate_x, ty, COLOR_ACCENT, tr(STR_ABOUT_DONATE_SCAN));
         ty += 28;
         ui_draw_text(g_font_body, donate_x, ty, COLOR_TEXT, "mastergarden1112@gmail.com");
 
         ui_draw_rect(LEFT_EDGE, FOOTER_Y - 10, RIGHT_EDGE - LEFT_EDGE, 1, COLOR_PANEL);
-        ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y, COLOR_TEXT_DIM, "B/+: volver");
+        ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y, COLOR_TEXT_DIM, tr(STR_ABOUT_FOOTER));
 
         SDL_RenderPresent(g_renderer);
     }

@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "config.h"
+#include "i18n.h"
 #include "catalog/catalog.h"
 #include "catalog/sources.h"
 #include "ui/ui_app.h"
@@ -289,6 +290,11 @@ int main(int argc, char **argv) {
     // aborting startup over.
     romfsInit();
 
+    // Picks the language every tr() call after this point returns in - see
+    // i18n.h. Cheap (one service call), and every screen this app draws
+    // needs it, so it happens as early as possible.
+    i18n_init();
+
     // Without this, the console dims/sleeps on its own inactivity timer
     // regardless of what's happening in the app - including mid-download,
     // where curl keeps running but there's no controller input for
@@ -507,15 +513,20 @@ int main(int argc, char **argv) {
 
     CatalogResult cres = fetch_merged_catalog(&sources, &entries, &count, err_buf, sizeof(err_buf));
     if (cres != CATALOG_OK) {
+        // Not fatal: the explorer, cleanup, and sources screens (all
+        // reachable from the same list screen ui_show_list draws below -
+        // see UI_LIST_OPEN_EXPLORER etc.) work entirely off the SD card and
+        // need no network at all. Bailing out here used to mean "no
+        // internet" also meant "the app doesn't open", which made those
+        // offline-only tools unreachable exactly when there's no connection
+        // to retry the catalog with. `entries`/`count` are left at their
+        // NULL/0 initializers - ui_show_list already renders that as
+        // "(el catálogo está vacío)" rather than crashing, and Stick L
+        // (UI_LIST_RELOAD_CATALOG) or the Fuentes screen let the catalog
+        // load once a connection is available, with no restart needed.
         char msg[640];
-        snprintf(msg, sizeof(msg), "No se pudo cargar el catálogo:\n%s", err_buf);
+        snprintf(msg, sizeof(msg), tr(STR_MAIN_CATALOG_LOAD_ERROR_TEMPLATE), err_buf);
         ui_app_show_message(msg);
-        curl_global_cleanup();
-        socketExit();
-        appletSetAutoSleepDisabled(false);
-        romfsExit();
-        ui_app_shutdown();
-        return 1;
     }
 
     int root_count = 0;
@@ -529,23 +540,30 @@ int main(int argc, char **argv) {
             bool changed = ui_show_sources(&sources);
             if (changed) {
                 sources_save(&sources);
-                catalog_free(entries);
-                entries = NULL;
-                count = 0;
-                free(root_entries);
-                root_entries = NULL;
-                root_count = 0;
-                // Ids may now refer to different apps under a new/changed
-                // source - stale cached textures could otherwise be shown
-                // under the wrong entry.
-                ui_icons_clear();
-                CatalogResult cres2 = fetch_merged_catalog(&sources, &entries, &count,
+                // Fetch into fresh locals first and only swap them in on
+                // success - mirrors UI_LIST_RELOAD_CATALOG below. Freeing
+                // the old catalog unconditionally (as this used to) meant
+                // toggling a source while offline, or while every source
+                // happens to be unreachable, left the app with an empty
+                // catalog even though the one it had a second ago was fine.
+                AppEntry *new_entries = NULL;
+                int new_count = 0;
+                CatalogResult cres2 = fetch_merged_catalog(&sources, &new_entries, &new_count,
                                                             err_buf, sizeof(err_buf));
                 if (cres2 != CATALOG_OK) {
                     char msg[640];
-                    snprintf(msg, sizeof(msg), "No se pudo cargar el catálogo:\n%s", err_buf);
+                    snprintf(msg, sizeof(msg), tr(STR_MAIN_CATALOG_RELOAD_KEEP_OLD_TEMPLATE), err_buf);
                     ui_app_show_message(msg);
                 } else {
+                    // Ids may now refer to different apps under a new/changed
+                    // source - stale cached textures could otherwise be shown
+                    // under the wrong entry. Only cleared once the new
+                    // catalog is confirmed good, not before.
+                    ui_icons_clear();
+                    catalog_free(entries);
+                    entries = new_entries;
+                    count = new_count;
+                    free(root_entries);
                     root_entries = build_root_entries(entries, count, &root_count);
                 }
             }
@@ -566,8 +584,7 @@ int main(int argc, char **argv) {
                                                         err_buf, sizeof(err_buf));
             if (cres2 != CATALOG_OK) {
                 char msg[640];
-                snprintf(msg, sizeof(msg), "No se pudo recargar el catálogo:\n%s\n\nSigues viendo la versión anterior.",
-                         err_buf);
+                snprintf(msg, sizeof(msg), tr(STR_MAIN_CATALOG_RELOAD_KEEP_OLD_TEMPLATE), err_buf);
                 ui_app_show_message(msg);
             } else {
                 catalog_free(entries);

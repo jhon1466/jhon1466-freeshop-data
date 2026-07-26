@@ -6,6 +6,7 @@
 #include "ui_prefs.h"
 #include "ui_nav.h"
 #include "ui_queue.h"
+#include "../i18n.h"
 
 #include <switch.h>
 #include <stdio.h>
@@ -98,9 +99,9 @@ typedef enum {
 
 static const char *sort_mode_label(SortMode mode) {
     switch (mode) {
-        case SORT_CATEGORY: return "Categoría";
-        case SORT_VERSION: return "Versión";
-        default: return "Título";
+        case SORT_CATEGORY: return tr(STR_LIST_SORT_CATEGORY);
+        case SORT_VERSION: return tr(STR_LIST_SORT_VERSION);
+        default: return tr(STR_LIST_SORT_TITLE);
     }
 }
 
@@ -186,10 +187,10 @@ static void save_prefs(ViewMode view_mode, SortMode sort_mode, const char *categ
 }
 
 static const char *empty_state_message(int count, const char *category_filter, const char *search_query) {
-    if (count == 0) return "(el catálogo está vacío)";
-    if (search_query[0] && category_filter[0]) return "(sin resultados para esta búsqueda en esta categoría)";
-    if (search_query[0]) return "(sin resultados para esta búsqueda)";
-    return "(sin apps en esta categoría)";
+    if (count == 0) return tr(STR_LIST_EMPTY_CATALOG);
+    if (search_query[0] && category_filter[0]) return tr(STR_LIST_EMPTY_SEARCH_IN_CATEGORY);
+    if (search_query[0]) return tr(STR_LIST_EMPTY_SEARCH);
+    return tr(STR_LIST_EMPTY_CATEGORY);
 }
 
 // Boxed gauge in the Tinfoil style: label, big "X.X GB libres" line, thin
@@ -200,14 +201,14 @@ static void draw_storage_panel(int x, int y, int w, int h, const char *label, bo
     ui_draw_text(g_font_small, x + 16, y + 10, COLOR_TEXT_DIM, label);
 
     if (!ok) {
-        ui_draw_text(g_font_body, x + 16, y + 32, COLOR_TEXT_DIM, "no disponible");
+        ui_draw_text(g_font_body, x + 16, y + 32, COLOR_TEXT_DIM, tr(STR_LIST_STORAGE_UNAVAILABLE));
         return;
     }
 
     char free_str[32];
     format_bytes(free_bytes, free_str, sizeof(free_str));
     char line[48];
-    snprintf(line, sizeof(line), "%s libres", free_str);
+    snprintf(line, sizeof(line), tr(STR_LIST_FREE_TEMPLATE), free_str);
     ui_draw_text(g_font_body, x + 16, y + 32, COLOR_TEXT, line);
 
     float pct = total > 0 ? (float)(total - free_bytes) / (float)total : 0.0f;
@@ -243,7 +244,7 @@ static void format_size(long bytes, char *out, size_t out_size) {
 // to fit above the storage panels.
 static void format_status_line(const SystemStatus *status, char *out, size_t out_size) {
     const char *clock = status->clock[0] ? status->clock : "--:--:--";
-    const char *net = status->network_ok ? status->network_label : "Sin conexión";
+    const char *net = status->network_ok ? status->network_label : tr(STR_LIST_NO_CONNECTION);
 
     if (status->battery_ok) {
         snprintf(out, out_size, "%s    %s    %u%%%s", clock, net, status->battery_percent,
@@ -395,7 +396,7 @@ static int draw_category_tabs(const char categories[][APP_ENTRY_CATEGORY_MAX], i
 
     if (category_count == 0) {
         ui_draw_text(g_font_small, left_box_x + TAB_BAR_ARROW_BOX + 16, TAB_BAR_Y + 8,
-                     COLOR_TEXT_DIM, "(sin categorías)");
+                     COLOR_TEXT_DIM, tr(STR_LIST_NO_CATEGORIES));
         return 0;
     }
 
@@ -661,8 +662,8 @@ int ui_show_list(AppEntry *entries, int count) {
                 SwkbdConfig kbd;
                 if (R_SUCCEEDED(swkbdCreate(&kbd, 0))) {
                     swkbdConfigMakePresetDefault(&kbd);
-                    swkbdConfigSetHeaderText(&kbd, "Buscar en el catálogo");
-                    swkbdConfigSetGuideText(&kbd, "Título del juego/app (vacío para quitar el filtro)");
+                    swkbdConfigSetHeaderText(&kbd, tr(STR_LIST_SEARCH_KBD_HEADER));
+                    swkbdConfigSetGuideText(&kbd, tr(STR_LIST_SEARCH_KBD_GUIDE));
                     swkbdConfigSetInitialText(&kbd, search_query);
                     swkbdConfigSetStringLenMax(&kbd, sizeof(search_query) - 1);
 
@@ -689,14 +690,14 @@ int ui_show_list(AppEntry *entries, int count) {
         ui_draw_text(g_font_title, LEFT_EDGE, HEADER_Y, COLOR_TEXT, "FreeShop");
         if (search_query[0]) {
             char header_line[96];
-            snprintf(header_line, sizeof(header_line), "- Catálogo - buscando \"%s\"", search_query);
+            snprintf(header_line, sizeof(header_line), tr(STR_LIST_HEADER_SEARCHING_TEMPLATE), search_query);
             ui_draw_text(g_font_body, 210, HEADER_Y + 4, COLOR_TEXT_DIM, header_line);
         } else {
-            ui_draw_text(g_font_body, 210, HEADER_Y + 4, COLOR_TEXT_DIM, "- Catálogo");
+            ui_draw_text(g_font_body, 210, HEADER_Y + 4, COLOR_TEXT_DIM, tr(STR_LIST_HEADER_CATALOG));
         }
         ui_draw_text_right(g_font_body, RIGHT_EDGE, STATUS_Y, COLOR_TEXT, status_line);
 
-        draw_storage_panel(PANEL_SD_X, PANEL_Y, PANEL_W, PANEL_H, "Tarjeta SD",
+        draw_storage_panel(PANEL_SD_X, PANEL_Y, PANEL_W, PANEL_H, tr(STR_LIST_SD_CARD),
                             storage.sd_ok, storage.sd_total, storage.sd_free);
         draw_storage_panel(PANEL_NAND_X, PANEL_Y, PANEL_W, PANEL_H, "NAND",
                             storage.nand_ok, storage.nand_total, storage.nand_free);
@@ -705,11 +706,11 @@ int ui_show_list(AppEntry *entries, int count) {
 
         if (view_mode == VIEW_LIST) {
             ui_draw_rect(LEFT_EDGE, COL_HEADER_Y, RIGHT_EDGE - LEFT_EDGE, COL_HEADER_H, COLOR_PANEL);
-            ui_draw_text(g_font_small, COL_NAME_X, COL_HEADER_Y + 8, COLOR_TEXT_DIM, "Nombre");
-            ui_draw_text(g_font_small, COL_TYPE_X, COL_HEADER_Y + 8, COLOR_TEXT_DIM, "Tipo");
-            ui_draw_text(g_font_small, COL_VERSION_X, COL_HEADER_Y + 8, COLOR_TEXT_DIM, "Versión");
-            ui_draw_text(g_font_small, COL_CATEGORY_X, COL_HEADER_Y + 8, COLOR_TEXT_DIM, "Categoría");
-            ui_draw_text(g_font_small, COL_SIZE_X, COL_HEADER_Y + 8, COLOR_TEXT_DIM, "Tamaño");
+            ui_draw_text(g_font_small, COL_NAME_X, COL_HEADER_Y + 8, COLOR_TEXT_DIM, tr(STR_LIST_COL_NAME));
+            ui_draw_text(g_font_small, COL_TYPE_X, COL_HEADER_Y + 8, COLOR_TEXT_DIM, tr(STR_LIST_COL_TYPE));
+            ui_draw_text(g_font_small, COL_VERSION_X, COL_HEADER_Y + 8, COLOR_TEXT_DIM, tr(STR_LIST_COL_VERSION));
+            ui_draw_text(g_font_small, COL_CATEGORY_X, COL_HEADER_Y + 8, COLOR_TEXT_DIM, tr(STR_LIST_COL_CATEGORY));
+            ui_draw_text(g_font_small, COL_SIZE_X, COL_HEADER_Y + 8, COLOR_TEXT_DIM, tr(STR_LIST_COL_SIZE));
 
             if (visible_count == 0) {
                 ui_draw_text(g_font_body, COL_NAME_X, LIST_TOP, COLOR_TEXT_DIM,
@@ -800,24 +801,18 @@ int ui_show_list(AppEntry *entries, int count) {
         // edge of the screen (ui_draw_text doesn't wrap or clip-warn) -
         // that's what made "Stick R: explorador" undiscoverable, not the
         // button itself.
-        char footer1[180];
-        snprintf(footer1, sizeof(footer1),
-                 "D-Pad: navegar    A: instalar    ZL/ZR: categoría    Y: vista %s    X: ordenar (%s)",
-                 view_mode == VIEW_LIST ? "cuadrícula" : "lista", sort_mode_label(sort_mode));
+        char footer1[220];
+        snprintf(footer1, sizeof(footer1), tr(STR_LIST_FOOTER1_TEMPLATE),
+                 view_mode == VIEW_LIST ? tr(STR_LIST_VIEW_GRID) : tr(STR_LIST_VIEW_LIST), sort_mode_label(sort_mode));
         ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y, COLOR_TEXT_DIM, footer1);
 
         int queue_n = ui_queue_count();
-        char footer2[210];
+        char footer2[240];
+        const char *active_suffix = search_query[0] ? tr(STR_LIST_SEARCH_ACTIVE_SUFFIX) : "";
         if (queue_n > 0) {
-            snprintf(footer2, sizeof(footer2),
-                     "R: buscar%s    -: fuentes    L: acerca de    Stick R: explorador    Stick L: recargar    "
-                     "+: cola (%d)    B: salir",
-                     search_query[0] ? " (activa)" : "", queue_n);
+            snprintf(footer2, sizeof(footer2), tr(STR_LIST_FOOTER2_QUEUE_TEMPLATE), active_suffix, queue_n);
         } else {
-            snprintf(footer2, sizeof(footer2),
-                     "R: buscar%s    -: fuentes    L: acerca de    Stick R: explorador    Stick L: recargar    "
-                     "+: cola    B: salir",
-                     search_query[0] ? " (activa)" : "");
+            snprintf(footer2, sizeof(footer2), tr(STR_LIST_FOOTER2_TEMPLATE), active_suffix);
         }
         ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y + 20, COLOR_TEXT_DIM, footer2);
 

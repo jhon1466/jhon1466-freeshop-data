@@ -10,6 +10,40 @@ typedef struct {
     uint32_t reserved;
 } __attribute__((packed)) Hfs0Header;
 
+int hfs0_parse_buffer(const uint8_t *buf, size_t buf_len, uint64_t header_offset, Hfs0 *out) {
+    memset(out, 0, sizeof(*out));
+
+    if (header_offset + sizeof(Hfs0Header) > buf_len) return -1;
+
+    Hfs0Header header;
+    memcpy(&header, buf + header_offset, sizeof(header));
+
+    if (memcmp(header.magic, "HFS0", 4) != 0) return -2;
+    if (header.num_files == 0 || header.num_files > HFS0_MAX_ENTRIES) return -2;
+    if (header.string_table_size == 0 || header.string_table_size > 64 * 1024) return -2;
+
+    uint64_t entries_offset = header_offset + sizeof(Hfs0Header);
+    uint64_t entries_size = (uint64_t)header.num_files * sizeof(Hfs0FileEntry);
+    uint64_t strings_offset = entries_offset + entries_size;
+    if (strings_offset + header.string_table_size > buf_len) return -1;
+
+    memcpy(out->entries, buf + entries_offset, (size_t)entries_size);
+
+    const char *string_table = (const char *)(buf + strings_offset);
+    out->count = (int)header.num_files;
+    for (int i = 0; i < out->count; i++) {
+        uint32_t off = out->entries[i].string_table_offset;
+        if (off >= header.string_table_size) return -2;
+        // Bounded by the table's own size rather than trusting a NUL to
+        // show up - the last name isn't guaranteed to be terminated.
+        snprintf(out->names[i], sizeof(out->names[i]), "%.*s",
+                 (int)(header.string_table_size - off), string_table + off);
+    }
+
+    out->data_region_offset = strings_offset + header.string_table_size;
+    return 0;
+}
+
 int hfs0_parse_at(FILE *fp, uint64_t header_offset, Hfs0 *out) {
     memset(out, 0, sizeof(*out));
 

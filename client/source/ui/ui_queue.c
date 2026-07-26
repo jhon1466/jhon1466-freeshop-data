@@ -3,6 +3,7 @@
 #include "ui_icons.h"
 #include "ui_nav.h"
 #include "../install/install_dispatch.h"
+#include "../i18n.h"
 
 #include <switch.h>
 #include <stdio.h>
@@ -89,10 +90,10 @@ static const char *type_label(AppFileType t) {
 
 static void status_text(QItemStatus st, const char **out_label, SDL_Color *out_color) {
     switch (st) {
-        case Q_ACTIVE:  *out_label = "Descargando..."; *out_color = COLOR_ACCENT; break;
-        case Q_DONE:    *out_label = "Instalado";      *out_color = COLOR_QUEUED; break;
-        case Q_FAILED:  *out_label = "Error";          *out_color = COLOR_ERROR;  break;
-        default:        *out_label = "En espera";      *out_color = COLOR_TEXT_DIM; break;
+        case Q_ACTIVE:  *out_label = tr(STR_QUEUE_STATUS_DOWNLOADING); *out_color = COLOR_ACCENT; break;
+        case Q_DONE:    *out_label = tr(STR_QUEUE_STATUS_INSTALLED);   *out_color = COLOR_QUEUED; break;
+        case Q_FAILED:  *out_label = tr(STR_QUEUE_STATUS_ERROR);       *out_color = COLOR_ERROR;  break;
+        default:        *out_label = tr(STR_QUEUE_STATUS_WAITING);     *out_color = COLOR_TEXT_DIM; break;
     }
 }
 
@@ -153,7 +154,7 @@ static void draw_queue_installing(QueueProgressCtx *ctx, long total, long now) {
     SDL_SetRenderDrawColor(g_renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, COLOR_BG.a);
     SDL_RenderClear(g_renderer);
 
-    ui_draw_text(g_font_title, LEFT_EDGE, HEADER_Y, COLOR_TEXT, "Cola de descargas");
+    ui_draw_text(g_font_title, LEFT_EDGE, HEADER_Y, COLOR_TEXT, tr(STR_QUEUE_TITLE));
 
     int shown = 0;
     for (int i = ctx->scroll_offset; i < s_count && shown < VISIBLE_ROWS; i++, shown++) {
@@ -168,8 +169,8 @@ static void draw_queue_installing(QueueProgressCtx *ctx, long total, long now) {
                                  ? resolve(ctx->entries, ctx->entry_count, s_ids[ctx->active_index])
                                  : NULL;
     char head[200];
-    snprintf(head, sizeof(head), "%s %d de %d: %s",
-             ctx->phase == INSTALL_PHASE_INSTALLING ? "Instalando" : "Descargando",
+    snprintf(head, sizeof(head), tr(STR_QUEUE_ITEM_OF_TEMPLATE),
+             ctx->phase == INSTALL_PHASE_INSTALLING ? tr(STR_QUEUE_PHASE_INSTALLING) : tr(STR_QUEUE_PHASE_DOWNLOADING),
              ctx->active_index + 1, s_count, active ? active->title : "");
     ui_draw_text(g_font_body, LEFT_EDGE + 16, PROGRESS_PANEL_Y + 12, COLOR_TEXT, head);
 
@@ -200,7 +201,7 @@ static void draw_queue_installing(QueueProgressCtx *ctx, long total, long now) {
         }
     }
     ui_draw_text(g_font_small, LEFT_EDGE + 16, PROGRESS_PANEL_Y + 78, COLOR_TEXT_DIM, line);
-    ui_draw_text_right(g_font_small, RIGHT_EDGE - 16, PROGRESS_PANEL_Y + 78, COLOR_TEXT_DIM, "B: cancelar");
+    ui_draw_text_right(g_font_small, RIGHT_EDGE - 16, PROGRESS_PANEL_Y + 78, COLOR_TEXT_DIM, tr(STR_QUEUE_CANCEL_HINT));
 
     SDL_RenderPresent(g_renderer);
 }
@@ -299,7 +300,7 @@ static void run_queue_install(AppEntry *entries, int entry_count) {
         SDL_SetRenderDrawColor(g_renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, COLOR_BG.a);
         SDL_RenderClear(g_renderer);
 
-        ui_draw_text(g_font_title, LEFT_EDGE, HEADER_Y, COLOR_TEXT, "Cola de descargas");
+        ui_draw_text(g_font_title, LEFT_EDGE, HEADER_Y, COLOR_TEXT, tr(STR_QUEUE_TITLE));
 
         int shown = 0;
         int scroll = 0;
@@ -310,12 +311,12 @@ static void run_queue_install(AppEntry *entries, int entry_count) {
 
         char summary[128];
         if (canceled) {
-            snprintf(summary, sizeof(summary), "Cancelado - %d de %d instalados.", ok_count, total_items);
+            snprintf(summary, sizeof(summary), tr(STR_QUEUE_CANCELED_TEMPLATE), ok_count, total_items);
         } else {
-            snprintf(summary, sizeof(summary), "Terminado - %d de %d instalados.", ok_count, total_items);
+            snprintf(summary, sizeof(summary), tr(STR_QUEUE_DONE_TEMPLATE), ok_count, total_items);
         }
         ui_draw_text(g_font_body, LEFT_EDGE, SCREEN_H - 80, COLOR_TEXT, summary);
-        ui_draw_text(g_font_small, LEFT_EDGE, SCREEN_H - 46, COLOR_TEXT_DIM, "A/B/+: volver");
+        ui_draw_text(g_font_small, LEFT_EDGE, SCREEN_H - 46, COLOR_TEXT_DIM, tr(STR_QUEUE_RESULTS_HINT));
 
         SDL_RenderPresent(g_renderer);
     }
@@ -374,14 +375,12 @@ void ui_show_queue(AppEntry *entries, int count) {
         SDL_RenderClear(g_renderer);
 
         char title[64];
-        snprintf(title, sizeof(title), "Cola de descargas (%d)", s_count);
+        snprintf(title, sizeof(title), tr(STR_QUEUE_TITLE_COUNT_TEMPLATE), s_count);
         ui_draw_text(g_font_title, LEFT_EDGE, HEADER_Y, COLOR_TEXT, title);
 
         if (s_count == 0) {
-            ui_draw_text(g_font_body, LEFT_EDGE, LIST_TOP, COLOR_TEXT_DIM,
-                         "No hay nada en la cola.");
-            ui_draw_text(g_font_small, LEFT_EDGE, LIST_TOP + 34, COLOR_TEXT_DIM,
-                         "Entra a una app y presiona + para agregarla a la cola.");
+            ui_draw_text(g_font_body, LEFT_EDGE, LIST_TOP, COLOR_TEXT_DIM, tr(STR_QUEUE_EMPTY_LINE1));
+            ui_draw_text(g_font_small, LEFT_EDGE, LIST_TOP + 34, COLOR_TEXT_DIM, tr(STR_QUEUE_EMPTY_LINE2));
         }
 
         int shown = 0;
@@ -392,10 +391,9 @@ void ui_show_queue(AppEntry *entries, int count) {
 
         ui_draw_rect(LEFT_EDGE, SCREEN_H - 56, RIGHT_EDGE - LEFT_EDGE, 1, COLOR_PANEL);
         if (s_count > 0) {
-            ui_draw_text(g_font_small, LEFT_EDGE, SCREEN_H - 44, COLOR_TEXT_DIM,
-                         "D-Pad/Stick: navegar    A: empezar    X: quitar    B/+: volver");
+            ui_draw_text(g_font_small, LEFT_EDGE, SCREEN_H - 44, COLOR_TEXT_DIM, tr(STR_QUEUE_FOOTER_WITH_ITEMS));
         } else {
-            ui_draw_text(g_font_small, LEFT_EDGE, SCREEN_H - 44, COLOR_TEXT_DIM, "B/+: volver");
+            ui_draw_text(g_font_small, LEFT_EDGE, SCREEN_H - 44, COLOR_TEXT_DIM, tr(STR_QUEUE_FOOTER_EMPTY));
         }
 
         SDL_RenderPresent(g_renderer);

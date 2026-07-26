@@ -2,6 +2,7 @@
 #include "ui_app.h"
 #include "ui_icons.h"
 #include "ui_queue.h"
+#include "../i18n.h"
 
 #include <switch.h>
 #include <stdio.h>
@@ -134,7 +135,7 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
     // whose server never reported one - see catalog.c/try_fetch_raw_directory.
     char size_str[32];
     if (entry->file_size <= 0) {
-        snprintf(size_str, sizeof(size_str), "tamaño desconocido");
+        snprintf(size_str, sizeof(size_str), "%s", tr(STR_DETAIL_UNKNOWN_SIZE));
     } else if (entry->file_size >= 1024L * 1024L * 1024L) {
         snprintf(size_str, sizeof(size_str), "%.2f GB", entry->file_size / (1024.0 * 1024.0 * 1024.0));
     } else {
@@ -142,7 +143,7 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
     }
 
     char header[300];
-    snprintf(header, sizeof(header), "por %s   -   v%s   -   %s", entry->author, entry->version, size_str);
+    snprintf(header, sizeof(header), tr(STR_DETAIL_HEADER_TEMPLATE), entry->author, entry->version, size_str);
 
     // Wrapped once here, not per frame - the title never changes while this
     // screen is up, and wrap_title measures character by character.
@@ -233,7 +234,7 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
         // "En cola" indicator for whichever entry + would currently toggle.
         if (ui_queue_contains(focused->id)) {
             ui_draw_rect(text_x, 172 + title_extra_y, 90, 26, COLOR_QUEUED);
-            ui_draw_text(g_font_small, text_x + 8, 175 + title_extra_y, COLOR_BG, "En cola");
+            ui_draw_text(g_font_small, text_x + 8, 175 + title_extra_y, COLOR_BG, tr(STR_DETAIL_QUEUED_BADGE));
         }
 
         // Decompressing an NSZ needs far more memory than any other install
@@ -243,7 +244,7 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
         // else was queued up.
         if (entry->file_type == APP_FILE_TYPE_NSZ) {
             ui_draw_text(g_font_small, text_x, 206 + title_extra_y, COLOR_TEXT_DIM,
-                         "NSZ: instálalo en modo applet (abre FreeShop desde el álbum)");
+                         tr(STR_DETAIL_NSZ_APPLET_HINT));
         }
 
         int y = LEFT_EDGE + DETAIL_ICON_SIZE + 30;
@@ -257,7 +258,7 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
 
         if (dlc_count > 0) {
             char section_header[48];
-            snprintf(section_header, sizeof(section_header), "DLC y actualizaciones (%d)", dlc_count);
+            snprintf(section_header, sizeof(section_header), tr(STR_DETAIL_DLC_SECTION_TEMPLATE), dlc_count);
             ui_draw_text(g_font_body, LEFT_EDGE, DLC_SECTION_Y, COLOR_TEXT, section_header);
 
             for (int i = dlc_scroll; i < dlc_count && i < dlc_scroll + DLC_VISIBLE_ROWS; i++) {
@@ -283,24 +284,24 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
 
         char hint[160];
         if (focus == FOCUS_DLC_LIST) {
-            snprintf(hint, sizeof(hint), "Arriba/Abajo: elegir    A: instalar seleccionado    B: volver al juego");
+            snprintf(hint, sizeof(hint), "%s", tr(STR_DETAIL_HINT_DLC_FOCUS));
         } else if (has_native_install(entry)) {
             if (dlc_count > 0) {
-                snprintf(hint, sizeof(hint), "A: instalar    X: instalar vía DBI    Y: ver DLC/actualizaciones (%d)    B: volver", dlc_count);
+                snprintf(hint, sizeof(hint), tr(STR_DETAIL_HINT_NATIVE_WITH_DLC_TEMPLATE), dlc_count);
             } else {
-                snprintf(hint, sizeof(hint), "A: instalar    X: instalar vía DBI    B: volver");
+                snprintf(hint, sizeof(hint), "%s", tr(STR_DETAIL_HINT_NATIVE));
             }
         } else if (dlc_count > 0) {
-            snprintf(hint, sizeof(hint), "A: instalar    Y: ver DLC/actualizaciones (%d)    B: volver", dlc_count);
+            snprintf(hint, sizeof(hint), tr(STR_DETAIL_HINT_DLC_TEMPLATE), dlc_count);
         } else {
-            snprintf(hint, sizeof(hint), "A: instalar    B: volver");
+            snprintf(hint, sizeof(hint), "%s", tr(STR_DETAIL_HINT_PLAIN));
         }
         ui_draw_text(g_font_small, LEFT_EDGE, 664, COLOR_TEXT_DIM, hint);
 
         // Queue hint on its own line so appending it above wouldn't push the
         // longest hint variant off the right edge (ui_draw_text doesn't wrap).
         ui_draw_text(g_font_small, LEFT_EDGE, 688, COLOR_TEXT_DIM,
-                     ui_queue_contains(focused->id) ? "+: quitar de la cola" : "+: agregar a la cola");
+                     ui_queue_contains(focused->id) ? tr(STR_DETAIL_QUEUE_REMOVE_HINT) : tr(STR_DETAIL_QUEUE_ADD_HINT));
 
         SDL_RenderPresent(g_renderer);
     }

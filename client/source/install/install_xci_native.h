@@ -17,10 +17,11 @@ typedef enum {
 // Installs entry->filename (an XCI at "<base_url><entry->download_url>")
 // directly into the console's own title database - no DBI hand-off, and no
 // intermediate download either. Locates the XCI's "secure" partition over
-// the network (two small, bounded Range requests: the root partition table
-// at the fixed XCI_ROOT_HFS0_OFFSET, then the "secure" entry's own nested
-// header - see xci_container.h/install_xci_native.c's
-// xci_open_secure_partition_from_url), then does exactly what
+// the network (three small, bounded Range requests: the gamecard header to
+// find where the root partition table actually is, that root table itself,
+// then the "secure" entry's own nested header - see
+// xci_container.h/install_xci_native.c's xci_open_secure_partition_from_url),
+// then does exactly what
 // install_nsp_native does from there: streams every referenced NCA straight
 // from the network into NcmContentStorage via ncm_install_content_from_url,
 // commits the content-meta record, imports the ticket/cert if present, and

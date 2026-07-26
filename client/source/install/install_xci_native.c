@@ -82,22 +82,79 @@ static int hfs0_parse_at_url(ResolvedUrl *ru, uint64_t header_offset, const char
 
     if (rc == 0) {
         out->data_region_offset += header_offset;
+    } else if (err_buf) {
+        // hfs0_parse_at() itself takes no err_buf (it's shared with the
+        // local-file install path, which has no use for one) - filled in
+        // here instead, so a failure at this step never leaves whatever
+        // was in err_buf from some earlier, unrelated call still showing
+        // (that's what "descarga cancelada" turning up for a completely
+        // different failure turned out to be: this exact gap).
+        if (rc == -2) {
+            snprintf(err_buf, err_buf_size,
+                     "encabezado HFS0 inválido en el offset 0x%llx (firma incorrecta o tabla malformada)",
+                     (unsigned long long)header_offset);
+        } else {
+            snprintf(err_buf, err_buf_size, "no se pudo leer el encabezado HFS0 en el offset 0x%llx",
+                     (unsigned long long)header_offset);
+        }
     }
     return rc;
 }
 
-// Network equivalent of the old xci_open_secure_partition(): reads the root
-// partition table at the fixed XCI_ROOT_HFS0_OFFSET, finds "secure" within
-// it, then reads that partition's own nested header - two small bounded
-// Range GETs total, regardless of how big the XCI itself is.
+// Network equivalent of the old xci_open_secure_partition(): fetches the
+// file's opening window once, locates and parses the root partition table
+// inside it, finds "secure", then fetches that partition's own nested
+// header - two bounded Range GETs total, regardless of how big the XCI is.
+//
+// The root table is parsed straight out of the window that was already
+// fetched and validated, never re-requested. An earlier version re-fetched
+// it by offset just to parse it, which meant a root table that verified
+// fine in the first response could still fail to parse in the second -
+// producing an "invalid HFS0 header" pointing at an offset that had, in
+// fact, just been confirmed good.
 static int xci_open_secure_partition_from_url(ResolvedUrl *ru, const char *tmp_path, Hfs0 *out,
                                                char *err_buf, size_t err_buf_size) {
+    char *window = NULL;
+    size_t window_len = 0;
+    HttpResult hres = resolved_url_get_range(ru, 0, XCI_SEARCH_WINDOW, &window, &window_len, err_buf, err_buf_size);
+    if (hres != HTTP_OK) return -1;
+
+    uint64_t root_offset = 0;
+    if (!xci_find_root_hfs0((const uint8_t *)window, window_len, &root_offset, err_buf, err_buf_size)) {
+        free(window);
+        return -2;
+    }
+
     Hfs0 root;
-    int rc = hfs0_parse_at_url(ru, XCI_ROOT_HFS0_OFFSET, tmp_path, &root, err_buf, err_buf_size);
-    if (rc != 0) return rc;
+    int rc = hfs0_parse_buffer((const uint8_t *)window, window_len, root_offset, &root);
+    free(window);
+    if (rc != 0) {
+        if (err_buf) {
+            snprintf(err_buf, err_buf_size,
+                     "la tabla de particiones del XCI (offset 0x%llx) está malformada",
+                     (unsigned long long)root_offset);
+        }
+        return -2;
+    }
 
     int secure_index = hfs0_find_by_name(&root, "secure");
-    if (secure_index < 0) return -2;
+    if (secure_index < 0) {
+        // Names found, listed: distinguishes "parsed fine but genuinely has
+        // no 'secure'" from "parsed into garbage", which are identical from
+        // a flat "not found" message alone.
+        if (err_buf) {
+            char names[256] = "";
+            for (int i = 0; i < root.count && i < 8; i++) {
+                if (i > 0) strncat(names, ", ", sizeof(names) - strlen(names) - 1);
+                strncat(names, root.names[i], sizeof(names) - strlen(names) - 1);
+            }
+            snprintf(err_buf, err_buf_size,
+                     "el archivo no es un XCI válido (partición 'secure' no encontrada; se detectaron %d "
+                     "particiones: %s)",
+                     root.count, root.count > 0 ? names : "ninguna");
+        }
+        return -2;
+    }
 
     uint64_t secure_offset = hfs0_entry_file_offset(&root, secure_index);
     return hfs0_parse_at_url(ru, secure_offset, tmp_path, out, err_buf, err_buf_size);
@@ -395,7 +452,9 @@ XciInstallResult install_xci_native(const AppEntry *entry, const char *base_url,
     Hfs0 secure;
     int prc = xci_open_secure_partition_from_url(&ru, hdr_path, &secure, err_buf, err_buf_size);
     if (prc == -2) {
-        if (err_buf) snprintf(err_buf, err_buf_size, "el archivo no es un XCI válido (partición 'secure' no encontrada)");
+        // err_buf is already filled with the detailed diagnostic (which
+        // partitions were actually found) by xci_open_secure_partition_from_url
+        // itself - not overwritten here with a generic message.
         return XCI_INSTALL_ERR_PARSE;
     }
     if (prc != 0) {

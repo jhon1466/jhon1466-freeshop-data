@@ -38,14 +38,28 @@ static void rollback_registered(NcmContentStorage *cs, const NcmContentId *ids, 
 }
 
 // Opens the XCI's "secure" partition (the one holding the actual title's
-// NCAs/cnmt/tik/cert) from an already-open local file: parses the root
-// partition table at the fixed XCI_ROOT_HFS0_OFFSET, finds "secure" within
-// it, then parses that partition's own nested header. Returns 0 on success,
-// -1 on I/O error, -2 if the file isn't a valid XCI or has no "secure"
-// partition - same contract hfs0_parse_at() itself uses.
+// NCAs/cnmt/tik/cert) from an already-open local file: reads the gamecard
+// header to find where the root partition table actually is (see
+// xci_container.h - a trimmed dump shifts this earlier than an untrimmed
+// one's fixed 0x10000, so it can't be a hardcoded constant), parses that
+// root table, finds "secure" within it, then parses that partition's own
+// nested header. Returns 0 on success, -1 on I/O error, -2 if the file
+// isn't a valid XCI or has no "secure" partition.
 static int xci_open_secure_partition_local(FILE *fp, Hfs0 *out) {
+    // static: XCI_SEARCH_WINDOW is far too big for a stack frame, and local
+    // installs are serial (one file at a time from the explorer).
+    static uint8_t window[XCI_SEARCH_WINDOW];
+    if (fseek(fp, 0, SEEK_SET) != 0) return -1;
+    size_t window_len = fread(window, 1, sizeof(window), fp);
+    if (window_len < XCI_HEADER_SIZE) return -1;
+
+    uint64_t root_offset = 0;
+    if (!xci_find_root_hfs0(window, window_len, &root_offset, NULL, 0)) return -2;
+
+    // Parsed from the same bytes the offset was found in - see
+    // hfs0_parse_buffer's doc comment.
     Hfs0 root;
-    int rc = hfs0_parse_at(fp, XCI_ROOT_HFS0_OFFSET, &root);
+    int rc = hfs0_parse_buffer(window, window_len, root_offset, &root);
     if (rc != 0) return rc;
 
     int secure_index = hfs0_find_by_name(&root, "secure");

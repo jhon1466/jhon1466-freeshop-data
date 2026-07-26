@@ -1,6 +1,7 @@
 #include "ui_sources.h"
 #include "ui_app.h"
 #include "../catalog/catalog.h"
+#include "../i18n.h"
 
 #include <switch.h>
 #include <stdio.h>
@@ -42,13 +43,13 @@ static bool add_source(SourceList *list) {
     if (list->count >= SOURCES_MAX) return false;
 
     char url[SOURCE_URL_MAX];
-    if (!prompt_text("Nueva fuente - dirección del servidor", "Ej: http://192.168.1.10:8080",
+    if (!prompt_text(tr(STR_SOURCES_NEW_URL_HEADER), tr(STR_SOURCES_NEW_URL_GUIDE),
                       "http://", url, sizeof(url))) {
         return false;
     }
 
     char name[SOURCE_NAME_MAX];
-    prompt_text("Nueva fuente - nombre (opcional)", "Cómo se muestra en la lista", NULL,
+    prompt_text(tr(STR_SOURCES_NEW_NAME_HEADER), tr(STR_SOURCES_NEW_NAME_GUIDE), NULL,
                 name, sizeof(name));
     // Precision-bounded so a URL longer than SOURCE_NAME_MAX truncates
     // instead of (harmlessly, but noisily to the compiler) risking it.
@@ -130,11 +131,11 @@ bool ui_show_sources(SourceList *list) {
                                                  err, sizeof(err));
                 char msg[300];
                 if (r == CATALOG_OK) {
-                    snprintf(msg, sizeof(msg), "Fuente agregada: se encontraron %d app%s.",
+                    snprintf(msg, sizeof(msg), tr(STR_SOURCES_ADDED_FOUND_TEMPLATE),
                              test_count, test_count == 1 ? "" : "s");
                     catalog_free(test_entries);
                 } else {
-                    snprintf(msg, sizeof(msg), "Fuente agregada, pero no se pudo leer el catálogo:\n%s", err);
+                    snprintf(msg, sizeof(msg), tr(STR_SOURCES_ADDED_ERROR_TEMPLATE), err);
                 }
                 ui_app_show_message(msg);
             }
@@ -160,10 +161,10 @@ bool ui_show_sources(SourceList *list) {
         SDL_SetRenderDrawColor(g_renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, COLOR_BG.a);
         SDL_RenderClear(g_renderer);
 
-        ui_draw_text(g_font_title, LEFT_EDGE, HEADER_Y, COLOR_TEXT, "Fuentes");
+        ui_draw_text(g_font_title, LEFT_EDGE, HEADER_Y, COLOR_TEXT, tr(STR_SOURCES_TITLE));
 
         if (visible_count == 0) {
-            ui_draw_text(g_font_body, LEFT_EDGE, LIST_TOP, COLOR_TEXT_DIM, "(sin fuentes configuradas)");
+            ui_draw_text(g_font_body, LEFT_EDGE, LIST_TOP, COLOR_TEXT_DIM, tr(STR_SOURCES_NONE_CONFIGURED));
         }
 
         for (int row = 0; row < visible_count; row++) {
@@ -179,7 +180,7 @@ bool ui_show_sources(SourceList *list) {
 
             SDL_Color text_color = is_selected ? COLOR_BG : COLOR_TEXT;
             SDL_Color dim_color = is_selected ? COLOR_BG : COLOR_TEXT_DIM;
-            const char *state = item->enabled ? "[activa]" : "[inactiva]";
+            const char *state = item->enabled ? tr(STR_SOURCES_ACTIVE) : tr(STR_SOURCES_INACTIVE);
 
             ui_draw_text(g_font_body, LEFT_EDGE + 20, row_y, text_color, item->name);
             ui_draw_text(g_font_small, LEFT_EDGE + 20, row_y + 26, dim_color, item->base_url);
@@ -187,8 +188,7 @@ bool ui_show_sources(SourceList *list) {
         }
 
         ui_draw_rect(LEFT_EDGE, FOOTER_Y - 10, RIGHT_EDGE - LEFT_EDGE, 1, COLOR_PANEL);
-        ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y, COLOR_TEXT_DIM,
-                     "A: activar/desactivar    Y: agregar    X: eliminar    B: volver");
+        ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y, COLOR_TEXT_DIM, tr(STR_SOURCES_FOOTER));
 
         SDL_RenderPresent(g_renderer);
     }
