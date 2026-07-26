@@ -152,6 +152,11 @@ static NspInstallResult install_from_url(ResolvedUrl *ru, const Pfs0 *pfs0,
 
     if (result == NSP_INSTALL_OK && phase_cb) phase_cb(INSTALL_PHASE_INSTALLING, userdata);
 
+    // Every content transfer below reports through this rather than calling
+    // `cb` directly, so the caller sees one bar for the whole title instead
+    // of one per NCA - see InstallAggProgressCtx.
+    InstallAggProgressCtx agg = { .cb = cb, .userdata = userdata, .done_before = 0, .grand_total = 0 };
+
     while (cnmt_index >= 0 && result == NSP_INSTALL_OK) {
         // Content this iteration freshly registers (not content that was
         // already there, shared from some other installed title - see
@@ -173,8 +178,15 @@ static NspInstallResult install_from_url(ResolvedUrl *ru, const Pfs0 *pfs0,
         uint64_t cnmt_offset = pfs0_entry_file_offset(pfs0, cnmt_index);
         uint64_t cnmt_size = pfs0->entries[cnmt_index].file_size;
 
+        // Fresh aggregate per cnmt: a file holding several titles (base plus
+        // an update, say) installs each as its own unit, so the bar
+        // restarting between them is correct rather than confusing.
+        agg.done_before = 0;
+        agg.grand_total = 0;
+
         bool cnmt_fresh = false;
-        if (!ncm_install_content_from_url(&cs, &cnmt_id, ru, cnmt_offset, cnmt_size, cb, userdata,
+        if (!ncm_install_content_from_url(&cs, &cnmt_id, ru, cnmt_offset, cnmt_size,
+                                           install_agg_progress_cb, &agg,
                                            &cnmt_fresh, err_buf, err_buf_size)) {
             // ncm_install_content_from_url's own err_buf message distinguishes a
             // cancel from a real failure ("instalación cancelada" vs. an
@@ -189,6 +201,21 @@ static NspInstallResult install_from_url(ResolvedUrl *ru, const Pfs0 *pfs0,
             result = NSP_INSTALL_ERR_NCM;
             rollback_registered(&cs, registered_ids, registered_count);
             break;
+        }
+
+        // The CNMT is what states every piece's size, so only now can the
+        // total this title actually transfers be known. Sizes are the
+        // final/decompressed ones, which is what both install paths below
+        // report against (ncz's progress is in decompressed bytes too).
+        {
+            uint64_t total_bytes = cnmt_size;
+            for (int i = 0; i < meta.content_info_count; i++) {
+                u64 piece = 0;
+                ncmContentInfoSizeToU64(&meta.content_infos[i], &piece);
+                total_bytes += piece;
+            }
+            agg.grand_total = total_bytes;
+            agg.done_before = cnmt_size; // the cnmt itself is already in
         }
 
         bool content_ok = true;
@@ -225,17 +252,20 @@ static NspInstallResult install_from_url(ResolvedUrl *ru, const Pfs0 *pfs0,
 
             uint64_t nca_offset = pfs0_entry_file_offset(pfs0, nca_index);
             uint64_t nca_size = pfs0->entries[nca_index].file_size;
+            u64 piece_size = 0;
+            ncmContentInfoSizeToU64(&meta.content_infos[i], &piece_size);
+
             bool nca_fresh = false;
             bool content_installed;
             if (is_ncz) {
-                u64 final_size = 0;
-                ncmContentInfoSizeToU64(&meta.content_infos[i], &final_size);
                 content_installed = ncm_install_ncz_content_from_url(&cs, &meta.content_infos[i].content_id, ru,
-                                                                       nca_offset, nca_size, final_size,
-                                                                       cb, userdata, &nca_fresh, err_buf, err_buf_size);
+                                                                       nca_offset, nca_size, piece_size,
+                                                                       install_agg_progress_cb, &agg, &nca_fresh,
+                                                                       err_buf, err_buf_size);
             } else {
                 content_installed = ncm_install_content_from_url(&cs, &meta.content_infos[i].content_id, ru,
-                                                                   nca_offset, nca_size, cb, userdata, &nca_fresh,
+                                                                   nca_offset, nca_size,
+                                                                   install_agg_progress_cb, &agg, &nca_fresh,
                                                                    err_buf, err_buf_size);
             }
             if (!content_installed) {
@@ -243,6 +273,10 @@ static NspInstallResult install_from_url(ResolvedUrl *ru, const Pfs0 *pfs0,
                 content_ok = false;
                 break;
             }
+            // Counted whether or not this piece was freshly written - a
+            // piece already present is skipped instantly, and leaving it out
+            // would make the bar stall short of 100% at the end.
+            agg.done_before += piece_size;
             if (nca_fresh && registered_count < NCM_MAX_CONTENT_INFOS + 1) {
                 registered_ids[registered_count++] = meta.content_infos[i].content_id;
             }

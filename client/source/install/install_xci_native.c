@@ -269,6 +269,10 @@ static XciInstallResult install_from_url(ResolvedUrl *ru, const Hfs0 *hfs0,
 
     if (result == XCI_INSTALL_OK && phase_cb) phase_cb(INSTALL_PHASE_INSTALLING, userdata);
 
+    // One bar for the whole title rather than one per NCA - see
+    // InstallAggProgressCtx, and install_nsp_native.c which does the same.
+    InstallAggProgressCtx agg = { .cb = cb, .userdata = userdata, .done_before = 0, .grand_total = 0 };
+
     while (cnmt_index >= 0 && result == XCI_INSTALL_OK) {
         // Content this iteration freshly registers (not content that was
         // already there, shared from some other installed title - see
@@ -290,8 +294,13 @@ static XciInstallResult install_from_url(ResolvedUrl *ru, const Hfs0 *hfs0,
         uint64_t cnmt_offset = hfs0_entry_file_offset(hfs0, cnmt_index);
         uint64_t cnmt_size = hfs0->entries[cnmt_index].file_size;
 
+        // Fresh aggregate per cnmt - see install_nsp_native.c for why.
+        agg.done_before = 0;
+        agg.grand_total = 0;
+
         bool cnmt_fresh = false;
-        if (!ncm_install_content_from_url(&cs, &cnmt_id, ru, cnmt_offset, cnmt_size, cb, userdata,
+        if (!ncm_install_content_from_url(&cs, &cnmt_id, ru, cnmt_offset, cnmt_size,
+                                           install_agg_progress_cb, &agg,
                                            &cnmt_fresh, err_buf, err_buf_size)) {
             result = (err_buf && strstr(err_buf, "cancel")) ? XCI_INSTALL_ERR_CANCELED : XCI_INSTALL_ERR_NCM;
             break; // nothing registered yet (a failed call cleans up its own placeholder) - no rollback needed
@@ -303,6 +312,18 @@ static XciInstallResult install_from_url(ResolvedUrl *ru, const Hfs0 *hfs0,
             result = XCI_INSTALL_ERR_NCM;
             rollback_registered(&cs, registered_ids, registered_count);
             break;
+        }
+
+        // Only now (the cnmt states them) is this title's total known.
+        {
+            uint64_t total_bytes = cnmt_size;
+            for (int i = 0; i < meta.content_info_count; i++) {
+                u64 piece = 0;
+                ncmContentInfoSizeToU64(&meta.content_infos[i], &piece);
+                total_bytes += piece;
+            }
+            agg.grand_total = total_bytes;
+            agg.done_before = cnmt_size;
         }
 
         bool content_ok = true;
@@ -322,13 +343,17 @@ static XciInstallResult install_from_url(ResolvedUrl *ru, const Hfs0 *hfs0,
 
             uint64_t nca_offset = hfs0_entry_file_offset(hfs0, nca_index);
             uint64_t nca_size = hfs0->entries[nca_index].file_size;
+            u64 piece_size = 0;
+            ncmContentInfoSizeToU64(&meta.content_infos[i], &piece_size);
+
             bool nca_fresh = false;
             if (!ncm_install_content_from_url(&cs, &meta.content_infos[i].content_id, ru, nca_offset, nca_size,
-                                               cb, userdata, &nca_fresh, err_buf, err_buf_size)) {
+                                               install_agg_progress_cb, &agg, &nca_fresh, err_buf, err_buf_size)) {
                 result = (err_buf && strstr(err_buf, "cancel")) ? XCI_INSTALL_ERR_CANCELED : XCI_INSTALL_ERR_NCM;
                 content_ok = false;
                 break;
             }
+            agg.done_before += piece_size;
             if (nca_fresh && registered_count < NCM_MAX_CONTENT_INFOS + 1) {
                 registered_ids[registered_count++] = meta.content_infos[i].content_id;
             }

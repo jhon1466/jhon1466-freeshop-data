@@ -45,6 +45,31 @@ int install_common_copy_file(const char *src, const char *dst);
 #define INSTALL_SCRATCH_SIZE (4 * 1024 * 1024)
 uint8_t *install_common_scratch(void);
 
+// Folds a title's several content pieces into one continuous progress
+// readout.
+//
+// A title is never a single file: NSP/XCI installs transfer each NCA the
+// CNMT references as its own request, and every one of them reports its own
+// 0..size progress. Passed straight through, that drives the caller's
+// progress bar from 0 to 100% once per NCA - which reads, from the user's
+// side, as the download completing and then starting over from scratch,
+// repeatedly. Reporting `done_before + now` against the sum of every piece
+// instead gives one bar that fills once, for the whole title.
+//
+// `grand_total` is 0 until the CNMT has been read (it's what states the
+// piece sizes) - while it is, this passes the per-piece numbers through
+// unchanged, which only covers the CNMT's own transfer (a few KB).
+typedef struct {
+    InstallProgressCallback cb;
+    void *userdata;
+    uint64_t done_before; // bytes fully transferred by previous pieces
+    uint64_t grand_total; // sum across every piece of this title, 0 = not known yet
+} InstallAggProgressCtx;
+
+// Pass as the InstallProgressCallback with an InstallAggProgressCtx as
+// userdata. Forwards the wrapped callback's bool return (false = cancel).
+bool install_agg_progress_cb(long total, long now, void *userdata);
+
 typedef struct {
     InstallProgressCallback cb;
     void *userdata;

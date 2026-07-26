@@ -1,4 +1,5 @@
 #include "install_local.h"
+#include "install_common.h"
 #include "pfs0.h"
 #include "hfs0.h"
 #include "xci_container.h"
@@ -171,6 +172,10 @@ InstallLocalResult install_nsp_from_local_file(const char *path,
 
     if (result == INSTALL_LOCAL_OK && phase_cb) phase_cb(INSTALL_PHASE_INSTALLING, userdata);
 
+    // One bar for the whole title rather than one per NCA - see
+    // InstallAggProgressCtx.
+    InstallAggProgressCtx agg = { .cb = cb, .userdata = userdata, .done_before = 0, .grand_total = 0 };
+
     while (cnmt_index >= 0 && result == INSTALL_LOCAL_OK) {
         NcmContentId registered_ids[NCM_MAX_CONTENT_INFOS + 1];
         int registered_count = 0;
@@ -185,8 +190,12 @@ InstallLocalResult install_nsp_from_local_file(const char *path,
         uint64_t cnmt_offset = pfs0_entry_file_offset(&pfs0, cnmt_index);
         uint64_t cnmt_size = pfs0.entries[cnmt_index].file_size;
 
+        agg.done_before = 0;
+        agg.grand_total = 0;
+
         bool cnmt_fresh = false;
-        if (!ncm_install_content(&cs, &cnmt_id, src, cnmt_offset, cnmt_size, cb, userdata, &cnmt_fresh, err_buf, err_buf_size)) {
+        if (!ncm_install_content(&cs, &cnmt_id, src, cnmt_offset, cnmt_size,
+                                  install_agg_progress_cb, &agg, &cnmt_fresh, err_buf, err_buf_size)) {
             result = (err_buf && strstr(err_buf, "cancel")) ? INSTALL_LOCAL_ERR_CANCELED : INSTALL_LOCAL_ERR_NCM;
             break;
         }
@@ -197,6 +206,17 @@ InstallLocalResult install_nsp_from_local_file(const char *path,
             result = INSTALL_LOCAL_ERR_NCM;
             rollback_registered(&cs, registered_ids, registered_count);
             break;
+        }
+
+        {
+            uint64_t total_bytes = cnmt_size;
+            for (int i = 0; i < meta.content_info_count; i++) {
+                u64 piece = 0;
+                ncmContentInfoSizeToU64(&meta.content_infos[i], &piece);
+                total_bytes += piece;
+            }
+            agg.grand_total = total_bytes;
+            agg.done_before = cnmt_size;
         }
 
         bool content_ok = true;
@@ -219,13 +239,17 @@ InstallLocalResult install_nsp_from_local_file(const char *path,
 
             uint64_t nca_offset = pfs0_entry_file_offset(&pfs0, nca_index);
             uint64_t nca_size = pfs0.entries[nca_index].file_size;
+            u64 piece_size = 0;
+            ncmContentInfoSizeToU64(&meta.content_infos[i], &piece_size);
+
             bool nca_fresh = false;
             if (!ncm_install_content(&cs, &meta.content_infos[i].content_id, src, nca_offset, nca_size,
-                                      cb, userdata, &nca_fresh, err_buf, err_buf_size)) {
+                                      install_agg_progress_cb, &agg, &nca_fresh, err_buf, err_buf_size)) {
                 result = (err_buf && strstr(err_buf, "cancel")) ? INSTALL_LOCAL_ERR_CANCELED : INSTALL_LOCAL_ERR_NCM;
                 content_ok = false;
                 break;
             }
+            agg.done_before += piece_size;
             if (nca_fresh && registered_count < NCM_MAX_CONTENT_INFOS + 1) {
                 registered_ids[registered_count++] = meta.content_infos[i].content_id;
             }
@@ -404,6 +428,10 @@ InstallLocalResult install_xci_from_local_file(const char *path,
 
     if (result == INSTALL_LOCAL_OK && phase_cb) phase_cb(INSTALL_PHASE_INSTALLING, userdata);
 
+    // One bar for the whole title rather than one per NCA - see
+    // InstallAggProgressCtx.
+    InstallAggProgressCtx agg = { .cb = cb, .userdata = userdata, .done_before = 0, .grand_total = 0 };
+
     while (cnmt_index >= 0 && result == INSTALL_LOCAL_OK) {
         NcmContentId registered_ids[NCM_MAX_CONTENT_INFOS + 1];
         int registered_count = 0;
@@ -418,8 +446,12 @@ InstallLocalResult install_xci_from_local_file(const char *path,
         uint64_t cnmt_offset = hfs0_entry_file_offset(&hfs0, cnmt_index);
         uint64_t cnmt_size = hfs0.entries[cnmt_index].file_size;
 
+        agg.done_before = 0;
+        agg.grand_total = 0;
+
         bool cnmt_fresh = false;
-        if (!ncm_install_content(&cs, &cnmt_id, src, cnmt_offset, cnmt_size, cb, userdata, &cnmt_fresh, err_buf, err_buf_size)) {
+        if (!ncm_install_content(&cs, &cnmt_id, src, cnmt_offset, cnmt_size,
+                                  install_agg_progress_cb, &agg, &cnmt_fresh, err_buf, err_buf_size)) {
             result = (err_buf && strstr(err_buf, "cancel")) ? INSTALL_LOCAL_ERR_CANCELED : INSTALL_LOCAL_ERR_NCM;
             break;
         }
@@ -430,6 +462,17 @@ InstallLocalResult install_xci_from_local_file(const char *path,
             result = INSTALL_LOCAL_ERR_NCM;
             rollback_registered(&cs, registered_ids, registered_count);
             break;
+        }
+
+        {
+            uint64_t total_bytes = cnmt_size;
+            for (int i = 0; i < meta.content_info_count; i++) {
+                u64 piece = 0;
+                ncmContentInfoSizeToU64(&meta.content_infos[i], &piece);
+                total_bytes += piece;
+            }
+            agg.grand_total = total_bytes;
+            agg.done_before = cnmt_size;
         }
 
         bool content_ok = true;
@@ -449,13 +492,17 @@ InstallLocalResult install_xci_from_local_file(const char *path,
 
             uint64_t nca_offset = hfs0_entry_file_offset(&hfs0, nca_index);
             uint64_t nca_size = hfs0.entries[nca_index].file_size;
+            u64 piece_size = 0;
+            ncmContentInfoSizeToU64(&meta.content_infos[i], &piece_size);
+
             bool nca_fresh = false;
             if (!ncm_install_content(&cs, &meta.content_infos[i].content_id, src, nca_offset, nca_size,
-                                      cb, userdata, &nca_fresh, err_buf, err_buf_size)) {
+                                      install_agg_progress_cb, &agg, &nca_fresh, err_buf, err_buf_size)) {
                 result = (err_buf && strstr(err_buf, "cancel")) ? INSTALL_LOCAL_ERR_CANCELED : INSTALL_LOCAL_ERR_NCM;
                 content_ok = false;
                 break;
             }
+            agg.done_before += piece_size;
             if (nca_fresh && registered_count < NCM_MAX_CONTENT_INFOS + 1) {
                 registered_ids[registered_count++] = meta.content_infos[i].content_id;
             }

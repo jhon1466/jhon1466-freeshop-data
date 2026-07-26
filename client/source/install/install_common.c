@@ -96,6 +96,25 @@ int install_common_copy_file(const char *src, const char *dst) {
     return 0;
 }
 
+bool install_agg_progress_cb(long total, long now, void *userdata) {
+    InstallAggProgressCtx *agg = (InstallAggProgressCtx *)userdata;
+    if (!agg->cb) return true;
+
+    if (agg->grand_total == 0) {
+        // Sizes not known yet - nothing to aggregate against, so pass the
+        // piece's own numbers through (see InstallAggProgressCtx).
+        return agg->cb(total, now, agg->userdata);
+    }
+
+    uint64_t overall = agg->done_before + (now > 0 ? (uint64_t)now : 0);
+    // Clamped because the sizes come from two different places (the CNMT's
+    // declared sizes vs. what each transfer actually reports) and a piece
+    // overshooting its declared size by a few bytes shouldn't ever render
+    // as more than 100%.
+    if (overall > agg->grand_total) overall = agg->grand_total;
+    return agg->cb((long)agg->grand_total, (long)overall, agg->userdata);
+}
+
 bool install_common_progress_thunk(long dltotal, long dlnow, void *userdata) {
     InstallProgressThunkCtx *ctx = (InstallProgressThunkCtx *)userdata;
     if (!ctx->cb) return true;
