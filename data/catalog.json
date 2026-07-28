@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T21:59:41.095Z",
+  "generatedAt": "2026-07-28T22:04:27.557Z",
   "apps": [
     {
       "id": "3",
@@ -925,6 +925,20 @@
       "filename": "Bioshock Remastered (v1.0.2).nsp",
       "fileType": "nsp",
       "longDescription": "Explora la ciudad submarina de Rapture, un refugio para las mentes más brillantes de la sociedad que se ha convertido en una distópica pesadilla a causa de la arrogancia de un hombre. Entre las ruinas anegadas, un nuevo ecosistema ha emergido, y los enloquecidos splicers dan caza a las Little Sisters, que estarían totalmente condenadas de no ser por sus colosales protectores, los Big Daddies. Solo podrás sobrevivir si piensas rápido, aprovechas las armas que encuentres y haces uso de los plásmidos, una sustancia que alterará tu ADN y te concederá poderes sobrenaturales. Para derrotar a los monstruos mutantes de Rapture debes convertirte en uno de ellos.\n\nTambién incluye:\n\n-Museo de las ideas huérfanas - Date una vuelta por los inicios de BioShock a través de las varias exposiciones de este museo virtual, que contiene desde imágenes conceptuales hasta modelos de juego completos. \n-Salas de desafíos - Pon a prueba tus habilidades de combate y tu capacidad de resolver puzles con esta serie de pruebas independientes.Comentarios del director: \"\"Imagining BioShock\"\" \n- Descubre nuevos objetos coleccionables para desbloquear vídeos episódicos con comentarios del director creativo Ken Levine y el jefe de animación Shawn Robertson."
+    },
+    {
+      "id": "68",
+      "title": "Blasphemous",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.8",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/68.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F4bs388zhokoikyp%2FBlasphemous_%2525281.0.8%252529.nsp%2Ffile",
+      "fileSize": 6580207832,
+      "filename": "Blasphemous (1.0.8).nsp",
+      "fileType": "nsp",
+      "longDescription": "Una terrible maldición conocida como El Milagro ha caído sobre en la tierra de Cvstodia y sus habitantes.\n\nEres El Penitente, único sobreviviente de la masacre de la \"Pena Silente\". Estás atrapado en un ciclo eterno de muerte y resurrección, y solo tú puedes librar al mundo de este destino tan terrible y llegar al origen de tu angustia."
     }
   ]
 }
