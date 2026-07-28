@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T22:28:36.158Z",
+  "generatedAt": "2026-07-28T22:56:00.788Z",
   "apps": [
     {
       "id": "3",
@@ -953,6 +953,20 @@
       "filename": "Borderlands Game Of The Year Edition [v1.0.2].xci",
       "fileType": "xci",
       "longDescription": "¡Descubre el disparador-saqueador cooperativo que lo inició todo, lleno de contenido y mejoras! Equipe a miles de millones de armas como uno de los 4 mercenarios de disparo feliz, cada uno con habilidades únicas de RPG. Enfréntate al injustificado planeta Pandora en busca de una poderosa tecnología alienígena: La Bóveda. Con nuevas armas, mejoras visuales, los 4 paquetes adicionales y más!"
+    },
+    {
+      "id": "70",
+      "title": "Burnout Paradise Remastered",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/70.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F5usee1oibgdecl9%2FBurnout_Paradise_Remastered_%2525281.0.0%252529.nsp%2Ffile",
+      "fileSize": 4281265488,
+      "filename": "Burnout Paradise Remastered (1.0.0).nsp",
+      "fileType": "nsp",
+      "longDescription": "El mundo de carreras definitivo\n\nLa franquicia tan exitosa de Burnout llega a Nintendo Switch por primera vez.\n\nDestaca por tus habilidades tras el volante y domina las calles abiertas de Paradise City en Burnout™ Paradise Remastered. Pon a prueba los límites de habilidad y resistencia mientras sobrepasas los límites de la velocidad. Maneja por las frenéticas avenidas del centro y las salvajes carreteras de montaña. Colisiona contra el tráfico, destruye a tus rivales y usa la ciudad abierta para encontrar atajos. Deja a tus amigos en el polvo y define tu ruta hacia la victoria o choca con un efecto espectacular y devastador."
     }
   ]
 }
