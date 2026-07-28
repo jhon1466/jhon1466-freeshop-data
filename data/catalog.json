@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-26T23:41:42.337Z",
+  "generatedAt": "2026-07-28T01:08:41.012Z",
   "apps": [
     {
       "id": "3",
@@ -743,6 +743,20 @@
       "filename": "Resident Evil Revelations [v1.0.1].xci",
       "fileType": "xci",
       "longDescription": "El juego de terror de supervivencia aclamado por la crítica lleva a los jugadores de nuevo a los sucesos acontecidos entre Resident Evil 4 y Resident Evil 5, en los que se revela toda la verdad sobre el virus T-Abyss. Los personajes destacados de la serie Jill Valentine y Chris Redfield protagonizan este Resident Evil Revelations, junto a sus compañeros de la BSAA Parker Luciani y Jessica Sherawat. La historia comienza a bordo de un crucero supuestamente abandonado, el \"Queen Zenobia\", donde los horrores acechan en cada rincón, antes de que los jugadores pongan rumbo a tierra, en dirección a la devastada ciudad de Terragrigia. Con la escasa munición y las pocas armas disponibles, tendrán por delante el reto de sobrevivir a los horrores que acechan en Resident Evil Revelations."
+    },
+    {
+      "id": "55",
+      "title": "Pokémon Legends Z-A",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "Update 2.0.2 + DLCs",
+      "version": "2.0.2",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/55.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fjdo8gf4slba9hmu%2FPK_Z-A_%25255B2.0.2_%25252B_2_DLCs%25255D.xci%2Ffile",
+      "fileSize": 6448197632,
+      "filename": "PK Z-A [2.0.2 + 2 DLCs].xci",
+      "fileType": "xci",
+      "longDescription": "No importa si eres un fan de siempre de Pokémon o si es la primera vez que lanzas una Pokébola porque el juego Pokémon Legends: Z-A tiene un montón de diversión para ofrecer a todo tipo de Entrenadores. Disfruta la mecánica de juego tradicional con toques modernos que seguramente transformarán tu experiencia de juego de rol al estilo de Pokémon."
     }
   ]
 }
