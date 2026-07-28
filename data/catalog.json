@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T21:29:07.976Z",
+  "generatedAt": "2026-07-28T21:59:41.095Z",
   "apps": [
     {
       "id": "3",
@@ -911,6 +911,20 @@
       "filename": "Bayonetta Origins Cereza and the Lost Demon [v0].xci",
       "fileType": "xci",
       "longDescription": "Un cuento encantador sobre una joven bruja\n\nÚnete a Cereza y a su demonio Cheshire en un viaje a través de un bosque habitado por hadas en Bayonetta Origins: Cereza and the Lost Demon para Nintendo Switch. Pasa las páginas de esta colorida aventura inspirada en los libros de cuentos y descubre los orígenes de la conocida bruja de Umbra."
+    },
+    {
+      "id": "67",
+      "title": "Bioshock Remastered",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.2",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/67.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fa0tan8s5ccadne9%2FBioshock_Remastered_%252528v1.0.2%252529.nsp%2Ffile",
+      "fileSize": 13038890712,
+      "filename": "Bioshock Remastered (v1.0.2).nsp",
+      "fileType": "nsp",
+      "longDescription": "Explora la ciudad submarina de Rapture, un refugio para las mentes más brillantes de la sociedad que se ha convertido en una distópica pesadilla a causa de la arrogancia de un hombre. Entre las ruinas anegadas, un nuevo ecosistema ha emergido, y los enloquecidos splicers dan caza a las Little Sisters, que estarían totalmente condenadas de no ser por sus colosales protectores, los Big Daddies. Solo podrás sobrevivir si piensas rápido, aprovechas las armas que encuentres y haces uso de los plásmidos, una sustancia que alterará tu ADN y te concederá poderes sobrenaturales. Para derrotar a los monstruos mutantes de Rapture debes convertirte en uno de ellos.\n\nTambién incluye:\n\n-Museo de las ideas huérfanas - Date una vuelta por los inicios de BioShock a través de las varias exposiciones de este museo virtual, que contiene desde imágenes conceptuales hasta modelos de juego completos. \n-Salas de desafíos - Pon a prueba tus habilidades de combate y tu capacidad de resolver puzles con esta serie de pruebas independientes.Comentarios del director: \"\"Imagining BioShock\"\" \n- Descubre nuevos objetos coleccionables para desbloquear vídeos episódicos con comentarios del director creativo Ken Levine y el jefe de animación Shawn Robertson."
     }
   ]
 }
