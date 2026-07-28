@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T20:59:13.487Z",
+  "generatedAt": "2026-07-28T21:11:10.143Z",
   "apps": [
     {
       "id": "3",
@@ -897,6 +897,20 @@
       "filename": "Aca NeoGeo Metal Slug 3 (1.0.2).nsp",
       "fileType": "nsp",
       "longDescription": "\"METAL SLUG 3\" es un juego de acción lanzado por SNK en el año 2000.\n\nEn realidad es la cuarta entrada de la serie de juegos METAL SLUG. Los jugadores podrán usar cuatro personajes diferentes mientras llegan al campo de batalla con una variedad de armamento.\n\n¡Los nuevos Slugs como un Drill Slug también aparecerán en el juego, lo que lleva a una acción aún más feroz y emocionante!\n\nLa serie \"ACA NEOGEO\" ha reproducido fielmente muchas obras maestras clásicas de NEOGEO.\n\nLos jugadores pueden cambiar varios ajustes de juego, como la dificultad del juego, y también reproducir la atmósfera de la configuración de la pantalla arcade en ese momento. Los jugadores también pueden competir entre sí de todo el mundo con sus puntuaciones más altas."
+    },
+    {
+      "id": "66",
+      "title": "Bayonetta Origins Cereza and the Lost Demon",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/66.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F62n2vvhw94wvtge%2FBayonetta_Origins_Cereza_and_the_Lost_Demon_%25255Bv0%25255D.xci%2Ffile",
+      "fileSize": 7985954816,
+      "filename": "Bayonetta Origins Cereza and the Lost Demon [v0].xci",
+      "fileType": "xci",
+      "longDescription": "Un cuento encantador sobre una joven bruja\n\nÚnete a Cereza y a su demonio Cheshire en un viaje a través de un bosque habitado por hadas en Bayonetta Origins: Cereza and the Lost Demon para Nintendo Switch. Pasa las páginas de esta colorida aventura inspirada en los libros de cuentos y descubre los orígenes de la conocida bruja de Umbra."
     }
   ]
 }
