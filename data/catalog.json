@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T02:38:49.185Z",
+  "generatedAt": "2026-07-28T03:09:04.808Z",
   "apps": [
     {
       "id": "3",
@@ -785,6 +785,20 @@
       "filename": "Super Mario Bros. Wonder [v1.2.1].xci",
       "fileType": "xci",
       "longDescription": "Cada nivel cuenta con su propia Flor Maravilla. Al recogerla, ¡puede ocurrir de todo! Las tuberías se moverán por sí solas, el terreno se inclinará, aparecerán Hipobótamos dando botes, una manada de Embistontes saldrá en estampida, caerás al vacío, flotarás por el espacio exterior ¡y mil cosas más! Hasta puede que te transformes en algo totalmente inesperado."
+    },
+    {
+      "id": "58",
+      "title": "METAL GEAR SOLID 3 Snake Eater Master Collection Version",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "v3.0.0 + DLC",
+      "version": "3.0.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/58.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fdljvjksv3vjbqm3%2FMETAL_GEAR_SOLID_3_Snake_Eater_Master_Collection_Version_%25255Bv3.0.0_%25252B_DLC%25255D.xci%2Ffile",
+      "fileSize": 19317040640,
+      "filename": "METAL GEAR SOLID 3 Snake Eater Master Collection Version [v3.0.0 + DLC].xci",
+      "fileType": "xci",
+      "longDescription": "Metal Gear Solid 3: Snake Eater es la historia de origen de Naked Snake y su mentor The Boss y el quinto título de la serie METAL GEAR.\n\nEl juego se desarrolla en un entorno profundo de la selva.\nSnake debe encontrar su equipo y usar varios camuflajes que permiten al jugador engañar a los ojos y la pintura facial del enemigo que coincide con el entorno circundante, proporcionando una experiencia de juego sigilosa única."
     }
   ]
 }
