@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T19:45:09.731Z",
+  "generatedAt": "2026-07-28T19:49:22.578Z",
   "apps": [
     {
       "id": "3",
@@ -855,6 +855,19 @@
       "filename": "Aca NeoGeo Metal Slug 2 (1.0.0).nsp",
       "fileType": "nsp",
       "longDescription": "Esta vez, el mundo es el campo de batalla! ¡Vuelve a tu Slug para una acción más increíble!\n\n\"METAL SLUG 2\" es un juego de acción lanzado por SNK en 1998.\n\nLos jugadores pueden elegir entre Marko, Tarma, Eri y Fio, con el objetivo de derrotar al Ejército Rebelde de Morden, que está planeando un golpe de estado una vez más. Además de las Heavy Machine Guns y Shotguns de los juegos anteriores, se han agregado nuevas armas como pistolas láser para aún más variaciones de batalla."
+    },
+    {
+      "id": "63",
+      "title": "Astral Chain",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "fd",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/63.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fiknde6wiunreamy%2FAstral_Chain_%2525281.0.1%252529.nsp%2Ffile",
+      "fileSize": 10344777944,
+      "filename": "Astral Chain (1.0.1).nsp",
+      "fileType": "nsp"
     }
   ]
 }
