@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T05:14:11.557Z",
+  "generatedAt": "2026-07-28T05:16:56.745Z",
   "apps": [
     {
       "id": "3",
@@ -243,7 +243,7 @@
     },
     {
       "id": "21",
-      "title": "Minecraft Bedrock NS",
+      "title": "Minecraft",
       "author": "Unknown",
       "category": "Game",
       "description": "Requiere Firmware 22.5.0",
