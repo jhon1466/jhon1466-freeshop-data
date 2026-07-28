@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T22:04:27.557Z",
+  "generatedAt": "2026-07-28T22:28:24.029Z",
   "apps": [
     {
       "id": "3",
@@ -939,6 +939,20 @@
       "filename": "Blasphemous (1.0.8).nsp",
       "fileType": "nsp",
       "longDescription": "Una terrible maldición conocida como El Milagro ha caído sobre en la tierra de Cvstodia y sus habitantes.\n\nEres El Penitente, único sobreviviente de la masacre de la \"Pena Silente\". Estás atrapado en un ciclo eterno de muerte y resurrección, y solo tú puedes librar al mundo de este destino tan terrible y llegar al origen de tu angustia."
+    },
+    {
+      "id": "69",
+      "title": "Borderlands Game Of The Year Edition [v1.0.2]",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.2",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/69.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fykg0j5nwg84n5np%2FBorderlands_Game_Of_The_Year_Edition_%25255Bv1.0.2%25255D.xci%2Ffile",
+      "fileSize": 14742225408,
+      "filename": "Borderlands Game Of The Year Edition [v1.0.2].xci",
+      "fileType": "xci",
+      "longDescription": "¡Descubre el disparador-saqueador cooperativo que lo inició todo, lleno de contenido y mejoras! Equipe a miles de millones de armas como uno de los 4 mercenarios de disparo feliz, cada uno con habilidades únicas de RPG. Enfréntate al injustificado planeta Pandora en busca de una poderosa tecnología alienígena: La Bóveda. Con nuevas armas, mejoras visuales, los 4 paquetes adicionales y más!"
     }
   ]
 }
