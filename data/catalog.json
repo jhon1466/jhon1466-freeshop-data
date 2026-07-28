@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T03:52:15.345Z",
+  "generatedAt": "2026-07-28T04:36:19.386Z",
   "apps": [
     {
       "id": "3",
@@ -247,10 +247,10 @@
       "author": "Unknown",
       "category": "Game",
       "description": "Requiere Firmware 22.5.0",
-      "version": "1.26.33",
+      "version": "1.26.34",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/21.jpg",
-      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F4hy8qwbm2s25f1v%2FMinecraft%2BBedrock%2BNS%2B%255Bv1.26.33%255D.xci",
-      "fileSize": 1842372608,
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F0taogmddbo1ccxd%2FMinecraft_%25255B0100D71004694000%25255D%25255Bv0%25255D.nsp%2Ffile",
+      "fileSize": 477124669,
       "filename": "Minecraft Bedrock NS [v1.26.33].xci",
       "fileType": "xci",
       "longDescription": "¡Sobrevive a la noche o crea una obra de arte en el juego aislado definitivo! Crea lo que sea que puedas imaginar, descubre misterios y enfréntate a enemigos emocionantes en un mundo infinito que es único cada vez que lo juegues. No hay forma incorrecta de jugar."
