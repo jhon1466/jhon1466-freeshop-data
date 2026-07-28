@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T19:17:23.010Z",
+  "generatedAt": "2026-07-28T19:45:09.731Z",
   "apps": [
     {
       "id": "3",
@@ -850,25 +850,11 @@
       "description": "",
       "version": "1.0.0",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/61.jpg",
-      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F20dh0ker0eu5s76%2FAca_NeoGeo_Metal_Slug_2_%2525281.0.0%252529.nsp%2Ffile",
+      "downloadUrl": "https://www.mediafire.com/file/20dh0ker0eu5s76/Aca_NeoGeo_Metal_Slug_2_%25281.0.0%2529.nsp/file",
       "fileSize": 97408810,
       "filename": "Aca NeoGeo Metal Slug 2 (1.0.0).nsp",
       "fileType": "nsp",
       "longDescription": "Esta vez, el mundo es el campo de batalla! ¡Vuelve a tu Slug para una acción más increíble!\n\n\"METAL SLUG 2\" es un juego de acción lanzado por SNK en 1998.\n\nLos jugadores pueden elegir entre Marko, Tarma, Eri y Fio, con el objetivo de derrotar al Ejército Rebelde de Morden, que está planeando un golpe de estado una vez más. Además de las Heavy Machine Guns y Shotguns de los juegos anteriores, se han agregado nuevas armas como pistolas láser para aún más variaciones de batalla."
-    },
-    {
-      "id": "63",
-      "title": "Hollow Knight",
-      "author": "Unknow",
-      "category": "Game",
-      "description": "[v1.5.12620]",
-      "version": "v1.5.12620",
-      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/63.jpg",
-      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fvconngydzq3bwyu%2FHollow%2BKnight%2B%5Bv1.5.12620%5D.xci%2Ffile",
-      "fileSize": 1410287616,
-      "filename": "Hollow Knight [v1.5.12620].xci",
-      "fileType": "xci",
-      "longDescription": "¡Forja tu propio camino en Hollow Knight! Una aventura épica a través de un vasto reino de insectos y héroes que se encuentra en ruinas.\nHollow Knight es una aventura de acción clásica en 2D ambientada en un vasto mundo interconectado. Explora cavernas tortuosas, ciudades antiguas y páramos mortales. Combate contra criaturas corrompidas, haz nuevas amistades con extraños insectos y resuelve los antiguos misterios que yacen en el corazón del reino.\n\n¡Incluye nuevos packs de contenido gratis! ¡Todas las misiones nuevas, batallas contra jefes y secretos!\n•Sueños Ocultos: ¡Poderosos enemigos emergen! Nuevas batallas contra jefes. Nuevas mejoras. Nueva música.\n•La Compañía de Grimm: Enciende la Linterna Pesadilla. Invoca a la Compañía. Nueva Misión Principal. Nuevas Batallas contra Jefes. Nueos Amuletos. Nuevos Enemigos. Nuevos Amigos.\n•Saviavida: Nuevas Herramientas Cartográficas. Nueva Batalla contra un Jefe. Jefes Mejorados. Nuevas Pistas de Música. ¡Más Extras Escondidos!"
     }
   ]
 }
