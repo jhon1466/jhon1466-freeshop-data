@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T19:49:22.578Z",
+  "generatedAt": "2026-07-28T20:00:22.746Z",
   "apps": [
     {
       "id": "3",
@@ -850,7 +850,7 @@
       "description": "",
       "version": "1.0.0",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/61.jpg",
-      "downloadUrl": "https://www.mediafire.com/file/20dh0ker0eu5s76/Aca_NeoGeo_Metal_Slug_2_%25281.0.0%2529.nsp/file",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F20dh0ker0eu5s76%2FAca_NeoGeo_Metal_Slug_2_%2525281.0.0%252529.nsp%2Ffile",
       "fileSize": 97408810,
       "filename": "Aca NeoGeo Metal Slug 2 (1.0.0).nsp",
       "fileType": "nsp",
