@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T22:28:24.029Z",
+  "generatedAt": "2026-07-28T22:28:36.158Z",
   "apps": [
     {
       "id": "3",
@@ -942,7 +942,7 @@
     },
     {
       "id": "69",
-      "title": "Borderlands Game Of The Year Edition [v1.0.2]",
+      "title": "Borderlands Game Of The Year Edition",
       "author": "Unknown",
       "category": "Game",
       "description": "",
