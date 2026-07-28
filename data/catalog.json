@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T20:00:22.746Z",
+  "generatedAt": "2026-07-28T20:02:19.421Z",
   "apps": [
     {
       "id": "3",
@@ -862,12 +862,13 @@
       "author": "Unknown",
       "category": "Game",
       "description": "",
-      "version": "fd",
+      "version": "1.0.1",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/63.jpg",
       "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fiknde6wiunreamy%2FAstral_Chain_%2525281.0.1%252529.nsp%2Ffile",
       "fileSize": 10344777944,
       "filename": "Astral Chain (1.0.1).nsp",
-      "fileType": "nsp"
+      "fileType": "nsp",
+      "longDescription": "Unos cuantos sobrevivientes de un desastre global se unen en una megaciudad futurística. Ahora será tu deber protegerlos contra los malévolos invasores, pero no estás solo, formas parte de una unidad especial de policías equipada con unas armas especiales llamadas Legions. En este nuevo juego de acción de PlatinumGames controlarás tanto al protagonista como a una Legion para desencadenar increíbles combinaciones. Intercambia legiones en cualquier momento para variar tu estilo y desencadenar diferentes habilidades. Los últimos remanentes de la humanidad dependen de ti, y para salvar al mundo, deberás investigar su lado oscuro. Explora una futurística metrópolis al estilo cyberpunk resolviendo crímenes y descubriendo cómo sobreviven los últimos remanentes de la humanidad. Conforme salves el mundo de unos invasores extradimensionales llamados “chimeras”, también podrás interactuar con los ciudadanos, cuestionar a los sospechosos, y formar equipo con los miembros de tu unidad especial para resolver los casos."
     }
   ]
 }
