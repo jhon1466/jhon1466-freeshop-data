@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T18:02:26.979Z",
+  "generatedAt": "2026-07-28T18:59:08.265Z",
   "apps": [
     {
       "id": "3",
@@ -841,6 +841,20 @@
       "filename": "Captain Toad Treasure Tracker(1.3.0).nsp",
       "fileType": "nsp",
       "longDescription": "¡Listo para la aventura!\n¡El capitán Toad es la estrella de su propia aventura de rompecabezas en la consola Nintendo Switch! Nuestro héroe deberá evadir peligros y rastrear tesoros en niveles cargados de trampas. ¡Sobrevive volcanes, motores de vapor, casas embrujadas e incluso niveles inspirados en el juego Super Mario Odyssey™! Un jugador más podrá unirse y ayudar lanzando nabos al enemigo.\n\nJuega como quieras y cuando quieras, incluso en el modo para dos jugadores utilizando un par de controles Joy-Con™ y una consola Nintendo Switch en el modo televisor o semiportátil. También podrás jugar solo en el modo portátil. Explora laberinticos niveles y encuentra tesoros como superdiamantes e hiperestrellas. Conforme vayas recuperando los tesoros robados por monstruos como el codicioso pajarraco y Wingo, ¡podrás jugar como Toadette! Estos pequeños héroes tendrán que esconderse, arrancar, tirar y abrirse paso a través de niveles infestados de enemigos, secretos por revelar y tesoros que encontrar. ¡Ilumina con la linterna tu próxima aventura!\n\nCon la actualización gratuita del juego Captain Toad y el Visor VR Toy-Con de Nintendo Labo: kit de VR te unirás al capitán Toad en una pequeña experiencia adicional de realidad virtual que es simple y adecuada para toda la familia. Descubre esta experiencia al visitar de nuevo los siguientes niveles como el capitán Toad en cuatro nuevas y pequeñas misiones:\n\n• El Tesoro de las ruinas\n• El templo de los don Estorbón\n• La pecera tropical\n• Disparos desde la vagoneta"
+    },
+    {
+      "id": "62",
+      "title": "Aca NeoGeo Metal Slug 2",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/61.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F20dh0ker0eu5s76%2FAca_NeoGeo_Metal_Slug_2_%2525281.0.0%252529.nsp%2Ffile",
+      "fileSize": 97408810,
+      "filename": "Aca NeoGeo Metal Slug 2 (1.0.0).nsp",
+      "fileType": "nsp",
+      "longDescription": "Esta vez, el mundo es el campo de batalla! ¡Vuelve a tu Slug para una acción más increíble!\n\n\"METAL SLUG 2\" es un juego de acción lanzado por SNK en 1998.\n\nLos jugadores pueden elegir entre Marko, Tarma, Eri y Fio, con el objetivo de derrotar al Ejército Rebelde de Morden, que está planeando un golpe de estado una vez más. Además de las Heavy Machine Guns y Shotguns de los juegos anteriores, se han agregado nuevas armas como pistolas láser para aún más variaciones de batalla."
     }
   ]
 }
