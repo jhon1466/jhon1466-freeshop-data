@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T03:32:54.519Z",
+  "generatedAt": "2026-07-28T03:42:29.099Z",
   "apps": [
     {
       "id": "3",
@@ -813,6 +813,20 @@
       "filename": "METAL GEAR SOLID Master Collection Version [v3.0.0 + 2 DLCs].xci",
       "fileType": "xci",
       "longDescription": "Publicado en 1998, este juego es la primera entrega en 3D de la serie METAL GEAR. Este título presenta una trama de acción y sigilo en la que deberás combatir una amenaza nuclear a escala global. Mezcla escenas de acción en vivo y cinemáticas con una innovadora mecánica de juego.\n\nLa historia, llena de intriga y traición, ha sido nombrada una de las mejores tramas del siglo XX y fue el tercer juego de la saga METAL GEAR que se convirtió en un éxito en los años siguientes.\n\nEl juego se desarrolla en un entorno profundo de la selva.\nSnake debe encontrar su equipo y usar varios camuflajes que permiten al jugador engañar a los ojos y la pintura facial del enemigo que coincide con el entorno circundante, proporcionando una experiencia de juego sigilosa única."
+    },
+    {
+      "id": "60",
+      "title": "Five Nights at Freddy's: Security Breach",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "0.5",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/60.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F296abf6mznjai03%2FFive%2BNights%2Bat%2BFreddy's%2BSecurity%2BBreach%2B%5Bv0.5%5D.xci%2Ffile",
+      "fileSize": 18144817664,
+      "filename": "Five Nights at Freddy's Security Breach [v0.5].xci",
+      "fileType": "xci",
+      "longDescription": "EL SIGUIENTE CAPÍTULO DEL HORROR\n\nFive Nights at Freddy's: Security Breach es la nueva entrega de la saga de juegos de terror para toda la familia que ha cautivado a millones de jugadores de todo el mundo. Juega como Gregory, un joven que pasa la noche atrapado en Freddy Fazbear's Mega Pizzaplex. Con la ayuda del mismísimo Freddy Fazbear, Gregory debe sobrevivir a la inagotable cacería de las nuevas versiones de los personajes de Five Nights at Freddy's y a una serie de amenazas terroríficas."
     }
   ]
 }
