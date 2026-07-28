@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T03:42:29.099Z",
+  "generatedAt": "2026-07-28T03:52:15.345Z",
   "apps": [
     {
       "id": "3",
@@ -246,7 +246,7 @@
       "title": "Minecraft Bedrock NS",
       "author": "Unknown",
       "category": "Game",
-      "description": "",
+      "description": "Requiere Firmware 22.5.0",
       "version": "1.26.33",
       "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/21.jpg",
       "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F4hy8qwbm2s25f1v%2FMinecraft%2BBedrock%2BNS%2B%255Bv1.26.33%255D.xci",
