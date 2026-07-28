@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-28T01:08:41.012Z",
+  "generatedAt": "2026-07-28T01:15:07.261Z",
   "apps": [
     {
       "id": "3",
@@ -757,6 +757,20 @@
       "filename": "PK Z-A [2.0.2 + 2 DLCs].xci",
       "fileType": "xci",
       "longDescription": "No importa si eres un fan de siempre de Pokémon o si es la primera vez que lanzas una Pokébola porque el juego Pokémon Legends: Z-A tiene un montón de diversión para ofrecer a todo tipo de Entrenadores. Disfruta la mecánica de juego tradicional con toques modernos que seguramente transformarán tu experiencia de juego de rol al estilo de Pokémon."
+    },
+    {
+      "id": "56",
+      "title": "METAL GEAR SOLID 2 Sons of Liberty Master Collection Version",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "v2.1.0 + DLC",
+      "version": "2.1.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/56.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Ft3x72eyz9n6zdbg%2FMETAL_GEAR_SOLID_2_Sons_of_Liberty_Master_Collection_Version_%25255Bv2.1.0_%25252B_DLC%25255D.xci%2Ffile",
+      "fileSize": 13331576832,
+      "filename": "METAL GEAR SOLID 2 Sons of Liberty Master Collection Version [v2.1.0 + DLC].xci",
+      "fileType": "xci",
+      "longDescription": "Se trata de la cuarta entrega de la saga METAL GEAR. Metal Gear Solid 2 mezcla una historia dividida en dos partes:\n\nEn los capítulos del Tanker, Solid Snake tratará de infiltrarse en un carguero secreto en busca de un nuevo prototipo del arma nuclear Metal Gear.\n\nEn los capítulos de Plant , el nuevo miembro de la unidad FOXHOUND, Raiden, se infiltrará en una planta en alta mar ocupada por terroristas.\n\nSe añadieron nuevas acciones, como poder apuntar en primera persona, agarrar a los enemigos a punta de pistola y ocultar a los rivales, en esta nueva entrega.\n\nTambién se incluyen un Screenplay Book digital exclusivo y un Master Book que detalla la historia y los personajes de Metal Gear Solid 2: Sons of Liberty ."
     }
   ]
 }
