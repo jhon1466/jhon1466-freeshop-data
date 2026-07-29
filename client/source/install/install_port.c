@@ -42,8 +42,10 @@ PortInstallResult install_port(const AppEntry *entry, const char *base_url,
     char part_path[512];
     snprintf(part_path, sizeof(part_path), "%s/%s.part", PORT_SCRATCH_DIR, entry->filename);
 
+    char resolved[900];
+    install_common_resolve_url(base_url, entry->download_url, resolved, sizeof(resolved));
     char url[900];
-    install_common_resolve_url(base_url, entry->download_url, url, sizeof(url));
+    install_common_direct_download_url(resolved, url, sizeof(url));
 
     HttpResult hres = http_download_to_file(url, part_path, cb, userdata, err_buf, err_buf_size);
     if (hres == HTTP_ERR_CANCELED) {

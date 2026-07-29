@@ -65,6 +65,12 @@ void ui_prefs_load(UiListPrefs *out) {
         snprintf(out->category_filter, sizeof(out->category_filter), "%s", json_string_value(category_filter));
     }
 
+    const json_t *effects_disabled = json_object_get(root, "effectsDisabled");
+    if (json_is_boolean(effects_disabled)) out->effects_disabled = json_boolean_value(effects_disabled);
+
+    const json_t *sound_disabled = json_object_get(root, "soundDisabled");
+    if (json_is_boolean(sound_disabled)) out->sound_disabled = json_boolean_value(sound_disabled);
+
     json_decref(root);
 }
 
@@ -75,6 +81,8 @@ void ui_prefs_save(const UiListPrefs *prefs) {
     json_object_set_new(root, "viewMode", json_integer(prefs->view_mode));
     json_object_set_new(root, "sortMode", json_integer(prefs->sort_mode));
     json_object_set_new(root, "categoryFilter", json_string(prefs->category_filter));
+    json_object_set_new(root, "effectsDisabled", json_boolean(prefs->effects_disabled));
+    json_object_set_new(root, "soundDisabled", json_boolean(prefs->sound_disabled));
 
     char *text = json_dumps(root, JSON_INDENT(2));
     json_decref(root);

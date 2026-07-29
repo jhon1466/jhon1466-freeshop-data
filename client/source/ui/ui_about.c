@@ -1,6 +1,9 @@
 #include "ui_about.h"
 #include "ui_app.h"
 #include "ui_icons.h"
+#include "ui_prefs.h"
+#include "ui_sound.h"
+#include "ui_fx.h"
 #include "../config.h"
 #include "../i18n.h"
 
@@ -35,10 +38,34 @@ void ui_show_about(void) {
     while (appletMainLoop()) {
         padUpdate(&pad);
         u64 kDown = padGetButtonsDown(&pad);
-        if ((kDown & HidNpadButton_B) || (kDown & HidNpadButton_Plus)) break;
+        if ((kDown & HidNpadButton_B) || (kDown & HidNpadButton_Plus)) {
+            ui_sound_play(UI_SOUND_BACK);
+            break;
+        }
+
+        // Effects/sound live here rather than on a settings screen of their
+        // own - this is the only screen that isn't task-oriented, and both
+        // are one-off "set it and forget it" toggles. Persisted through the
+        // same prefs file the list screen uses, read-modify-write so
+        // toggling one never drops the view/sort/category the user had.
+        if (kDown & (HidNpadButton_X | HidNpadButton_Y)) {
+            if (kDown & HidNpadButton_X) ui_fx_set_enabled(!ui_fx_enabled());
+            if (kDown & HidNpadButton_Y) ui_sound_set_enabled(!ui_sound_enabled());
+
+            UiListPrefs prefs;
+            ui_prefs_load(&prefs);
+            prefs.effects_disabled = !ui_fx_enabled();
+            prefs.sound_disabled = !ui_sound_enabled();
+            ui_prefs_save(&prefs);
+
+            // Played after the toggle so turning sound back on is audible
+            // immediately (and turning it off makes no noise, as expected).
+            ui_sound_play(UI_SOUND_NAVIGATE);
+        }
 
         SDL_SetRenderDrawColor(g_renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, COLOR_BG.a);
         SDL_RenderClear(g_renderer);
+        ui_fx_draw_background();
 
         ui_draw_text(g_font_title, LEFT_EDGE, HEADER_Y, COLOR_TEXT, "FreeShop");
         ui_draw_text(g_font_body, 210, HEADER_Y + 4, COLOR_TEXT_DIM, tr(STR_ABOUT_HEADER));
@@ -82,7 +109,11 @@ void ui_show_about(void) {
         ui_draw_text(g_font_body, donate_x, ty, COLOR_TEXT, "mastergarden1112@gmail.com");
 
         ui_draw_rect(LEFT_EDGE, FOOTER_Y - 10, RIGHT_EDGE - LEFT_EDGE, 1, COLOR_PANEL);
-        ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y, COLOR_TEXT_DIM, tr(STR_ABOUT_FOOTER));
+        char footer[160];
+        snprintf(footer, sizeof(footer), tr(STR_ABOUT_FOOTER_TOGGLES),
+                 tr(ui_fx_enabled() ? STR_ON : STR_OFF),
+                 tr(ui_sound_enabled() ? STR_ON : STR_OFF));
+        ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y, COLOR_TEXT_DIM, footer);
 
         SDL_RenderPresent(g_renderer);
     }

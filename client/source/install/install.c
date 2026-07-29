@@ -32,8 +32,10 @@ InstallResult install_app(const AppEntry *entry, const char *base_url,
     char part_path[512];
     snprintf(part_path, sizeof(part_path), "%s/%s.part", dest_dir, entry->filename);
 
+    char resolved[900];
+    install_common_resolve_url(base_url, entry->download_url, resolved, sizeof(resolved));
     char url[900];
-    install_common_resolve_url(base_url, entry->download_url, url, sizeof(url));
+    install_common_direct_download_url(resolved, url, sizeof(url));
 
     InstallProgressThunkCtx thunk_ctx = { .cb = cb, .userdata = userdata };
     HttpResult hres = http_download_to_file(url, part_path, install_common_progress_thunk, &thunk_ctx,

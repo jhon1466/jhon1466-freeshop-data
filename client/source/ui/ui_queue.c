@@ -2,6 +2,7 @@
 #include "ui_app.h"
 #include "ui_icons.h"
 #include "ui_nav.h"
+#include "ui_fx.h"
 #include "../install/install_dispatch.h"
 #include "../i18n.h"
 
@@ -153,6 +154,11 @@ static void draw_queue_installing(QueueProgressCtx *ctx, long total, long now) {
 
     SDL_SetRenderDrawColor(g_renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, COLOR_BG.a);
     SDL_RenderClear(g_renderer);
+    // No animated background here - this redraws several times a second for
+    // the whole download/install, and the glow's texture blending competed
+    // for CPU with the transfer itself (see main.c's install_progress_cb for
+    // the same reasoning). Kept on the browse/results views below, which
+    // only redraw in response to input.
 
     ui_draw_text(g_font_title, LEFT_EDGE, HEADER_Y, COLOR_TEXT, tr(STR_QUEUE_TITLE));
 
@@ -299,6 +305,7 @@ static void run_queue_install(AppEntry *entries, int entry_count) {
         ui_icons_begin_frame();
         SDL_SetRenderDrawColor(g_renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, COLOR_BG.a);
         SDL_RenderClear(g_renderer);
+        ui_fx_draw_background();
 
         ui_draw_text(g_font_title, LEFT_EDGE, HEADER_Y, COLOR_TEXT, tr(STR_QUEUE_TITLE));
 
@@ -373,6 +380,7 @@ void ui_show_queue(AppEntry *entries, int count) {
         ui_icons_begin_frame();
         SDL_SetRenderDrawColor(g_renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, COLOR_BG.a);
         SDL_RenderClear(g_renderer);
+        ui_fx_draw_background();
 
         char title[64];
         snprintf(title, sizeof(title), tr(STR_QUEUE_TITLE_COUNT_TEMPLATE), s_count);

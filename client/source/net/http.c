@@ -2,9 +2,29 @@
 
 #include <switch.h>
 #include <curl/curl.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+// Diagnostic-only, same pattern as main.c's update_debug_log/ui_icons.c's
+// icon_debug_log: a real user report of some apps "installing before fully
+// downloaded" pointed at a truncated transfer somehow not being caught -
+// logging every download's requested vs. actually-received byte count here
+// instead of guessing blind. Best-effort: a failure to open the log is
+// silently ignored. Always on (no settings toggle) - matches this
+// project's other debug logs, and the file only grows when something is
+// actually downloaded, which is rare enough not to matter.
+void download_debug_log(const char *fmt, ...) {
+    FILE *fp = fopen("sdmc:/switch/freeshop/download_debug.log", "a");
+    if (!fp) return;
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(fp, fmt, ap);
+    va_end(ap);
+    fputc('\n', fp);
+    fclose(fp);
+}
 
 typedef struct {
     char *data;
@@ -329,6 +349,20 @@ HttpResult http_get_range_streamed(const char *url, uint64_t offset, uint64_t le
         curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &effective_url);
         snprintf(effective_url_out, effective_url_out_size, "%s", effective_url ? effective_url : url);
     }
+
+    // See http_download_to_file's identical block for why - this is the
+    // per-NCA-piece equivalent, and the one most directly relevant to a
+    // report of a *native* NSP/XCI install finishing with less than the
+    // whole title actually written: `downloaded` is exactly how many bytes
+    // curl handed to write_cb (which is what actually reaches NCM here),
+    // whether or not that matches what was asked for in `length`.
+    curl_off_t dbg_downloaded = -1;
+    curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD_T, &dbg_downloaded);
+    download_debug_log("http_get_range_streamed: url=%s offset=%llu requested=%llu result=%s "
+                        "http_status=%ld downloaded=%lld",
+                        url, (unsigned long long)offset, (unsigned long long)length,
+                        curl_easy_strerror(res), status, (long long)dbg_downloaded);
+
     curl_easy_cleanup(curl);
 
     if (res == CURLE_WRITE_ERROR) {
@@ -448,6 +482,27 @@ HttpResult http_download_to_file(const char *url, const char *dest_path,
                       "TLS-ECDHE-ECDSA-WITH-AES-256-GCM-SHA384");
 
     CURLcode res = curl_easy_perform(curl);
+
+    // Captured before cleanup/fclose, purely for download_debug_log below -
+    // none of this affects the actual success/failure decision, which stays
+    // exactly what it already was (curl's own CURLcode). See this
+    // function's header comment: the point is to see, after the fact,
+    // whether a report of "installed before fully downloaded" lines up with
+    // curl already knowing the transfer was short (expected vs. actual
+    // disagree here) or with it believing everything arrived fine (in which
+    // case the bug is downstream of this function, not in the download
+    // itself).
+    curl_off_t dbg_content_length = -1, dbg_downloaded = -1;
+    long dbg_status = 0;
+    curl_easy_getinfo(curl, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T, &dbg_content_length);
+    curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD_T, &dbg_downloaded);
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &dbg_status);
+    long dbg_file_size = ftell(fp);
+    download_debug_log("http_download_to_file: url=%s result=%s http_status=%ld "
+                        "content_length=%lld downloaded=%lld file_size=%ld",
+                        url, curl_easy_strerror(res), dbg_status,
+                        (long long)dbg_content_length, (long long)dbg_downloaded, dbg_file_size);
+
     curl_easy_cleanup(curl);
     fclose(fp);
 

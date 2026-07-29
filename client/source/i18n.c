@@ -132,6 +132,10 @@ static const char *const kStrings[STR_COUNT][LANG_COUNT] = {
     [STR_ABOUT_DONATE_SCAN]                = { "Escanea el QR o dona por PayPal a:",
                                                 "Scan the QR code or donate via PayPal to:" },
     [STR_ABOUT_FOOTER]                     = { "B/+: volver", "B/+: back" },
+    [STR_ABOUT_FOOTER_TOGGLES]             = { "X: efectos (%s)    Y: sonido (%s)    B/+: volver",
+                                                "X: effects (%s)    Y: sound (%s)    B/+: back" },
+    [STR_ON]                               = { "activado", "on" },
+    [STR_OFF]                              = { "desactivado", "off" },
 
     // ---- ui_queue.c ----
     [STR_QUEUE_STATUS_DOWNLOADING]         = { "Descargando...", "Downloading..." },

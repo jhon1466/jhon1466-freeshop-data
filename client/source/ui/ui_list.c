@@ -6,6 +6,8 @@
 #include "ui_prefs.h"
 #include "ui_nav.h"
 #include "ui_queue.h"
+#include "ui_sound.h"
+#include "ui_fx.h"
 #include "../i18n.h"
 
 #include <switch.h>
@@ -179,10 +181,15 @@ static int build_visible(const AppEntry *entries, int count, const char *categor
 // immediately rather than batching for some "on exit" point, since B/+/HOME
 // can end the process at any time with no reliable hook to save from then.
 static void save_prefs(ViewMode view_mode, SortMode sort_mode, const char *category_filter) {
+    // Effects/sound are owned by ui_fx/ui_sound rather than tracked here -
+    // read them back from there so saving a view/sort change never clobbers
+    // whatever the user set them to.
     UiListPrefs prefs;
     prefs.view_mode = (int)view_mode;
     prefs.sort_mode = (int)sort_mode;
     snprintf(prefs.category_filter, sizeof(prefs.category_filter), "%s", category_filter);
+    prefs.effects_disabled = !ui_fx_enabled();
+    prefs.sound_disabled = !ui_sound_enabled();
     ui_prefs_save(&prefs);
 }
 
@@ -566,6 +573,11 @@ int ui_show_list(AppEntry *entries, int count) {
 
         {
             int cols = (view_mode == VIEW_GRID) ? GRID_COLS : 1;
+            // One navigate tone per actual move, driven off the selection
+            // changing rather than off each button check - held auto-repeat,
+            // stick, and D-Pad then all sound identical, and a press that
+            // doesn't move (already at an edge) stays silent.
+            int selected_before = selected;
 
             // Held state for repeat purposes - D-Pad or left stick, either
             // one counts. (Stick Y follows the usual up=positive convention;
@@ -607,25 +619,36 @@ int ui_show_list(AppEntry *entries, int count) {
                 nav_left.was_held = false;
                 nav_right.was_held = false;
             }
+            if (selected != selected_before) ui_sound_play(UI_SOUND_NAVIGATE);
+
             if (kDown & HidNpadButton_A) {
-                if (visible_count > 0) return visible[selected];
+                if (visible_count > 0) {
+                    ui_sound_play(UI_SOUND_CONFIRM);
+                    return visible[selected];
+                }
             }
             if (kDown & HidNpadButton_Minus) {
+                ui_sound_play(UI_SOUND_CONFIRM);
                 return UI_LIST_OPEN_SOURCES;
             }
             if (kDown & HidNpadButton_L) {
+                ui_sound_play(UI_SOUND_CONFIRM);
                 return UI_LIST_OPEN_ABOUT;
             }
             if (kDown & HidNpadButton_StickR) {
+                ui_sound_play(UI_SOUND_CONFIRM);
                 return UI_LIST_OPEN_EXPLORER;
             }
             if (kDown & HidNpadButton_StickL) {
+                ui_sound_play(UI_SOUND_CONFIRM);
                 return UI_LIST_RELOAD_CATALOG;
             }
             if (kDown & HidNpadButton_B) {
+                ui_sound_play(UI_SOUND_BACK);
                 return UI_LIST_EXIT;
             }
             if (kDown & HidNpadButton_Plus) {
+                ui_sound_play(UI_SOUND_CONFIRM);
                 return UI_LIST_OPEN_QUEUE;
             }
             if (kDown & HidNpadButton_Y) {
@@ -633,6 +656,7 @@ int ui_show_list(AppEntry *entries, int count) {
                 // views - only the per-mode row/scroll math needs resetting.
                 view_mode = (view_mode == VIEW_LIST) ? VIEW_GRID : VIEW_LIST;
                 scroll_offset = 0;
+                ui_sound_play(UI_SOUND_NAVIGATE);
                 save_prefs(view_mode, sort_mode, category_filter);
             }
             if (kDown & HidNpadButton_X) {
@@ -644,6 +668,7 @@ int ui_show_list(AppEntry *entries, int count) {
                 visible_count = build_visible(entries, count, category_filter, search_query, visible);
                 selected = 0;
                 scroll_offset = 0;
+                ui_sound_play(UI_SOUND_NAVIGATE);
                 save_prefs(view_mode, sort_mode, category_filter);
             }
             if ((kDown & (HidNpadButton_ZL | HidNpadButton_ZR)) && category_count > 0) {
@@ -656,6 +681,7 @@ int ui_show_list(AppEntry *entries, int count) {
                 visible_count = build_visible(entries, count, category_filter, search_query, visible);
                 selected = 0;
                 scroll_offset = 0;
+                ui_sound_play(UI_SOUND_NAVIGATE);
                 save_prefs(view_mode, sort_mode, category_filter);
             }
             if (kDown & HidNpadButton_R) {
@@ -686,6 +712,7 @@ int ui_show_list(AppEntry *entries, int count) {
 
         SDL_SetRenderDrawColor(g_renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, COLOR_BG.a);
         SDL_RenderClear(g_renderer);
+        ui_fx_draw_background();
 
         ui_draw_text(g_font_title, LEFT_EDGE, HEADER_Y, COLOR_TEXT, "FreeShop");
         if (search_query[0]) {
@@ -720,17 +747,35 @@ int ui_show_list(AppEntry *entries, int count) {
             if (selected < scroll_offset) scroll_offset = selected;
             if (selected >= scroll_offset + VISIBLE_ROWS) scroll_offset = selected - VISIBLE_ROWS + 1;
 
+            // Zebra striping first, so the highlight bar below lands on top
+            // of it rather than being carved up by it.
+            for (int vi = scroll_offset; vi < visible_count && vi < scroll_offset + VISIBLE_ROWS; vi++) {
+                int row_index = vi - scroll_offset;
+                if (row_index % 2 != 1) continue;
+                int row_y = LIST_TOP + row_index * ROW_HEIGHT;
+                ui_draw_rect(LEFT_EDGE, row_y - 6, RIGHT_EDGE - LEFT_EDGE, ROW_HEIGHT - 4, COLOR_PANEL);
+            }
+
+            // The highlight slides to the newly selected row instead of
+            // teleporting. Kept as one bar drawn from an eased position
+            // rather than a per-row rect - that's what makes the movement
+            // continuous between rows. Persisted across calls (this screen
+            // is re-entered from the detail screen) and seeded to -1 so the
+            // very first frame snaps rather than flying in from the top.
+            static float highlight_y = -1.0f;
+            if (visible_count > 0) {
+                float target_y = (float)(LIST_TOP + (selected - scroll_offset) * ROW_HEIGHT - 6);
+                highlight_y = (highlight_y < 0.0f) ? target_y : ui_fx_ease(highlight_y, target_y, 0.30f);
+                ui_draw_rect(LEFT_EDGE, (int)highlight_y, RIGHT_EDGE - LEFT_EDGE, ROW_HEIGHT - 4, COLOR_ACCENT);
+            } else {
+                highlight_y = -1.0f;
+            }
+
             for (int vi = scroll_offset; vi < visible_count && vi < scroll_offset + VISIBLE_ROWS; vi++) {
                 int i = visible[vi];
                 int row_index = vi - scroll_offset;
                 int row_y = LIST_TOP + row_index * ROW_HEIGHT;
                 bool is_selected = (vi == selected);
-
-                if (is_selected) {
-                    ui_draw_rect(LEFT_EDGE, row_y - 6, RIGHT_EDGE - LEFT_EDGE, ROW_HEIGHT - 4, COLOR_ACCENT);
-                } else if (row_index % 2 == 1) {
-                    ui_draw_rect(LEFT_EDGE, row_y - 6, RIGHT_EDGE - LEFT_EDGE, ROW_HEIGHT - 4, COLOR_PANEL);
-                }
 
                 SDL_Color text_color = is_selected ? COLOR_BG : COLOR_TEXT;
                 SDL_Color dim_color = is_selected ? COLOR_BG : COLOR_TEXT_DIM;
@@ -760,7 +805,7 @@ int ui_show_list(AppEntry *entries, int count) {
                 grid_zoom = 1.0f;
                 grid_zoom_selected = selected;
             }
-            grid_zoom += (GRID_ZOOM_TARGET - grid_zoom) * GRID_ZOOM_EASE;
+            grid_zoom = ui_fx_ease(grid_zoom, GRID_ZOOM_TARGET, GRID_ZOOM_EASE);
 
             int selected_row = selected / GRID_COLS;
             if (selected_row < scroll_offset) scroll_offset = selected_row;

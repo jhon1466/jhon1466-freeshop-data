@@ -64,6 +64,45 @@ void ncm_format_content_id(const NcmContentId *id, char out_hex[33]) {
 // install scratch buffer - see install_common.h.
 #define NCM_INSTALL_CHUNK_SIZE INSTALL_SCRATCH_SIZE
 
+// Drops any content already registered under `content_id` so the caller can
+// write it fresh.
+//
+// This used to be an optimization instead: ncmContentStorageHas() said the
+// id was present, so the download was skipped entirely on the theory that a
+// content id is the content's own hash and therefore can only ever name one
+// exact set of bytes. That reasoning is sound for content that finished
+// installing, and wrong for everything else - and "everything else" is
+// reachable, because ncmContentStorageCreatePlaceHolder reserves the piece's
+// full declared size up front and fills it in as bytes arrive. An install
+// that dies partway (crash, sleep, a bug in an earlier build) can therefore
+// leave content whose id is registered and whose *size* is exactly right,
+// holding almost none of the real data.
+//
+// That was observed on hardware: a 16.7GB Program NCA sat registered at
+// full size with ~8MB actually written, so every subsequent install skipped
+// re-downloading it and reported success over a title that could never
+// launch. A size check doesn't catch it (the size is right by construction),
+// and the only check that would - hashing the piece - means reading
+// multi-GB off the SD card on every single install, purely to guard against
+// this. Re-downloading is the cheaper correct answer, and matches what the
+// user asked for by starting an install at all.
+static void drop_existing_content(NcmContentStorage *cs, const NcmContentId *content_id,
+                                   uint64_t expected_size, const char *caller) {
+    bool already_has = false;
+    if (R_FAILED(ncmContentStorageHas(cs, &already_has, content_id)) || !already_has) return;
+
+    s64 existing_size = 0;
+    ncmContentStorageGetSizeFromContentId(cs, &existing_size, content_id);
+
+    char hex[33];
+    ncm_format_content_id(content_id, hex);
+    download_debug_log("%s: %s already registered (size %lld, expected %llu) - deleting and "
+                        "re-downloading, registered content is not proof it is complete",
+                        caller, hex, (long long)existing_size, (unsigned long long)expected_size);
+
+    ncmContentStorageDelete(cs, content_id);
+}
+
 bool ncm_install_content(NcmContentStorage *cs, const NcmContentId *content_id,
                           FILE *src, uint64_t file_offset, uint64_t size,
                           InstallProgressCallback cb, void *userdata,
@@ -71,13 +110,10 @@ bool ncm_install_content(NcmContentStorage *cs, const NcmContentId *content_id,
                           char *err_buf, size_t err_buf_size) {
     if (out_registered) *out_registered = false;
 
-    bool already_has = false;
-    Result rc = ncmContentStorageHas(cs, &already_has, content_id);
-    if (R_SUCCEEDED(rc) && already_has) {
-        return true; // already present (e.g. shared with another installed title) - not ours to roll back
-    }
+    drop_existing_content(cs, content_id, size, "ncm_install_content");
 
     NcmPlaceHolderId placeholder_id;
+    Result rc;
     rc = ncmContentStorageGeneratePlaceHolderId(cs, &placeholder_id);
     if (R_FAILED(rc)) {
         if (err_buf) snprintf(err_buf, err_buf_size, "ncmContentStorageGeneratePlaceHolderId falló (0x%x)", rc);
@@ -239,14 +275,10 @@ bool ncm_install_content_from_url(NcmContentStorage *cs, const NcmContentId *con
                                    char *err_buf, size_t err_buf_size) {
     if (out_registered) *out_registered = false;
 
-    bool already_has = false;
-    Result rc = ncmContentStorageHas(cs, &already_has, content_id);
-    if (R_SUCCEEDED(rc) && already_has) {
-        return true; // already present (e.g. shared with another installed title) - not ours to roll back
-    }
+    drop_existing_content(cs, content_id, size, "ncm_install_content_from_url");
 
     NcmPlaceHolderId placeholder_id;
-    rc = ncmContentStorageGeneratePlaceHolderId(cs, &placeholder_id);
+    Result rc = ncmContentStorageGeneratePlaceHolderId(cs, &placeholder_id);
     if (R_FAILED(rc)) {
         if (err_buf) snprintf(err_buf, err_buf_size, "ncmContentStorageGeneratePlaceHolderId falló (0x%x)", rc);
         return false;
@@ -289,32 +321,44 @@ bool ncm_install_content_from_url(NcmContentStorage *cs, const NcmContentId *con
         .err_buf_size = err_buf_size,
     };
 
+    // A self-resolving proxy (MediaFire) hands back a different storage node
+    // on every resolve, and node-to-node behavior isn't uniform - some don't
+    // honor Range at all (see http_get_range_streamed's own 206 check).
+    // Retrying a few times, each a genuinely fresh resolve, gives a real
+    // shot at a node that does support it instead of failing outright on
+    // whichever one the first attempt happened to land on. Matches
+    // RESOLVED_URL_RANGE_RETRIES's reasoning in install_common.c (the
+    // small-header-fetch equivalent of this).
+    #define NCM_RANGE_RETRIES 4
+
     HttpResult hres = HTTP_OK;
     char net_err[160] = {0};
     if (size > 0) {
-        // Try the cached direct link first (skips re-resolving through the
-        // proxy on every single content piece - see ResolvedUrl's doc
-        // comment in install_common.h). If that fails outright (not a
-        // cancel, not an NCM-side failure), the cached link most likely
-        // stopped working (expired, host hiccup) - reset what's been
-        // written so far (ncmContentStorageWritePlaceHolder is a plain
-        // offset write, safe to redo from scratch) and retry once through
-        // the proxy, which re-resolves to a fresh direct link and re-seeds
-        // the cache for the NCAs still to come.
-        bool had_cached = ru->direct_url[0] != '\0';
-        const char *first_url = had_cached ? ru->direct_url : ru->proxy_url;
-        char *first_effective_out = had_cached ? NULL : ru->direct_url;
-        size_t first_effective_out_size = had_cached ? 0 : sizeof(ru->direct_url);
+        // Resolve from this console where that's possible, so the link isn't
+        // one the server resolved against its own IP (which MediaFire then
+        // refuses to serve here) - see resolved_url_ensure_direct.
+        resolved_url_ensure_direct(ru);
 
-        hres = http_get_range_streamed(first_url, file_offset, size, nca_network_write_cb, &ctx,
-                                        first_effective_out, first_effective_out_size, net_err, sizeof(net_err));
-        // Flush whatever's left in the buffer from a successful transfer
-        // (the last chunk almost never lands exactly on a 4MB boundary).
-        if (hres == HTTP_OK && !ctx.canceled && !ctx.ncm_failed) {
-            nca_flush(&ctx);
+        // Try the cached direct link first (skips a resolve on every single
+        // content piece - see ResolvedUrl's doc comment in install_common.h).
+        bool had_cached = ru->direct_url[0] != '\0';
+        if (had_cached) {
+            hres = http_get_range_streamed(ru->direct_url, file_offset, size, nca_network_write_cb, &ctx,
+                                            NULL, 0, net_err, sizeof(net_err));
+            // Flush whatever's left in the buffer from a successful transfer
+            // (the last chunk almost never lands exactly on a 4MB boundary).
+            if (hres == HTTP_OK && !ctx.canceled && !ctx.ncm_failed) {
+                nca_flush(&ctx);
+            }
         }
 
-        if (hres != HTTP_OK && !ctx.canceled && !ctx.ncm_failed && had_cached) {
+        // Cached link missing or it just failed (not a cancel, not an
+        // NCM-side failure) - (re)resolve through the proxy, retrying on
+        // failure. ncmContentStorageWritePlaceHolder is a plain offset
+        // write, so redoing a partial attempt from scratch is safe.
+        for (int attempt = 0;
+             attempt < NCM_RANGE_RETRIES && hres != HTTP_OK && !ctx.canceled && !ctx.ncm_failed;
+             attempt++) {
             ru->direct_url[0] = '\0';
             ctx.flushed = 0;
             ctx.buf_len = 0;
@@ -337,6 +381,16 @@ bool ncm_install_content_from_url(NcmContentStorage *cs, const NcmContentId *con
         ncmContentStorageDeletePlaceHolder(cs, &placeholder_id);
         return false;
     }
+
+    // The actual gate deciding whether this content piece is considered
+    // complete and gets registered - logged unconditionally (not just on
+    // failure) so a "some app installs before fully downloaded" report can
+    // be checked against what this function itself believed happened, not
+    // just what curl reported lower down in http.c.
+    download_debug_log("ncm_install_content_from_url: expected_size=%llu flushed=%llu hres=%d -> %s",
+                        (unsigned long long)size, (unsigned long long)ctx.flushed, (int)hres,
+                        (hres == HTTP_OK && ctx.flushed == size) ? "OK" : "INCOMPLETE");
+
     if (hres != HTTP_OK || ctx.flushed != size) {
         ncmContentStorageDeletePlaceHolder(cs, &placeholder_id);
         if (err_buf) {
@@ -467,6 +521,17 @@ bool ncm_read_content_meta(NcmContentStorage *cs, const NcmContentId *cnmt_conte
     out->attributes = hdr->attributes;
     memcpy(out->raw_extended_header, buf + sizeof(PackagedContentMetaHeader), hdr->extended_header_size);
 
+    // Struct sizes logged alongside the header fields they're used with: the
+    // whole content table is walked by striding sizeof(PackagedContentInfoRaw)
+    // from a base derived from sizeof(PackagedContentMetaHeader), so if
+    // either is off by even a byte (a stray alignment hole surviving
+    // __attribute__((packed)), say) every entry past the first reads from
+    // the wrong place - which is indistinguishable, from the outside, from
+    // a title that genuinely only has small pieces.
+    download_debug_log("  cnmt layout: header=%zu ext_header=%u info_entry=%zu content_count=%u",
+                        sizeof(PackagedContentMetaHeader), (unsigned)hdr->extended_header_size,
+                        sizeof(PackagedContentInfoRaw), (unsigned)hdr->content_count);
+
     const uint8_t *info_cursor = buf + sizeof(PackagedContentMetaHeader) + hdr->extended_header_size;
     uint64_t infos_bytes = (uint64_t)hdr->content_count * sizeof(PackagedContentInfoRaw);
     if ((uint64_t)cnmt_size < (uint64_t)(info_cursor - buf) + infos_bytes) {
@@ -478,9 +543,72 @@ bool ncm_read_content_meta(NcmContentStorage *cs, const NcmContentId *cnmt_conte
     out->content_info_count = 0;
     for (int i = 0; i < hdr->content_count && out->content_info_count < NCM_MAX_CONTENT_INFOS; i++) {
         const PackagedContentInfoRaw *packaged = (const PackagedContentInfoRaw *)(info_cursor + (size_t)i * sizeof(PackagedContentInfoRaw));
+
+        // Every parsed entry, before any filtering: two entries coming out
+        // with the same content id (which is what a title installing only
+        // its small pieces looks like) means this parse is walking the
+        // table wrong, and the id/type/size triplet is what shows where.
+        // Copied out of the packed struct before use - taking the address of
+        // a packed member yields a possibly-unaligned pointer, which these
+        // helpers aren't written to accept.
+        NcmContentInfo raw_info = packaged->info;
+        u64 raw_size = 0;
+        ncmContentInfoSizeToU64(&raw_info, &raw_size);
+        char raw_hex[33];
+        ncm_format_content_id(&raw_info.content_id, raw_hex);
+        download_debug_log("  cnmt entry[%d] @0x%zx: id=%s type=%u size=%llu",
+                            i, (size_t)((const uint8_t *)packaged - buf), raw_hex,
+                            (unsigned)raw_info.content_type, (unsigned long long)raw_size);
+
         // Skip delta fragments (content_type 6) - no known installer installs these.
         if (packaged->info.content_type <= NcmContentType_LegalInformation) {
             out->content_infos[out->content_info_count++] = packaged->info;
+        }
+    }
+
+    // The single most useful number for a report of "installed with most of
+    // the title missing": how many content pieces the cnmt itself claims to
+    // have, versus how many actually ended up in out->content_infos after
+    // the delta-fragment filter. If content_count is already small here,
+    // the cnmt read out of the just-installed Meta NCA genuinely says the
+    // title only has this many pieces - the bug (or bad source file) is
+    // upstream of this function, not in the install loop that follows it.
+    download_debug_log("ncm_read_content_meta: title_id=%016llx cnmt_size=%lld content_count=%u "
+                        "content_info_count=%d",
+                        (unsigned long long)hdr->title_id, (long long)cnmt_size,
+                        (unsigned)hdr->content_count, out->content_info_count);
+
+    // A content id is the content's own hash, so two entries can never
+    // legitimately share one - different content is different bytes is a
+    // different id, by construction. A file whose cnmt does list the same id
+    // twice is malformed, and the shape it takes in practice is nasty:
+    // observed on hardware, a 16.7GB "game" whose cnmt named an 834KB piece
+    // as *both* its Program and its Control, leaving the actual multi-GB NCA
+    // in the container unreferenced. Every installer faithfully following
+    // that cnmt (this one, DBI, any other) installs only the small piece and
+    // has no reason to think anything went wrong - the title then appears on
+    // the home menu and cannot launch. Rejecting it here turns that silent
+    // wrong "success" into a clear failure that names the real cause.
+    for (int i = 0; i < out->content_info_count; i++) {
+        for (int j = i + 1; j < out->content_info_count; j++) {
+            if (memcmp(out->content_infos[i].content_id.c,
+                        out->content_infos[j].content_id.c,
+                        sizeof(out->content_infos[i].content_id.c)) != 0) {
+                continue;
+            }
+            char hex[33];
+            ncm_format_content_id(&out->content_infos[i].content_id, hex);
+            download_debug_log("ncm_read_content_meta: REJECTED - entries %d and %d share content id %s",
+                                i, j, hex);
+            if (err_buf) {
+                snprintf(err_buf, err_buf_size,
+                         "este archivo está mal armado: su índice interno declara dos veces el mismo "
+                         "contenido (%s) y no referencia el resto del juego, así que instalarlo dejaría "
+                         "un título que no abre. Consigue otra copia del archivo.",
+                         hex);
+            }
+            free(buf);
+            return false;
         }
     }
 

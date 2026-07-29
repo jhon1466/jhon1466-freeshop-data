@@ -422,19 +422,12 @@ bool ncm_install_ncz_content_from_url(NcmContentStorage *cs, const NcmContentId 
                                        char *err_buf, size_t err_buf_size) {
     if (out_registered) *out_registered = false;
 
-    // Unlike ncm_install_content_from_url, content that's already present is
-    // NOT taken on trust here. A content id is the NCA's own hash, so in
-    // principle anything stored under it must be identical - but this app's
-    // earlier NCZ builds could register a byte-wrong reconstruction under a
-    // perfectly valid id (that bug is what the SHA-256 check at the end of
-    // this function now exists to prevent). Consoles that ran those builds
-    // still hold that poisoned content, and skipping over it would keep
-    // resurrecting a title the console then refuses to launch, no matter how
-    // many times it's deleted and reinstalled.
-    //
-    // Deliberately limited to the compressed path: plain .nca content has
-    // always been written by proven code, so the usual dedup still applies
-    // there and nothing gets needlessly re-downloaded.
+    // Content already present is never taken on trust - see
+    // drop_existing_content() in ncm_install.c, which does the same for the
+    // uncompressed paths and carries the full reasoning. (This path reached
+    // that conclusion first, over byte-wrong reconstructions from earlier
+    // NCZ builds; the plain-NCA paths since hit the same class of problem
+    // from a different direction, so it's now uniform across all of them.)
     bool already_has = false;
     Result rc = ncmContentStorageHas(cs, &already_has, content_id);
     if (R_SUCCEEDED(rc) && already_has) {
@@ -634,6 +627,14 @@ bool ncm_install_ncz_content_from_url(NcmContentStorage *cs, const NcmContentId 
         return false;
     }
 
+    // Same "unconditional, not just on failure" reasoning as
+    // ncm_install_content_from_url's own checkpoint in ncm_install.c.
+    download_debug_log("ncm_install_ncz_content_from_url: compressed_size=%llu final_size=%llu "
+                        "decompressed=%llu -> %s",
+                        (unsigned long long)compressed_size, (unsigned long long)final_size,
+                        (unsigned long long)ctx.abs_offset,
+                        (ctx.abs_offset == final_size) ? "OK" : "INCOMPLETE");
+
     if (ctx.abs_offset != final_size) {
         if (err_buf) snprintf(err_buf, err_buf_size,
                                "el contenido NCZ descomprimido no coincide con el tamaño esperado (%llu vs %llu bytes)",
@@ -648,6 +649,11 @@ bool ncm_install_ncz_content_from_url(NcmContentStorage *cs, const NcmContentId 
     // home menu that the console then refuses to launch, which is far worse
     // than a clean failure here.
     if (memcmp(digest, content_id->c, 16) != 0) {
+        // Distinct from the size checkpoint above on purpose: same length
+        // but wrong bytes points at a decompression/re-encryption bug
+        // rather than a truncated transfer.
+        download_debug_log("ncm_install_ncz_content_from_url: SHA-256 mismatch (length matched, "
+                            "content did not) - not registered");
         if (err_buf) snprintf(err_buf, err_buf_size,
                                "el contenido reconstruido del NCZ no coincide con su hash esperado - "
                                "no se instaló nada. Usa \"Instalar vía DBI\" (botón X) para este archivo.");

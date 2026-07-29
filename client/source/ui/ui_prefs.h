@@ -15,6 +15,13 @@ typedef struct {
     int view_mode;
     int sort_mode;
     char category_filter[UI_PREFS_CATEGORY_MAX];
+    // Ambient background effects and UI feedback tones (see ui_fx.h /
+    // ui_sound.h). Both default to on for a new install, so these are
+    // stored inverted - a missing/zeroed field then reads as "enabled",
+    // matching ui_prefs_load's document-everything-defaults-to-0 contract
+    // without needing a separate "was this field present" check.
+    bool effects_disabled;
+    bool sound_disabled;
 } UiListPrefs;
 
 // Loads sdmc:/switch/freeshop/prefs.json into `out`, defaulting every field

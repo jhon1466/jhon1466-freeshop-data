@@ -3,6 +3,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
+// Diagnostic-only: appends one line to sdmc:/switch/freeshop/download_debug.log
+// - see http.c's own doc comment on the function for why this exists.
+// Exported (not http.c-local) so install/*.c can log its own higher-level
+// checkpoints (e.g. "did this NCA's byte count actually match what NCM was
+// told to expect") into the same file/timeline as the raw transfer numbers
+// http.c logs, instead of two disjoint logs that have to be manually
+// interleaved by timestamp to make sense of.
+void download_debug_log(const char *fmt, ...);
+
 typedef enum {
     HTTP_OK = 0,
     HTTP_ERR_INIT,

@@ -18,6 +18,9 @@
 #include "ui/ui_about.h"
 #include "ui/ui_explorer.h"
 #include "ui/ui_queue.h"
+#include "ui/ui_prefs.h"
+#include "ui/ui_sound.h"
+#include "ui/ui_fx.h"
 #include "install/install.h"
 #include "install/install_nsp.h"
 #include "install/install_nsp_native.h"
@@ -225,8 +228,14 @@ static bool install_progress_cb(long total, long now, void *userdata) {
     SDL_SetRenderDrawColor(g_renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, COLOR_BG.a);
     SDL_RenderClear(g_renderer);
 
-    const char *title = (ctx && ctx->phase == INSTALL_PHASE_INSTALLING) ? "Instalando..." : "Descargando...";
-    ui_draw_text(g_font_title, 90, 260, COLOR_TEXT, title);
+    // No animated background or wrapped title here on purpose - this
+    // callback fires several times a second for the entire duration of a
+    // download/install, competing for CPU with the network transfer and NCM
+    // writes themselves. The glow background's texture blending noticeably
+    // slowed real installs when tried here; kept on screens that sit idle
+    // (list, detail, about, the queue's browse/results views).
+    const char *phase_title = (ctx && ctx->phase == INSTALL_PHASE_INSTALLING) ? "Instalando..." : "Descargando...";
+    ui_draw_text(g_font_title, 90, 260, COLOR_TEXT, phase_title);
 
     char line[64];
     float pct = 0.0f;
@@ -294,6 +303,19 @@ int main(int argc, char **argv) {
     // i18n.h. Cheap (one service call), and every screen this app draws
     // needs it, so it happens as early as possible.
     i18n_init();
+
+    // Ambient background effects and UI tones, both honoring whatever the
+    // user last set (defaulting to on). Failures inside these are
+    // deliberately silent - they're decoration, and a console that can't
+    // open an audio device should still get a working store.
+    {
+        UiListPrefs startup_prefs;
+        ui_prefs_load(&startup_prefs);
+        ui_fx_init();
+        ui_fx_set_enabled(!startup_prefs.effects_disabled);
+        ui_sound_init();
+        ui_sound_set_enabled(!startup_prefs.sound_disabled);
+    }
 
     // Without this, the console dims/sleeps on its own inactivity timer
     // regardless of what's happening in the app - including mid-download,
@@ -730,6 +752,8 @@ int main(int argc, char **argv) {
     catalog_free(entries);
     free(root_entries);
     ui_icons_clear();
+    ui_fx_shutdown();
+    ui_sound_shutdown();
     curl_global_cleanup();
     socketExit();
     // Restore normal auto-sleep behavior before handing control back to

@@ -429,5 +429,16 @@ NspInstallResult install_nsp_native(const AppEntry *entry, const char *base_url,
         return NSP_INSTALL_ERR_PARSE;
     }
 
+    // Full file listing as parsed from the network - the most direct way to
+    // see whether a title that "installed" with most of itself missing
+    // actually had the missing pieces in its PFS0 at all (a source file
+    // that's genuinely incomplete/fake) versus this installer failing to
+    // request something that was really there.
+    download_debug_log("install_nsp_native: %s - %d PFS0 entries:", entry->filename, pfs0.count);
+    for (int i = 0; i < pfs0.count; i++) {
+        download_debug_log("  [%d] %s (%llu bytes)", i, pfs0.names[i],
+                            (unsigned long long)pfs0.entries[i].file_size);
+    }
+
     return install_from_url(&ru, &pfs0, cb, phase_cb, userdata, err_buf, err_buf_size);
 }

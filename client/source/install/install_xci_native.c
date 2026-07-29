@@ -486,5 +486,12 @@ XciInstallResult install_xci_native(const AppEntry *entry, const char *base_url,
         return XCI_INSTALL_ERR_DOWNLOAD;
     }
 
+    // Same reasoning as install_nsp_native.c's identical log - see there.
+    download_debug_log("install_xci_native: %s - %d secure partition entries:", entry->filename, secure.count);
+    for (int i = 0; i < secure.count; i++) {
+        download_debug_log("  [%d] %s (%llu bytes)", i, secure.names[i],
+                            (unsigned long long)secure.entries[i].file_size);
+    }
+
     return install_from_url(&ru, &secure, cb, phase_cb, userdata, err_buf, err_buf_size);
 }

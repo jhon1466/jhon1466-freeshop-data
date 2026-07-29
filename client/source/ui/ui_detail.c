@@ -2,6 +2,8 @@
 #include "ui_app.h"
 #include "ui_icons.h"
 #include "ui_queue.h"
+#include "ui_sound.h"
+#include "ui_fx.h"
 #include "../i18n.h"
 
 #include <switch.h>
@@ -168,31 +170,40 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
         if (focus == FOCUS_MAIN) {
             if (kDown & HidNpadButton_A) {
                 *out_target = entry;
+                ui_sound_play(UI_SOUND_CONFIRM);
                 return UI_DETAIL_INSTALL;
             }
             if (kDown & HidNpadButton_B) {
+                ui_sound_play(UI_SOUND_BACK);
                 return UI_DETAIL_BACK;
             }
             if (has_native_install(entry) && (kDown & HidNpadButton_X)) {
                 *out_target = entry;
+                ui_sound_play(UI_SOUND_CONFIRM);
                 return UI_DETAIL_INSTALL_DBI;
             }
             if (dlc_count > 0 && (kDown & HidNpadButton_Y)) {
                 focus = FOCUS_DLC_LIST;
+                ui_sound_play(UI_SOUND_NAVIGATE);
             }
         } else {
+            int dlc_before = dlc_selected;
             if (kDown & HidNpadButton_Down) {
                 if (dlc_selected < dlc_count - 1) dlc_selected++;
             }
             if (kDown & HidNpadButton_Up) {
                 if (dlc_selected > 0) dlc_selected--;
             }
+            if (dlc_selected != dlc_before) ui_sound_play(UI_SOUND_NAVIGATE);
+
             if (kDown & HidNpadButton_A) {
                 *out_target = &dlc_entries[dlc_selected];
+                ui_sound_play(UI_SOUND_CONFIRM);
                 return UI_DETAIL_INSTALL;
             }
             if (kDown & HidNpadButton_B) {
                 focus = FOCUS_MAIN;
+                ui_sound_play(UI_SOUND_BACK);
             }
         }
 
@@ -205,8 +216,10 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
         if (kDown & HidNpadButton_Plus) {
             if (ui_queue_contains(focused->id)) {
                 ui_queue_remove(focused->id);
+                ui_sound_play(UI_SOUND_BACK);
             } else {
                 ui_queue_add(focused->id);
+                ui_sound_play(UI_SOUND_CONFIRM);
             }
         }
 
@@ -215,6 +228,7 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
 
         SDL_SetRenderDrawColor(g_renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, COLOR_BG.a);
         SDL_RenderClear(g_renderer);
+        ui_fx_draw_background();
 
         ui_draw_rect(60, 60, SCREEN_W - 120, 560, COLOR_PANEL);
 

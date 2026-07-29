@@ -22,6 +22,14 @@ int install_common_sha256_file(const char *path, char out_hex[65]);
 void install_common_resolve_url(const char *base_url, const char *download_url,
                                  char *out, size_t out_size);
 
+// Writes the URL to actually download from into `out`: a link resolved by
+// this console when `url` is one the catalog's MediaFire proxy wraps (see
+// resolved_url_ensure_direct for why that matters), or `url` unchanged
+// otherwise. For the whole-file download paths - the streaming installers
+// go through ResolvedUrl instead, which does this itself and additionally
+// keeps the proxy URL around to re-resolve from mid-install.
+void install_common_direct_download_url(const char *url, char *out, size_t out_size);
+
 // Some libnx/sdmc filesystem driver versions don't support rename() the way
 // POSIX callers expect (e.g. failing when the destination already exists,
 // or failing outright across certain FS states). Used as a fallback so an
@@ -98,6 +106,17 @@ typedef struct {
 } ResolvedUrl;
 
 void resolved_url_init(ResolvedUrl *r, const char *proxy_url);
+
+// Resolves `proxy_url` to a direct link from this console rather than
+// letting the server do it, when that's possible (currently: the catalog's
+// own MediaFire proxy). MediaFire ties a resolved link to the IP that asked
+// for it, so a link the server resolved is rejected when the console tries
+// to download it - resolving here makes those the same address. See the
+// implementation's comment for the full reasoning.
+//
+// Returns true when direct_url ends up populated. False is not an error:
+// it just means the usual proxy path is used, exactly as before.
+bool resolved_url_ensure_direct(ResolvedUrl *r);
 
 // Same contract as http_get_range, sourced from `r` instead of a raw URL -
 // see ResolvedUrl's doc comment above for the try-direct-then-fall-back

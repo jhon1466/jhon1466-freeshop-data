@@ -87,6 +87,9 @@ typedef enum {
     STR_ABOUT_DONATE_TEXT,
     STR_ABOUT_DONATE_SCAN,
     STR_ABOUT_FOOTER,
+    STR_ABOUT_FOOTER_TOGGLES,            // "X: efectos (%s)    Y: sonido (%s)    B/+: volver"
+    STR_ON,
+    STR_OFF,
 
     // ---- ui_queue.c ----
     STR_QUEUE_STATUS_DOWNLOADING,
