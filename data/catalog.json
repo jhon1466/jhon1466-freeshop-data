@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-29T21:30:24.569Z",
+  "generatedAt": "2026-07-29T21:32:06.503Z",
   "apps": [
     {
       "id": "3",
@@ -995,6 +995,20 @@
       "filename": "Sniper Elite 3 Ultimate Edition[v1.0.1].nsp",
       "fileType": "nsp",
       "longDescription": "Sniper Elite 3 es un shooter táctico en tercera persona ambientado en la Segunda Guerra Mundial y basado en el sigilo, con balística realista y grandes niveles abiertos.\n\nAcecha a tus objetivos entre los cañones, oasis y ciudades del norte de África, a medida que saboteas un programa de superarmas que podría acabar con la resistencia de los aliados.\n\nProcede con sigilo, planifica y usa tus habilidades para dar caza a tus objetivos. Eres tan letal en las distancias cortas como a distancia: francotirador, cuerpo a cuerpo, trampas explosivas..."
+    },
+    {
+      "id": "74",
+      "title": "Sniper Elite 4",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.3",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/74.webp",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Ftoqqe5645wmvg8d%2FSniper_Elite_4%25255Bv1.0.3%25255D.nsp%2Ffile",
+      "fileSize": 6550971608,
+      "filename": "Sniper Elite 4[v1.0.3].nsp",
+      "fileType": "nsp",
+      "longDescription": "Disfruta del combate táctico en tercera persona, de las posibilidades de juego y de disparos muy precisos. ¡Libera a Italia del fascismo en la Segunda Guerra Mundial!\n\nLibertad sin igual. Completa la campaña como prefieras.\n\nÉpicos disparos desde lejos con una impresionante cámara de rayos X.\n\nForma equipo o enfréntate a otros jugadores en el multijugador online o local.\n\nSiente cada disparo con la vibración HD y mueve la cámara con los controles giroscópicos."
     }
   ]
 }
