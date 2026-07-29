@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-29T00:15:39.139Z",
+  "generatedAt": "2026-07-29T00:56:38.504Z",
   "apps": [
     {
       "id": "3",
@@ -869,20 +869,6 @@
       "filename": "Astral Chain (1.0.1).nsp",
       "fileType": "nsp",
       "longDescription": "Unos cuantos sobrevivientes de un desastre global se unen en una megaciudad futurística. Ahora será tu deber protegerlos contra los malévolos invasores, pero no estás solo, formas parte de una unidad especial de policías equipada con unas armas especiales llamadas Legions. En este nuevo juego de acción de PlatinumGames controlarás tanto al protagonista como a una Legion para desencadenar increíbles combinaciones. Intercambia legiones en cualquier momento para variar tu estilo y desencadenar diferentes habilidades. Los últimos remanentes de la humanidad dependen de ti, y para salvar al mundo, deberás investigar su lado oscuro. Explora una futurística metrópolis al estilo cyberpunk resolviendo crímenes y descubriendo cómo sobreviven los últimos remanentes de la humanidad. Conforme salves el mundo de unos invasores extradimensionales llamados “chimeras”, también podrás interactuar con los ciudadanos, cuestionar a los sospechosos, y formar equipo con los miembros de tu unidad especial para resolver los casos."
-    },
-    {
-      "id": "64",
-      "title": "Alan Wake Remastered",
-      "author": "Unknown",
-      "category": "Game",
-      "description": "",
-      "version": "1.0.1",
-      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/64.jpg",
-      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Ffkrgjv0q9ztpsup%2FAlan_Wake_Remastered_1.0.1.nsp%2Ffile",
-      "fileSize": 16711063256,
-      "filename": "Alan Wake Remastered 1.0.1.nsp",
-      "fileType": "nsp",
-      "longDescription": "En este galardonado thriller de acción cinemática, el afligido escritor Alan Wake se embarca en la desesperada búsqueda de su mujer desaparecida, Alice. Cuando Alan descubre las páginas de una historia de terror que, al parecer, ha escrito él mismo, su comprensión de la realidad se verá amenazada y tendrá que hacer frente a la creciente oscuridad. La historia de terror cobra vida.\n\n• La experiencia completa incluye el juego principal y las dos expansiones de la historia, The Signal y The Writer.\n\n• Vive cada momento tenso de esta historia por episodios, repleta de giros y suspense.\n\n• Combate con luz: intensos combates en los que vas a necesitar algo más que balas para acabar con la oscuridad.\n\nDisfruta de este clásico de siempre con escenas mejoradas, personajes extravagantes, majestuosas vistas del noroeste del Pacífico y mucho más."
     },
     {
       "id": "65",
