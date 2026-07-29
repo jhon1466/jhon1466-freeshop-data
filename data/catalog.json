@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-29T01:01:50.031Z",
+  "generatedAt": "2026-07-29T01:05:18.821Z",
   "apps": [
     {
       "id": "3",
@@ -967,6 +967,20 @@
       "filename": "Fire Emblem Engage (1.3.0).nsp",
       "fileType": "nsp",
       "longDescription": "Una vez por milenio, héroes de leyenda llamados Emblemas conceden insólitos poderes a quien porte los 12 anillos Emblema. El momento del ritual se aproxima y Alear, el Dragón Divino de la profecía, despierta para reunirlos a todos y devolver la paz al continente."
+    },
+    {
+      "id": "72",
+      "title": "Hollow Knigh",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.5.12620",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/72.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fvconngydzq3bwyu%2FHollow%2BKnight%2B%5Bv1.5.12620%5D.xci%2Ffile",
+      "fileSize": 1410287616,
+      "filename": "Hollow Knight [v1.5.12620].xci",
+      "fileType": "xci",
+      "longDescription": "Explora un inframundo sin igual\n\nBajo la decadente ciudad de Dirtmouth subyace Hallownest, una civilización en ruinas que se ha visto reducida a una mera sombra de su otrora glorioso pasado. Tanto exploradores como expoliadores se aventuran bajo la superficie atraídos por sus tesoros, reliquias e incluso en pos de respuestas a antiguos secretos, pero entre este cúmulo de saqueadores también campan a sus anchas criaturas nauseabundas y monstruos grotescos, víctima de un veneno empalagoso que penetra el subsuelo."
     }
   ]
 }
