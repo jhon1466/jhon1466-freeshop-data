@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-29T21:34:53.252Z",
+  "generatedAt": "2026-07-29T21:36:48.425Z",
   "apps": [
     {
       "id": "3",
@@ -1023,6 +1023,20 @@
       "filename": "Sniper Elite V2 Remastered [v1.0.5].nsp",
       "fileType": "nsp",
       "longDescription": "Disfruta de la remasterización del galardonado shooter Sniper Elite V2.\n\nEl sigilo será clave, puesto que estarás entre dos ejércitos desesperados y el tiempo corre en tu contra. Acecha a tus objetivos, prepara el tiro y usa habilidad, paciencia y astucia para cumplir la misión.\n\nEXPERIENCIA REALISTA: Gravedad, viento, velocidad y otros factores afectarán al tiro. ¡La simulación de francotirador más realista hasta la fecha!\n\nTODOS LOS DLC: Acaba con el Führer gracias a todas las armas, mapas y misiones descargables.\n\nELECCIÓN DEL TIRADOR: ¿Será un tiro perfecto lejano desde las sombras o un enfrentamiento directo?\n\nMULTIJUGADOR Y COOPERATIVO: 7 modos multijugador (4 jugadores en local, 8 online) y 4 modos cooperativos.\n\nCONTROLES EXCLUSIVOS PARA NINTENDO SWITCH: Mejorados para mando Pro y compatibles con los controles de movimiento.\n\nGRÁFICOS REMASTERIZADOS: Texturas, efectos y gráficos modernizados dotan de nueva vida a este clásico.\n\nMODO FOTO: Captura y comparte unas fotos impresionantes."
+    },
+    {
+      "id": "76",
+      "title": "SIGNALIS",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.3",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/76.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Flsmfih7szk2w5u3%2FSIGNALIS_%2525281.3%252529.nsp%2Ffile",
+      "fileSize": 4866180312,
+      "filename": "SIGNALIS (1.3).nsp",
+      "fileType": "nsp",
+      "longDescription": "En busca de sueños dentro de una pesadilla\n\nDespierta de tu letargo y explora un mundo surrealista con tecnología retro con Elster, una técnica replika que busca a la compañera y los sueños que perdió. Descubre secretos aterradores, puzles desafiantes y criaturas de pesadilla en una experiencia clásica de terror psicológico y supervivencia cósmicos tan tensa como melancólica.\n\nExcepción fatal\n\nSIGNALIS está ambientado en un futuro distópico en el que la humanidad ha colonizado el sistema solar y el régimen totalitario de Eusan mantiene un férreo control mediante vigilancia y propaganda agresivas. Los androides conocidos como replikas viven entre la población y hacen de trabajadores, funcionarios y protektors junto a los ciudadanos a los que emula su diseño.\n\nLa historia de SIGNALIS empieza cuando una replika llamada Elster despierta de su criogenización en una nave siniestrada. Atrapada en un frío planeta, se embarca en un viaje hacia profundidades ignotas."
     }
   ]
 }
