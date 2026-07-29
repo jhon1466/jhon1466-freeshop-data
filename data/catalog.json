@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-29T21:47:39.667Z",
+  "generatedAt": "2026-07-29T21:51:29.240Z",
   "apps": [
     {
       "id": "3",
@@ -1037,6 +1037,19 @@
       "filename": "SIGNALIS (1.3).nsp",
       "fileType": "nsp",
       "longDescription": "En busca de sueños dentro de una pesadilla\n\nDespierta de tu letargo y explora un mundo surrealista con tecnología retro con Elster, una técnica replika que busca a la compañera y los sueños que perdió. Descubre secretos aterradores, puzles desafiantes y criaturas de pesadilla en una experiencia clásica de terror psicológico y supervivencia cósmicos tan tensa como melancólica.\n\nExcepción fatal\n\nSIGNALIS está ambientado en un futuro distópico en el que la humanidad ha colonizado el sistema solar y el régimen totalitario de Eusan mantiene un férreo control mediante vigilancia y propaganda agresivas. Los androides conocidos como replikas viven entre la población y hacen de trabajadores, funcionarios y protektors junto a los ciudadanos a los que emula su diseño.\n\nLa historia de SIGNALIS empieza cuando una replika llamada Elster despierta de su criogenización en una nave siniestrada. Atrapada en un frío planeta, se embarca en un viaje hacia profundidades ignotas."
+    },
+    {
+      "id": "77",
+      "title": "Minecraft - Story Mode - Season Two",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/77.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fko8d3hsyopbz1z3%2FMinecraft%2BStory%2BMode%2BSeason%2BTwo.nsp%2Ffile",
+      "fileSize": 6372075844,
+      "filename": "Minecraft Story Mode Season Two.nsp",
+      "fileType": "nsp"
     }
   ]
 }
