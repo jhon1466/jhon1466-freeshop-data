@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-29T01:05:18.821Z",
+  "generatedAt": "2026-07-29T21:30:24.569Z",
   "apps": [
     {
       "id": "3",
@@ -981,6 +981,20 @@
       "filename": "Hollow Knight [v1.5.12620].xci",
       "fileType": "xci",
       "longDescription": "Explora un inframundo sin igual\n\nBajo la decadente ciudad de Dirtmouth subyace Hallownest, una civilización en ruinas que se ha visto reducida a una mera sombra de su otrora glorioso pasado. Tanto exploradores como expoliadores se aventuran bajo la superficie atraídos por sus tesoros, reliquias e incluso en pos de respuestas a antiguos secretos, pero entre este cúmulo de saqueadores también campan a sus anchas criaturas nauseabundas y monstruos grotescos, víctima de un veneno empalagoso que penetra el subsuelo."
+    },
+    {
+      "id": "73",
+      "title": "Sniper Elite 3 Ultimate Edition",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.1",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/73.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F05n0e9zpuuotyfh%2FSniper_Elite_3_Ultimate_Edition%25255Bv1.0.1%25255D.nsp%2Ffile",
+      "fileSize": 6684995800,
+      "filename": "Sniper Elite 3 Ultimate Edition[v1.0.1].nsp",
+      "fileType": "nsp",
+      "longDescription": "Sniper Elite 3 es un shooter táctico en tercera persona ambientado en la Segunda Guerra Mundial y basado en el sigilo, con balística realista y grandes niveles abiertos.\n\nAcecha a tus objetivos entre los cañones, oasis y ciudades del norte de África, a medida que saboteas un programa de superarmas que podría acabar con la resistencia de los aliados.\n\nProcede con sigilo, planifica y usa tus habilidades para dar caza a tus objetivos. Eres tan letal en las distancias cortas como a distancia: francotirador, cuerpo a cuerpo, trampas explosivas..."
     }
   ]
 }
