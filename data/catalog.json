@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-29T21:32:06.503Z",
+  "generatedAt": "2026-07-29T21:34:53.252Z",
   "apps": [
     {
       "id": "3",
@@ -1009,6 +1009,20 @@
       "filename": "Sniper Elite 4[v1.0.3].nsp",
       "fileType": "nsp",
       "longDescription": "Disfruta del combate táctico en tercera persona, de las posibilidades de juego y de disparos muy precisos. ¡Libera a Italia del fascismo en la Segunda Guerra Mundial!\n\nLibertad sin igual. Completa la campaña como prefieras.\n\nÉpicos disparos desde lejos con una impresionante cámara de rayos X.\n\nForma equipo o enfréntate a otros jugadores en el multijugador online o local.\n\nSiente cada disparo con la vibración HD y mueve la cámara con los controles giroscópicos."
+    },
+    {
+      "id": "75",
+      "title": "Sniper Elite V2 Remastered",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.5",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/75.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F2h3oz0xe7kknnxt%2FSniper_Elite_V2_Remastered_%25255Bv1.0.5%25255D.nsp%2Ffile",
+      "fileSize": 7416375512,
+      "filename": "Sniper Elite V2 Remastered [v1.0.5].nsp",
+      "fileType": "nsp",
+      "longDescription": "Disfruta de la remasterización del galardonado shooter Sniper Elite V2.\n\nEl sigilo será clave, puesto que estarás entre dos ejércitos desesperados y el tiempo corre en tu contra. Acecha a tus objetivos, prepara el tiro y usa habilidad, paciencia y astucia para cumplir la misión.\n\nEXPERIENCIA REALISTA: Gravedad, viento, velocidad y otros factores afectarán al tiro. ¡La simulación de francotirador más realista hasta la fecha!\n\nTODOS LOS DLC: Acaba con el Führer gracias a todas las armas, mapas y misiones descargables.\n\nELECCIÓN DEL TIRADOR: ¿Será un tiro perfecto lejano desde las sombras o un enfrentamiento directo?\n\nMULTIJUGADOR Y COOPERATIVO: 7 modos multijugador (4 jugadores en local, 8 online) y 4 modos cooperativos.\n\nCONTROLES EXCLUSIVOS PARA NINTENDO SWITCH: Mejorados para mando Pro y compatibles con los controles de movimiento.\n\nGRÁFICOS REMASTERIZADOS: Texturas, efectos y gráficos modernizados dotan de nueva vida a este clásico.\n\nMODO FOTO: Captura y comparte unas fotos impresionantes."
     }
   ]
 }
