@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-07-29T21:51:29.240Z",
+  "generatedAt": "2026-08-01T23:51:36.459Z",
   "apps": [
     {
       "id": "3",
@@ -1050,6 +1050,20 @@
       "fileSize": 6372075844,
       "filename": "Minecraft Story Mode Season Two.nsp",
       "fileType": "nsp"
+    },
+    {
+      "id": "78",
+      "title": "Need for Speed - Hot Pursuit Remastered",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.3",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/78.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fgmk4jx5dlggqxgo%2FNeed_for_Speed_-_Hot_Pursuit_Remastered_%2525281.0.3%252529.nsp%2Ffile",
+      "fileSize": 8736138558,
+      "filename": "Need for Speed - Hot Pursuit Remastered (1.0.3).nsp",
+      "fileType": "nsp",
+      "longDescription": "Siente la emoción de la persecución y la adrenalina de escapar en Need for Speed™ Hot Pursuit Remastered en Nintendo Switch™. Siente la velocidad como forajido y como policía en los coches de mayor rendimiento del mundo. Supera la presión o acaba con los infractores de la ley con las armas tácticas que tienes a tu disposición en un juego de carreras trepidante y competitivo. Actualizado con gráficos mejorados, multijugador con plataforma cruzada y competición asincrónica con Autolog, además de todos los DLC adicionales. Esta es la presentación aclamada por la crítica de Need for Speed Ultimate Edition de Criterion Games. Es hora de retomar la persecución."
     }
   ]
 }
