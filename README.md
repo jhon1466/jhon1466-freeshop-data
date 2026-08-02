@@ -185,12 +185,27 @@ version on every launch (see
 1. Bump `CLIENT_VERSION` in [`config.h`](client/source/config.h).
 2. Build (`docker build -t freeshop-client-builder client/` once, then
    `docker run --rm -v "$(pwd)/client:/workspace" freeshop-client-builder sh -c "cd /workspace && make"`).
-3. On `jhon1466-freeshop-data`, create a GitHub Release tagged `v<version>`
-   (a leading `v` is optional - stripped before comparing) and attach the
-   built `client/freeshop-client.nro` as a release asset named **exactly**
-   `freeshop-client.nro` (see `CLIENT_RELEASE_ASSET_NAME` in `config.h`).
-   Whatever you write as that release's description is shown to users in
-   the update confirmation dialog - worth actually filling in.
+3. Publish it:
+
+   ```
+   node scripts/publish-client-release.js v<version> "release notes"
+   ```
+
+   That creates the GitHub Release on `jhon1466-freeshop-data` tagged
+   `v<version>` and attaches the built `client/freeshop-client.nro` under
+   the asset name the updater expects (`CLIENT_RELEASE_ASSET_NAME` in
+   `config.h`). It refuses to publish if the tag doesn't match the
+   `CLIENT_VERSION` the `.nro` was actually built with, which is the easy
+   way to ship an update consoles then re-offer forever. Long notes can go
+   in a file instead: `--notes-file notes.txt`.
+
+   The script needs `GITHUB_TOKEN` in `server/.env` (gitignored). Doing
+   this by hand through GitHub's web UI works too - the tag's leading `v`
+   is optional (stripped before comparing) and only the asset name has to
+   be exact.
+
+   Whatever you write as the release's description is shown to users in the
+   update confirmation dialog - worth actually filling in.
 
 The version check is a plain string comparison, not semver-aware - it only
 detects "different from what's running", so don't publish a release with an
