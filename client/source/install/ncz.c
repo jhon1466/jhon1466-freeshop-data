@@ -576,25 +576,26 @@ bool ncm_install_ncz_content_from_url(NcmContentStorage *cs, const NcmContentId 
 
     uint64_t remaining_compressed = compressed_size - prefetch_len;
     if (ok && remaining_compressed > 0) {
-        // Same cached-direct-link-then-fall-back-to-proxy behavior as
-        // ncm_install_content_from_url - see ResolvedUrl's doc comment.
+        // Cached link first, then a freshly resolved one on failure - same
+        // as ncm_install_content_from_url, and for the same reason: a
+        // MediaFire link can expire partway through a long transfer, and
+        // re-resolving has to happen on-console (resolved_url_refresh)
+        // rather than by requesting the proxy URL, which yields a link
+        // bound to the server's address that MediaFire refuses here.
+        resolved_url_ensure_direct(ru);
         bool had_cached = ru->direct_url[0] != '\0';
-        const char *first_url = had_cached ? ru->direct_url : ru->proxy_url;
-        char *first_effective_out = had_cached ? NULL : ru->direct_url;
-        size_t first_effective_out_size = had_cached ? 0 : sizeof(ru->direct_url);
 
         char net_err[160] = {0};
-        HttpResult r2 = http_get_range_streamed(first_url, entry_offset + prefetch_len, remaining_compressed,
-                                                 ncz_network_write_cb, &ctx,
-                                                 first_effective_out, first_effective_out_size,
-                                                 net_err, sizeof(net_err));
-        if (r2 != HTTP_OK && !ctx.canceled && !ctx.failed && had_cached) {
-            ru->direct_url[0] = '\0';
+        HttpResult r2 = HTTP_ERR_REQUEST;
+        if (had_cached) {
+            r2 = http_get_range_streamed(ru->direct_url, entry_offset + prefetch_len, remaining_compressed,
+                                          ncz_network_write_cb, &ctx, NULL, 0, net_err, sizeof(net_err));
+        }
+        if (r2 != HTTP_OK && !ctx.canceled && !ctx.failed) {
+            const char *url = resolved_url_refresh(ru);
             net_err[0] = '\0';
-            r2 = http_get_range_streamed(ru->proxy_url, entry_offset + prefetch_len, remaining_compressed,
-                                          ncz_network_write_cb, &ctx,
-                                          ru->direct_url, sizeof(ru->direct_url),
-                                          net_err, sizeof(net_err));
+            r2 = http_get_range_streamed(url, entry_offset + prefetch_len, remaining_compressed,
+                                          ncz_network_write_cb, &ctx, NULL, 0, net_err, sizeof(net_err));
         }
         if (r2 != HTTP_OK && !ctx.canceled && !ctx.failed) {
             ok = false;

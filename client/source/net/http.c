@@ -54,6 +54,27 @@ static void set_curl_error(char *err_buf, size_t err_buf_size, CURLcode code) {
     snprintf(err_buf, err_buf_size, "%s", curl_easy_strerror(code));
 }
 
+typedef struct {
+    MemBuffer buf;
+    size_t max_len; // abort once buf.len would exceed this
+} BoundedMemBuffer;
+
+// Same growable-buffer behavior as mem_write_cb, but refuses to grow past
+// max_len. http_get_range asks for a small slice (a header, a ticket, a few
+// KB); a server that ignores Range and answers 200 with the entire file
+// instead would otherwise have mem_write_cb buffer that whole file - for an
+// NSP/XCI, gigabytes - into RAM before curl_easy_perform even returns,
+// which is what a "the app just hangs for a long time" report turned out to
+// be. Returning a short write here aborts the transfer immediately (curl
+// surfaces it as CURLE_WRITE_ERROR) instead of buffering data nothing will
+// ever use.
+static size_t bounded_mem_write_cb(void *ptr, size_t size, size_t nmemb, void *userdata) {
+    BoundedMemBuffer *bounded = (BoundedMemBuffer *)userdata;
+    size_t add = size * nmemb;
+    if (bounded->buf.len + add > bounded->max_len) return 0;
+    return mem_write_cb(ptr, size, nmemb, &bounded->buf);
+}
+
 HttpResult http_get(const char *url, char **out_buf, size_t *out_len,
                      char *err_buf, size_t err_buf_size) {
     CURL *curl = curl_easy_init();
@@ -230,15 +251,19 @@ HttpResult http_get_range(const char *url, uint64_t offset, uint64_t length,
         return HTTP_ERR_INIT;
     }
 
-    MemBuffer buf = {0};
+    // A little slack past the requested length: a compliant 206 response is
+    // never larger than asked for, so this only ever matters for the
+    // non-compliant-server case this guards against, not for legitimate
+    // traffic.
+    BoundedMemBuffer bounded = { .buf = {0}, .max_len = (size_t)length + 4096 };
     char range[64];
     snprintf(range, sizeof(range), "%llu-%llu",
              (unsigned long long)offset, (unsigned long long)(offset + length - 1));
 
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_RANGE, range);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, mem_write_cb);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buf);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, bounded_mem_write_cb);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &bounded);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
@@ -254,37 +279,44 @@ HttpResult http_get_range(const char *url, uint64_t offset, uint64_t length,
 
     CURLcode res = curl_easy_perform(curl);
 
+    static const char *const RANGE_UNSUPPORTED_MSG =
+        "el servidor no soporta descargas por rango - los archivos NSP/XCI grandes necesitan esto "
+        "para instalarse sin descargar el archivo completo primero; usa \"Instalar vía DBI\" en su lugar";
+
+    if (res == CURLE_WRITE_ERROR) {
+        // bounded_mem_write_cb refusing more than requested - a server
+        // ignoring Range and sending the whole file back. Reported the same
+        // way as the 200-instead-of-206 case below (it's the same
+        // underlying problem, just caught before wasting time/memory
+        // buffering gigabytes that would've been thrown away anyway).
+        curl_easy_cleanup(curl);
+        free(bounded.buf.data);
+        if (err_buf) snprintf(err_buf, err_buf_size, "%s", RANGE_UNSUPPORTED_MSG);
+        return HTTP_ERR_REQUEST;
+    }
     if (res != CURLE_OK) {
         curl_easy_cleanup(curl);
-        free(buf.data);
+        free(bounded.buf.data);
         set_curl_error(err_buf, err_buf_size, res);
         return HTTP_ERR_REQUEST;
     }
 
-    // A server that doesn't support (or outright ignores) Range answers 200
-    // with the WHOLE body instead of 206 with just the requested slice -
-    // curl_easy_perform above still reports CURLE_OK either way, since as
-    // far as it's concerned the request completed normally. Every caller of
-    // this function (hfs0_parse_at_url/pfs0 equivalents, ticket/cert
-    // fetches) treats whatever comes back as if it were exactly the
-    // requested [offset, offset+length) slice, so a 200 here would get
-    // silently parsed as if it were that slice - garbage read from the
-    // wrong file position, surfacing as a confusing "not a valid NSP/XCI"
-    // or "'secure' partition not found" instead of the real cause. Checking
-    // this explicitly matches http_get_range_streamed's existing check;
-    // this one, unlike that one, was missing it.
+    // A server that doesn't support (or outright ignores) Range but answers
+    // with something small enough to fit under bounded_mem_write_cb's cap
+    // still needs catching here: 200 with the WHOLE body instead of 206
+    // with just the requested slice. Every caller of this function
+    // (hfs0_parse_at_url/pfs0 equivalents, ticket/cert fetches) treats
+    // whatever comes back as if it were exactly the requested
+    // [offset, offset+length) slice, so a 200 here would get silently
+    // parsed as if it were that slice - garbage read from the wrong file
+    // position, surfacing as a confusing "not a valid NSP/XCI" or "'secure'
+    // partition not found" instead of the real cause.
     long status = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
     if (status != 206) {
         curl_easy_cleanup(curl);
-        free(buf.data);
-        if (err_buf) {
-            snprintf(err_buf, err_buf_size,
-                     "el servidor no soporta descargas por rango (HTTP %ld) - los archivos NSP/XCI grandes "
-                     "necesitan esto para instalarse sin descargar el archivo completo primero; usa "
-                     "\"Instalar vía DBI\" en su lugar",
-                     status);
-        }
+        free(bounded.buf.data);
+        if (err_buf) snprintf(err_buf, err_buf_size, "%s", RANGE_UNSUPPORTED_MSG);
         return HTTP_ERR_REQUEST;
     }
 
@@ -295,8 +327,8 @@ HttpResult http_get_range(const char *url, uint64_t offset, uint64_t length,
     }
     curl_easy_cleanup(curl);
 
-    *out_buf = buf.data ? buf.data : strdup("");
-    *out_len = buf.len;
+    *out_buf = bounded.buf.data ? bounded.buf.data : strdup("");
+    *out_len = bounded.buf.len;
     return HTTP_OK;
 }
 
@@ -325,6 +357,29 @@ HttpResult http_get_range_streamed(const char *url, uint64_t offset, uint64_t le
     // No CURLOPT_TIMEOUT here on purpose - unlike http_get_range's small
     // bounded reads, this streams potentially GB-sized content, exactly
     // like http_download_to_file below.
+    //
+    // A stall-detecting bound instead: without one, a connection that goes
+    // quiet without closing hangs this call forever, and because the
+    // install's progress/cancel handling only runs when data arrives (the
+    // write callback drives it), the whole app appears frozen with no way
+    // to back out. Aborting on "essentially no data for this long" turns
+    // that into a normal transfer error the caller resumes from
+    // (ncm_install.c reconnects and continues where it left off), so a
+    // dropped connection recovers by itself.
+    //
+    // The threshold is deliberately near-zero rather than a real speed
+    // floor, so genuinely slow connections are never cut off - only ones
+    // delivering literally nothing. The window is short because every
+    // second spent waiting on a connection that has already died is a
+    // second of visibly stalled download, and reconnecting is cheap
+    // (measured: ~0.1s to connect, ~0.5s to first byte).
+    //
+    // It still has to clear how long a 4MB flush to NCM can block this
+    // transfer (see nca_flush), since that time counts against curl's speed
+    // average even though nothing is wrong - measured at ~0.16s per flush,
+    // so 8s leaves a very wide margin.
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 8L);
     curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 512L * 1024L);
     curl_easy_setopt(curl, CURLOPT_USERAGENT,
                       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -341,7 +396,10 @@ HttpResult http_get_range_streamed(const char *url, uint64_t offset, uint64_t le
                       "TLS-ECDHE-ECDSA-WITH-AES-128-GCM-SHA256:"
                       "TLS-ECDHE-ECDSA-WITH-AES-256-GCM-SHA384");
 
+    u64 start_tick = armGetSystemTick();
     CURLcode res = curl_easy_perform(curl);
+    double elapsed_sec = armTicksToNs(armGetSystemTick() - start_tick) / 1e9;
+
     long status = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
     if (res == CURLE_OK && status == 206 && effective_url_out) {
@@ -356,12 +414,24 @@ HttpResult http_get_range_streamed(const char *url, uint64_t offset, uint64_t le
     // whole title actually written: `downloaded` is exactly how many bytes
     // curl handed to write_cb (which is what actually reaches NCM here),
     // whether or not that matches what was asked for in `length`.
+    //
+    // Timing alongside it: how long the connection took to set up
+    // (mbedtls's handshake is slow on this hardware) versus how long it
+    // then spent transferring is the difference between "the host is
+    // throttling" and "reconnecting is costing more than it saves", which
+    // the byte counts alone can't distinguish.
     curl_off_t dbg_downloaded = -1;
+    double dbg_connect = 0.0, dbg_starttransfer = 0.0;
     curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD_T, &dbg_downloaded);
-    download_debug_log("http_get_range_streamed: url=%s offset=%llu requested=%llu result=%s "
-                        "http_status=%ld downloaded=%lld",
-                        url, (unsigned long long)offset, (unsigned long long)length,
-                        curl_easy_strerror(res), status, (long long)dbg_downloaded);
+    curl_easy_getinfo(curl, CURLINFO_CONNECT_TIME, &dbg_connect);
+    curl_easy_getinfo(curl, CURLINFO_STARTTRANSFER_TIME, &dbg_starttransfer);
+    download_debug_log("http_get_range_streamed: offset=%llu requested=%llu result=%s "
+                        "http_status=%ld downloaded=%lld elapsed=%.1fs connect=%.1fs first_byte=%.1fs "
+                        "avg=%.2fMB/s",
+                        (unsigned long long)offset, (unsigned long long)length,
+                        curl_easy_strerror(res), status, (long long)dbg_downloaded,
+                        elapsed_sec, dbg_connect, dbg_starttransfer,
+                        elapsed_sec > 0 ? (dbg_downloaded / elapsed_sec) / (1024.0 * 1024.0) : 0.0);
 
     curl_easy_cleanup(curl);
 
@@ -442,6 +512,9 @@ HttpResult http_download_to_file(const char *url, const char *dest_path,
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 30L);
+    // Same stall bound as http_get_range_streamed - see the comment there.
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
+    curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 30L);
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
     curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, xfer_progress_cb);
     curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &ctx);

@@ -1,5 +1,6 @@
 #include "install_common.h"
 
+#include <switch.h>
 #include <mbedtls/sha256.h>
 #include <ctype.h>
 #include <errno.h>
@@ -210,13 +211,26 @@ bool resolved_url_ensure_direct(ResolvedUrl *r) {
     char page_url[900];
     if (!mediafire_page_from_proxy(r->proxy_url, page_url, sizeof(page_url))) return false;
 
+    // Timed: this fetches and parses a full MediaFire file page, so it is
+    // far from free, and it runs again every time a transfer has to be
+    // re-established with a new link. If recovering from dropped transfers
+    // is costing more than the transfers themselves, this is where it
+    // shows up.
+    u64 start_tick = armGetSystemTick();
     char *html = NULL;
     size_t html_len = 0;
-    if (http_get(page_url, &html, &html_len, NULL, 0) != HTTP_OK) return false;
+    if (http_get(page_url, &html, &html_len, NULL, 0) != HTTP_OK) {
+        download_debug_log("  resolve: FAILED to fetch MediaFire page after %.1fs",
+                            armTicksToNs(armGetSystemTick() - start_tick) / 1e9);
+        return false;
+    }
 
     bool ok = mediafire_scrape_link(html, r->direct_url, sizeof(r->direct_url));
     free(html);
     if (!ok) r->direct_url[0] = '\0';
+
+    download_debug_log("  resolve: %s (page %zu bytes, %.1fs)", ok ? "OK" : "scrape FAILED",
+                        html_len, armTicksToNs(armGetSystemTick() - start_tick) / 1e9);
     return ok;
 }
 
@@ -235,17 +249,30 @@ void resolved_url_init(ResolvedUrl *r, const char *proxy_url) {
     r->direct_url[0] = '\0';
 }
 
-// A self-resolving proxy like this catalog's /api/dl/mediafire hands back a
-// different storage node on every resolve (confirmed directly: three
-// requests against the same proxy URL landed on three different
-// download*.mediafire.com hosts) - MediaFire's own CDN, not something the
-// proxy controls. Node-to-node behavior isn't uniform: some don't honor
-// Range at all (answer 200 with the whole body instead of 206 with the
-// requested slice - see http_get_range's check), which single-handedly
-// blocks the native streaming installer for whichever titles happen to land
-// on one. A few retries, each a genuinely fresh resolve, gives a real shot
-// at landing on a node that does support it instead of failing outright on
-// the first unlucky one.
+const char *resolved_url_refresh(ResolvedUrl *r) {
+    // Discard the cached link first - resolved_url_ensure_direct() is a
+    // no-op while one is still set, and the whole point of getting here is
+    // that the one we had stopped working.
+    r->direct_url[0] = '\0';
+    if (resolved_url_ensure_direct(r)) return r->direct_url;
+
+    // Nothing resolvable on-console (not a proxied MediaFire URL, or the
+    // page fetch failed) - the proxy URL is all there is. For MediaFire
+    // that's a link resolved against the *server's* IP, which MediaFire
+    // then refuses to serve here (see resolved_url_ensure_direct), so this
+    // is a genuine last resort rather than an equivalent alternative.
+    return r->proxy_url;
+}
+
+// MediaFire hands back a different storage node on every resolve (confirmed
+// directly: three requests against the same proxy URL landed on three
+// different download*.mediafire.com hosts), and node behavior isn't uniform
+// - some answer 200 with the whole body instead of 206 with the requested
+// slice, which the streaming installer can't use at all. Its links also
+// expire, so one that worked at the start of a multi-GB install can stop
+// working partway through. Retrying, each attempt a genuinely fresh
+// on-console resolve, covers both: a new node for the unlucky-node case, a
+// new link for the expired-link case.
 #define RESOLVED_URL_RANGE_RETRIES 4
 
 HttpResult resolved_url_get_range(ResolvedUrl *r, uint64_t offset, uint64_t length,
@@ -257,18 +284,17 @@ HttpResult resolved_url_get_range(ResolvedUrl *r, uint64_t offset, uint64_t leng
         HttpResult hres = http_get_range(r->direct_url, offset, length, out_buf, out_len,
                                           NULL, 0, err_buf, err_buf_size);
         if (hres == HTTP_OK) return HTTP_OK;
-        // The cached direct link stopped working (expired, host hiccup,
-        // etc.) - fall through to a fresh resolve instead of failing
-        // outright.
-        r->direct_url[0] = '\0';
     }
 
     HttpResult hres = HTTP_ERR_REQUEST;
     for (int attempt = 0; attempt < RESOLVED_URL_RANGE_RETRIES; attempt++) {
-        hres = http_get_range(r->proxy_url, offset, length, out_buf, out_len,
-                               r->direct_url, sizeof(r->direct_url), err_buf, err_buf_size);
+        // Re-resolve from this console every time rather than falling back
+        // to proxy_url: for MediaFire that URL resolves against the
+        // server's IP and is refused here, so retrying it just repeats the
+        // same failure four times over.
+        const char *url = resolved_url_refresh(r);
+        hres = http_get_range(url, offset, length, out_buf, out_len, NULL, 0, err_buf, err_buf_size);
         if (hres == HTTP_OK) return HTTP_OK;
-        r->direct_url[0] = '\0';
     }
     return hres;
 }

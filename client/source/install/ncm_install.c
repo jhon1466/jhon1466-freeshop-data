@@ -207,6 +207,14 @@ typedef struct {
     bool ncm_failed;
     char *err_buf;
     size_t err_buf_size;
+    // Total nanoseconds spent inside nca_flush. Writing to NCM happens on
+    // this same thread as the transfer, so every one of these nanoseconds is
+    // time curl spends not reading the socket - which is both why a
+    // download can average well below what the link actually delivers, and
+    // why curl's own speed accounting can see a healthy connection as
+    // stalled. Measuring it is the only way to tell "the host is slow" apart
+    // from "we are the bottleneck".
+    u64 flush_ns_total;
 } NcaNetworkWriteCtx;
 
 // Flushes whatever's buffered into the placeholder in one ncm write, then
@@ -219,9 +227,18 @@ typedef struct {
 // 4MB batching the local-file path (ncm_install_content) already does.
 static bool nca_flush(NcaNetworkWriteCtx *ctx) {
     if (ctx->buf_len == 0) return true;
+    u64 flush_start = armGetSystemTick();
     Result rc = ncmContentStorageWritePlaceHolder(ctx->cs, ctx->placeholder_id,
                                                    (s64)ctx->flushed, ctx->buf, ctx->buf_len);
+    ctx->flush_ns_total += armTicksToNs(armGetSystemTick() - flush_start);
     if (R_FAILED(rc)) {
+        // Logged with the raw Result: curl only ever surfaces this as a
+        // generic "failed writing received data", which is indistinguishable
+        // from the two other ways nca_network_write_cb can refuse a chunk,
+        // and the actual NCM error code is what says whether it's out of
+        // space, a bad placeholder, or something else entirely.
+        download_debug_log("  nca_flush FAILED: ncmContentStorageWritePlaceHolder(offset=%llu, len=%zu) "
+                            "rc=0x%x", (unsigned long long)ctx->flushed, ctx->buf_len, rc);
         if (ctx->err_buf) snprintf(ctx->err_buf, ctx->err_buf_size, "ncmContentStorageWritePlaceHolder falló (0x%x)", rc);
         ctx->ncm_failed = true;
         return false;
@@ -240,6 +257,10 @@ static size_t nca_network_write_cb(void *ptr, size_t size, size_t nmemb, void *u
     // (truncating would register a placeholder full of wrong/incomplete
     // data without ever surfacing an error).
     if (ctx->flushed + ctx->buf_len + add > ctx->total_size) {
+        download_debug_log("  write_cb REFUSED: server overran the requested range "
+                            "(flushed=%llu buffered=%zu incoming=%zu total=%llu)",
+                            (unsigned long long)ctx->flushed, ctx->buf_len, add,
+                            (unsigned long long)ctx->total_size);
         if (ctx->err_buf) snprintf(ctx->err_buf, ctx->err_buf_size,
                                     "el servidor envió más datos de los esperados para este contenido");
         ctx->ncm_failed = true;
@@ -261,6 +282,8 @@ static size_t nca_network_write_cb(void *ptr, size_t size, size_t nmemb, void *u
     }
 
     if (ctx->cb && !ctx->cb((long)ctx->total_size, (long)(ctx->flushed + ctx->buf_len), ctx->userdata)) {
+        download_debug_log("  write_cb: canceled by user at %llu bytes",
+                            (unsigned long long)(ctx->flushed + ctx->buf_len));
         ctx->canceled = true;
         return 0;
     }
@@ -276,6 +299,18 @@ bool ncm_install_content_from_url(NcmContentStorage *cs, const NcmContentId *con
     if (out_registered) *out_registered = false;
 
     drop_existing_content(cs, content_id, size, "ncm_install_content_from_url");
+
+    // Free space up front: a write that starts fine and fails partway is
+    // exactly what running out of room looks like, and NCM reserves a
+    // piece's full size at CreatePlaceHolder time without necessarily
+    // failing there if the space isn't really available.
+    {
+        s64 free_space = 0;
+        if (R_SUCCEEDED(ncmContentStorageGetFreeSpaceSize(cs, &free_space))) {
+            download_debug_log("  ncm free space: %lld bytes (piece needs %llu)",
+                                (long long)free_space, (unsigned long long)size);
+        }
+    }
 
     NcmPlaceHolderId placeholder_id;
     Result rc = ncmContentStorageGeneratePlaceHolderId(cs, &placeholder_id);
@@ -319,17 +354,17 @@ bool ncm_install_content_from_url(NcmContentStorage *cs, const NcmContentId *con
         .ncm_failed = false,
         .err_buf = err_buf,
         .err_buf_size = err_buf_size,
+        .flush_ns_total = 0,
     };
 
-    // A self-resolving proxy (MediaFire) hands back a different storage node
-    // on every resolve, and node-to-node behavior isn't uniform - some don't
-    // honor Range at all (see http_get_range_streamed's own 206 check).
-    // Retrying a few times, each a genuinely fresh resolve, gives a real
-    // shot at a node that does support it instead of failing outright on
-    // whichever one the first attempt happened to land on. Matches
-    // RESOLVED_URL_RANGE_RETRIES's reasoning in install_common.c (the
-    // small-header-fetch equivalent of this).
-    #define NCM_RANGE_RETRIES 4
+    // How many attempts in a row may fail *without transferring anything*
+    // before giving up. Deliberately counted per stall rather than in total:
+    // MediaFire routinely cuts a long transfer partway (observed dropping a
+    // 4.28GB piece at ~226MB, then ~87MB), so a total cap would doom any
+    // large content to never finishing no matter how well each attempt
+    // went. Attempts that make progress don't count against this at all -
+    // only a link that delivers nothing at all, repeatedly, ends the loop.
+    #define NCM_RANGE_STALL_RETRIES 6
 
     HttpResult hres = HTTP_OK;
     char net_err[160] = {0};
@@ -339,36 +374,63 @@ bool ncm_install_content_from_url(NcmContentStorage *cs, const NcmContentId *con
         // refuses to serve here) - see resolved_url_ensure_direct.
         resolved_url_ensure_direct(ru);
 
-        // Try the cached direct link first (skips a resolve on every single
-        // content piece - see ResolvedUrl's doc comment in install_common.h).
-        bool had_cached = ru->direct_url[0] != '\0';
-        if (had_cached) {
-            hres = http_get_range_streamed(ru->direct_url, file_offset, size, nca_network_write_cb, &ctx,
-                                            NULL, 0, net_err, sizeof(net_err));
-            // Flush whatever's left in the buffer from a successful transfer
-            // (the last chunk almost never lands exactly on a 4MB boundary).
-            if (hres == HTTP_OK && !ctx.canceled && !ctx.ncm_failed) {
+        int stalled = 0;
+        bool first_attempt = true;
+
+        // Resumes rather than restarts. ctx.flushed is how much has actually
+        // been committed to the placeholder, and NCM writes are plain
+        // offset writes, so a dropped transfer only costs the bytes that
+        // hadn't been flushed yet - the next attempt asks for the remainder
+        // and carries on. Restarting from zero each time (as this used to)
+        // meant a piece bigger than whatever the host was willing to serve
+        // in one go could never complete, however many retries it got.
+        while (ctx.flushed < size && !ctx.canceled && !ctx.ncm_failed && stalled < NCM_RANGE_STALL_RETRIES) {
+            // Only resolve a new link when the current one has stopped
+            // delivering anything. Re-resolving costs a full page fetch
+            // from MediaFire, so doing it after every hiccup turned each
+            // recovery into a multi-second stall of its own - and it's
+            // wasted work whenever the link is still fine, which is
+            // precisely what an attempt that transferred data proves. A
+            // host that merely throttles or drops long transfers (MediaFire
+            // does both) is best answered by reconnecting to the same link;
+            // only a link that yields nothing at all is worth replacing.
+            // `stalled == 0` means the previous attempt moved data, so the
+            // link is demonstrably still good; keep using it.
+            bool link_still_good = ru->direct_url[0] != '\0' && (first_attempt || stalled == 0);
+            const char *url = link_still_good ? ru->direct_url : resolved_url_refresh(ru);
+            first_attempt = false;
+
+            uint64_t before = ctx.flushed;
+            u64 flush_ns_before = ctx.flush_ns_total;
+            ctx.buf_len = 0; // drop the unflushed tail of a failed attempt; refetched below
+            net_err[0] = '\0';
+
+            hres = http_get_range_streamed(url, file_offset + ctx.flushed, size - ctx.flushed,
+                                            nca_network_write_cb, &ctx, NULL, 0, net_err, sizeof(net_err));
+
+            // Commit whatever did arrive, successful attempt or not - it's
+            // contiguous data starting exactly at ctx.flushed either way,
+            // and keeping it is what lets the next attempt pick up further
+            // along instead of covering the same ground again.
+            if (!ctx.canceled && !ctx.ncm_failed) {
                 nca_flush(&ctx);
+            }
+
+            if (ctx.flushed > before) {
+                stalled = 0;
+                download_debug_log("  resume: %llu/%llu bytes committed (+%llu this attempt, "
+                                    "%.1fs of it blocked writing to NCM)",
+                                    (unsigned long long)ctx.flushed, (unsigned long long)size,
+                                    (unsigned long long)(ctx.flushed - before),
+                                    (ctx.flush_ns_total - flush_ns_before) / 1e9);
+            } else {
+                stalled++;
             }
         }
 
-        // Cached link missing or it just failed (not a cancel, not an
-        // NCM-side failure) - (re)resolve through the proxy, retrying on
-        // failure. ncmContentStorageWritePlaceHolder is a plain offset
-        // write, so redoing a partial attempt from scratch is safe.
-        for (int attempt = 0;
-             attempt < NCM_RANGE_RETRIES && hres != HTTP_OK && !ctx.canceled && !ctx.ncm_failed;
-             attempt++) {
-            ru->direct_url[0] = '\0';
-            ctx.flushed = 0;
-            ctx.buf_len = 0;
-            net_err[0] = '\0';
-            hres = http_get_range_streamed(ru->proxy_url, file_offset, size, nca_network_write_cb, &ctx,
-                                            ru->direct_url, sizeof(ru->direct_url), net_err, sizeof(net_err));
-            if (hres == HTTP_OK && !ctx.canceled && !ctx.ncm_failed) {
-                nca_flush(&ctx);
-            }
-        }
+        // A transfer that ended short but whose flush completed the piece is
+        // a success - the last attempt's CURLcode says nothing useful then.
+        if (ctx.flushed == size) hres = HTTP_OK;
     }
 
     if (ctx.canceled) {

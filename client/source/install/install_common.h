@@ -118,6 +118,13 @@ void resolved_url_init(ResolvedUrl *r, const char *proxy_url);
 // it just means the usual proxy path is used, exactly as before.
 bool resolved_url_ensure_direct(ResolvedUrl *r);
 
+// Throws away any cached direct link and resolves a fresh one, returning
+// the URL to fetch from next. Use this to recover mid-install: MediaFire's
+// direct links expire, so one that worked when a multi-GB download started
+// can be dead by the time a later piece is requested. Falls back to the
+// proxy URL only when nothing can be resolved on-console.
+const char *resolved_url_refresh(ResolvedUrl *r);
+
 // Same contract as http_get_range, sourced from `r` instead of a raw URL -
 // see ResolvedUrl's doc comment above for the try-direct-then-fall-back
 // behavior.

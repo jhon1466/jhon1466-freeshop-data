@@ -118,6 +118,37 @@ void ui_draw_progress_bar(int x, int y, int w, int h, float pct, SDL_Color fill,
     if (fill_w > 0) ui_draw_rect(x, y, fill_w, h, fill);
 }
 
+void ui_truncate_to_width(TTF_Font *font, const char *text, int max_w, char *out, size_t out_size) {
+    snprintf(out, out_size, "%s", text);
+    if (!font) return;
+
+    int w = 0, h = 0;
+    TTF_SizeUTF8(font, out, &w, &h);
+    if (w <= max_w) return;
+
+    size_t len = strlen(out);
+    while (len > 1) {
+        len--;
+        snprintf(out, out_size, "%.*s...", (int)len, text);
+        TTF_SizeUTF8(font, out, &w, &h);
+        if (w <= max_w) return;
+    }
+}
+
+void ui_format_bytes(int64_t bytes, char *out, size_t out_size) {
+    if (bytes < 0) bytes = 0;
+
+    double kb = bytes / 1024.0;
+    double mb = kb / 1024.0;
+    double gb = mb / 1024.0;
+
+    // Two decimals for GB, one for MB: at GB scale a single decimal only
+    // moves once every ~100MB, which reads as a stalled transfer.
+    if (gb >= 1.0) snprintf(out, out_size, "%.2f GB", gb);
+    else if (mb >= 1.0) snprintf(out, out_size, "%.1f MB", mb);
+    else snprintf(out, out_size, "%.0f KB", kb);
+}
+
 int ui_draw_text_wrapped(TTF_Font *font, int x, int y, int max_width, int line_height,
                           SDL_Color color, const char *text) {
     if (!font || !text) return y;

@@ -173,6 +173,11 @@ typedef struct {
     // storage (install_nsp_native, install_xci_native) flip this via
     // on_install_phase once that phase actually starts.
     InstallPhase phase;
+    // What's being installed, shown under the phase heading: the catalog
+    // title, a filename for a local install, "FreeShop" for a self-update.
+    // May be NULL, in which case no name line is drawn at all rather than
+    // showing something that could be mistaken for a real title.
+    const char *title;
 } InstallProgressCtx;
 
 static void on_install_phase(InstallPhase phase, void *userdata) {
@@ -235,18 +240,31 @@ static bool install_progress_cb(long total, long now, void *userdata) {
     // slowed real installs when tried here; kept on screens that sit idle
     // (list, detail, about, the queue's browse/results views).
     const char *phase_title = (ctx && ctx->phase == INSTALL_PHASE_INSTALLING) ? "Instalando..." : "Descargando...";
-    ui_draw_text(g_font_title, 90, 260, COLOR_TEXT, phase_title);
+    ui_draw_text(g_font_title, 90, 250, COLOR_TEXT, phase_title);
 
-    char line[64];
+    // Which title this is - truncated to one line rather than wrapped:
+    // wrapping would rasterize several lines on every one of these
+    // redraws, and this callback is deliberately kept cheap (see above).
+    if (ctx && ctx->title && ctx->title[0]) {
+        char name_line[160];
+        ui_truncate_to_width(g_font_body, ctx->title, 1100, name_line, sizeof(name_line));
+        ui_draw_text(g_font_body, 90, 300, COLOR_TEXT, name_line);
+    }
+
+    char line[96];
     float pct = 0.0f;
+    char done_str[32];
+    ui_format_bytes(now, done_str, sizeof(done_str));
     if (total > 0) {
         pct = (float)now / (float)total;
-        snprintf(line, sizeof(line), "%d%% (%ld / %ld bytes)", (int)(pct * 100), now, total);
+        char total_str[32];
+        ui_format_bytes(total, total_str, sizeof(total_str));
+        snprintf(line, sizeof(line), "%d%%   (%s / %s)", (int)(pct * 100), done_str, total_str);
     } else {
-        snprintf(line, sizeof(line), "%ld bytes descargados", now);
+        snprintf(line, sizeof(line), "%s descargados", done_str);
     }
-    ui_draw_text(g_font_body, 90, 320, COLOR_TEXT_DIM, line);
-    ui_draw_progress_bar(90, 370, 1100, 24, pct, COLOR_ACCENT, COLOR_PANEL);
+    ui_draw_text(g_font_body, 90, 340, COLOR_TEXT_DIM, line);
+    ui_draw_progress_bar(90, 380, 1100, 24, pct, COLOR_ACCENT, COLOR_PANEL);
 
     // Average speed since the download started (simple and robust - no
     // ring buffer to size/manage - trades a little responsiveness to
@@ -263,12 +281,12 @@ static bool install_progress_cb(long total, long now, void *userdata) {
                 char speed_line[64];
                 snprintf(speed_line, sizeof(speed_line), "%.1f MB/s - tiempo restante: %dm %ds",
                          bytes_per_sec / (1024.0 * 1024.0), mins, secs);
-                ui_draw_text(g_font_small, 90, 410, COLOR_TEXT_DIM, speed_line);
+                ui_draw_text(g_font_small, 90, 420, COLOR_TEXT_DIM, speed_line);
             }
         }
     }
 
-    ui_draw_text(g_font_small, 90, 440, COLOR_TEXT_DIM, "B: cancelar");
+    ui_draw_text(g_font_small, 90, 450, COLOR_TEXT_DIM, "B: cancelar");
 
     SDL_RenderPresent(g_renderer);
 
@@ -468,7 +486,7 @@ int main(int argc, char **argv) {
             padConfigureInput(1, HidNpadStyleSet_NpadStandard);
             padInitializeDefault(&update_pad);
             InstallProgressCtx update_ctx = { .pad = &update_pad, .start_tick = 0, .started = false,
-                                               .phase = INSTALL_PHASE_DOWNLOADING };
+                                               .phase = INSTALL_PHASE_DOWNLOADING, .title = "FreeShop" };
             char staging_path[512];
             char update_err[256];
             SelfUpdateApplyResult ares = self_update_apply(self_path, asset_url, staging_path, sizeof(staging_path),
@@ -649,8 +667,13 @@ int main(int argc, char **argv) {
             // catalog install path below) makes the progress screen show
             // "Instalando..." from the first frame instead of briefly
             // (and wrongly) claiming to be downloading.
+            // No catalog title for a local install - its filename, without
+            // the directory part, is the closest thing to one.
+            const char *local_title = strrchr(local_path, '/');
+            local_title = local_title ? local_title + 1 : local_path;
+
             InstallProgressCtx local_ctx = { .pad = &local_pad, .start_tick = 0, .started = false,
-                                              .phase = INSTALL_PHASE_INSTALLING };
+                                              .phase = INSTALL_PHASE_INSTALLING, .title = local_title };
 
             InstallLocalResult lres = local_is_xci
                 ? install_xci_from_local_file(local_path, install_progress_cb, on_install_phase, &local_ctx,
@@ -689,7 +712,8 @@ int main(int argc, char **argv) {
         padConfigureInput(1, HidNpadStyleSet_NpadStandard);
         padInitializeDefault(&install_pad);
         InstallProgressCtx progress_ctx = { .pad = &install_pad, .start_tick = 0, .started = false,
-                                             .phase = INSTALL_PHASE_DOWNLOADING };
+                                             .phase = INSTALL_PHASE_DOWNLOADING,
+                                             .title = install_target->title };
 
         // Entries from different enabled sources need their own base URL,
         // not a single global one - see AppEntry.source_base_url.

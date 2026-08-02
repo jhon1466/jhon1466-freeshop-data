@@ -41,6 +41,15 @@ void ui_draw_progress_bar(int x, int y, int w, int h, float pct, SDL_Color fill,
 int ui_draw_text_wrapped(TTF_Font *font, int x, int y, int max_width, int line_height,
                           SDL_Color color, const char *text);
 
+// Truncates `text` to fit within max_w pixels, appending "..." if cut.
+void ui_truncate_to_width(TTF_Font *font, const char *text, int max_w, char *out, size_t out_size);
+
+// Human-readable byte count, picking KB/MB/GB by magnitude. Raw byte
+// counts are unreadable at the sizes this app deals in - a game's progress
+// shown as "2463583744 / 4281265152 bytes" says far less at a glance than
+// "2.29 / 3.99 GB", and the digits churn every frame.
+void ui_format_bytes(int64_t bytes, char *out, size_t out_size);
+
 // Full-screen modal message (supports '\n'), blocks until A or + is pressed.
 void ui_app_show_message(const char *msg);
 

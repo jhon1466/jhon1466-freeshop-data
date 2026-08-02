@@ -124,7 +124,9 @@ static void draw_row(AppEntry *entries, int entry_count, const char *id, int row
 
     if (e) {
         char meta[48];
-        snprintf(meta, sizeof(meta), "%s  -  %.1f MB", type_label(e->file_type), e->file_size / (1024.0 * 1024.0));
+        char size_str[32];
+        ui_format_bytes(e->file_size, size_str, sizeof(size_str));
+        snprintf(meta, sizeof(meta), "%s  -  %s", type_label(e->file_type), size_str);
         ui_draw_text(g_font_small, text_x, row_y + 34, COLOR_TEXT_DIM, meta);
     }
 
@@ -185,11 +187,14 @@ static void draw_queue_installing(QueueProgressCtx *ctx, long total, long now) {
                          COLOR_ACCENT, COLOR_BG);
 
     char line[96];
+    char done_str[32];
+    ui_format_bytes(now, done_str, sizeof(done_str));
     if (total > 0) {
-        snprintf(line, sizeof(line), "%d%%  (%.1f / %.1f MB)", (int)(pct * 100),
-                 now / (1024.0 * 1024.0), total / (1024.0 * 1024.0));
+        char total_str[32];
+        ui_format_bytes(total, total_str, sizeof(total_str));
+        snprintf(line, sizeof(line), "%d%%  (%s / %s)", (int)(pct * 100), done_str, total_str);
     } else {
-        snprintf(line, sizeof(line), "%.1f MB", now / (1024.0 * 1024.0));
+        snprintf(line, sizeof(line), "%s", done_str);
     }
 
     if (ctx->started && total > 0 && now > 0) {
