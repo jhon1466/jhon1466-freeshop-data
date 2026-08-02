@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-01T23:54:03.163Z",
+  "generatedAt": "2026-08-02T04:15:18.298Z",
   "apps": [
     {
       "id": "3",
@@ -1078,6 +1078,20 @@
       "filename": "SUPERHOT.nsp",
       "fileType": "nsp",
       "longDescription": "\"«Un referente de la excelencia».\n– destructoid 9/10\n\n«El shooter más innovador al que he jugado en años».\n– Jimquisition 9,5/10\n\n«Distinto de todo a lo que he jugado antes».\n– Polygon 9/10\n\n«A la altura de System Shock y Half-Life».\n– The Daily Dot 5/5\n\n«¡SUPERHOT ES EL SHOOTER MÁS INNOVADOR AL QUE HE JUGADO EN AÑOS!»\n– Washington Post"
+    },
+    {
+      "id": "80",
+      "title": "Super Mario 3D All-Stars",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.1.1",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/80.jpeg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F8hnip0cf64jod6d%2FSuper_Mario_3D_All_Stars_%25255Bv1.1.1%25255D.xci%2Ffile",
+      "fileSize": 5268717056,
+      "filename": "Super Mario 3D All Stars [v1.1.1].xci",
+      "fileType": "xci",
+      "longDescription": "¡3 juegos reunidos en 1 colección estelar!\n\n¡Descubre tres de las más grandes aventuras de Mario en 3D con Super Mario 3D All-Stars para Nintendo Switch! Este paquete especial incluye Super Mario 64, Super Mario Sunshine y Super Mario Galaxy. Todos los juegos se han puesto al día para Nintendo Switch y cuentan con gráficos en alta definición, controles adaptados a los mandos Joy-Con y un reproductor de música que incluye las épicas bandas sonoras de los tres juegos."
     }
   ]
 }
