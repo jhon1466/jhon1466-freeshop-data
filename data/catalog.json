@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-03T01:27:55.679Z",
+  "generatedAt": "2026-08-03T01:34:38.388Z",
   "apps": [
     {
       "id": "3",
@@ -1078,6 +1078,20 @@
       "filename": "Super Mario 3D All Stars [v1.1.1].xci",
       "fileType": "xci",
       "longDescription": "¡3 juegos reunidos en 1 colección estelar!\n\n¡Descubre tres de las más grandes aventuras de Mario en 3D con Super Mario 3D All-Stars para Nintendo Switch! Este paquete especial incluye Super Mario 64, Super Mario Sunshine y Super Mario Galaxy. Todos los juegos se han puesto al día para Nintendo Switch y cuentan con gráficos en alta definición, controles adaptados a los mandos Joy-Con y un reproductor de música que incluye las épicas bandas sonoras de los tres juegos."
+    },
+    {
+      "id": "81",
+      "title": "Hades II",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.137848",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/81.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fgmom6unjv97r5uq%2FHades%2BII%2B%5Bv1.0.137848%5D.xci%2Ffile",
+      "fileSize": 7477566464,
+      "filename": "Hades II [v1.0.137848].xci",
+      "fileType": "xci",
+      "longDescription": "ÁBRETE PASO MÁS ALLÁ DEL INFRAMUNDO\n\nEncarnarás a la Princesa inmortal del Inframundo, y explorarás un mundo más extenso y elaborado. Tendrás que derrotar a las huestes del Titán del Tiempo con la ayuda del Olimpo, en una historia desgarradora que se irá desgranando poco a poco con cada uno de tus logros o reveses."
     }
   ]
 }
