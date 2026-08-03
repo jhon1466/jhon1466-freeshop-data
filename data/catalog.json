@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-03T01:36:34.411Z",
+  "generatedAt": "2026-08-03T03:25:53.284Z",
   "apps": [
     {
       "id": "3",
@@ -1106,6 +1106,20 @@
       "filename": "Hades [v1.0.38233].xci",
       "fileType": "xci",
       "longDescription": "COMBATE PARA ESCAPAR DEL INFIERNO\n\nComo el príncipe inmortal del Inframundo, tendrás a tu disposición los poderes y las armas míticas del Olimpo para liberarte de las garras del mismísimo dios de los muertos, al tiempo que te vas haciendo más fuerte y descubres más piezas de la historia con cada intento de fuga."
+    },
+    {
+      "id": "83",
+      "title": "New Super Mario Bros. U Deluxe",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "1.0.2",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/83.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fs1jveiiuqzysh8m%2FNew%2BSuper%2BMario%2BBros%2BU%2BDeluxe%2Bv131072.xci%2Ffile",
+      "fileSize": 2701500928,
+      "filename": "New Super Mario Bros U Deluxe v131072.xci",
+      "fileType": "xci",
+      "longDescription": "¡Únete a Mario, Luigi y a sus amigos en cualquier momento y en cualquier lugar en una divertida aventura para uno o varios jugadores! Disfruta de dos aventuras de desplazamiento lateral con hasta tres amigos* e intenta salvar al Reino Champiñón. Incluye los juegos New Super Mario Bros. U y New Super Luigi U, ¡ambos incluyen a Nabbit y a Toadette como personajes jugables!"
     }
   ]
 }
