@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-03T01:34:38.388Z",
+  "generatedAt": "2026-08-03T01:36:34.411Z",
   "apps": [
     {
       "id": "3",
@@ -1092,6 +1092,20 @@
       "filename": "Hades II [v1.0.137848].xci",
       "fileType": "xci",
       "longDescription": "ÁBRETE PASO MÁS ALLÁ DEL INFRAMUNDO\n\nEncarnarás a la Princesa inmortal del Inframundo, y explorarás un mundo más extenso y elaborado. Tendrás que derrotar a las huestes del Titán del Tiempo con la ayuda del Olimpo, en una historia desgarradora que se irá desgranando poco a poco con cada uno de tus logros o reveses."
+    },
+    {
+      "id": "82",
+      "title": "Hades",
+      "author": "Unknown",
+      "category": "Game",
+      "description": "",
+      "version": "v1.0.38233",
+      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/82.jpg",
+      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2Fhzr1tscn5cq176p%2FHades_%25255Bv1.0.38233%25255D.xci%2Ffile",
+      "fileSize": 6181138432,
+      "filename": "Hades [v1.0.38233].xci",
+      "fileType": "xci",
+      "longDescription": "COMBATE PARA ESCAPAR DEL INFIERNO\n\nComo el príncipe inmortal del Inframundo, tendrás a tu disposición los poderes y las armas míticas del Olimpo para liberarte de las garras del mismísimo dios de los muertos, al tiempo que te vas haciendo más fuerte y descubres más piezas de la historia con cada intento de fuga."
     }
   ]
 }
