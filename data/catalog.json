@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-02T04:15:18.298Z",
+  "generatedAt": "2026-08-03T01:27:55.679Z",
   "apps": [
     {
       "id": "3",
@@ -1064,20 +1064,6 @@
       "filename": "Need for Speed - Hot Pursuit Remastered (1.0.3).nsp",
       "fileType": "nsp",
       "longDescription": "Siente la emoción de la persecución y la adrenalina de escapar en Need for Speed™ Hot Pursuit Remastered en Nintendo Switch™. Siente la velocidad como forajido y como policía en los coches de mayor rendimiento del mundo. Supera la presión o acaba con los infractores de la ley con las armas tácticas que tienes a tu disposición en un juego de carreras trepidante y competitivo. Actualizado con gráficos mejorados, multijugador con plataforma cruzada y competición asincrónica con Autolog, además de todos los DLC adicionales. Esta es la presentación aclamada por la crítica de Need for Speed Ultimate Edition de Criterion Games. Es hora de retomar la persecución."
-    },
-    {
-      "id": "79",
-      "title": "SUPERHOT",
-      "author": "Unknown",
-      "category": "Game",
-      "description": "",
-      "version": "1.0",
-      "iconUrl": "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main/icons/79.jpg",
-      "downloadUrl": "https://yomu-9c07c.web.app/api/dl/mediafire?url=https%3A%2F%2Fwww.mediafire.com%2Ffile%2F1zd0swthg9fyb3w%2FSUPERHOT.nsp%2Ffile",
-      "fileSize": 2391285976,
-      "filename": "SUPERHOT.nsp",
-      "fileType": "nsp",
-      "longDescription": "\"«Un referente de la excelencia».\n– destructoid 9/10\n\n«El shooter más innovador al que he jugado en años».\n– Jimquisition 9,5/10\n\n«Distinto de todo a lo que he jugado antes».\n– Polygon 9/10\n\n«A la altura de System Shock y Half-Life».\n– The Daily Dot 5/5\n\n«¡SUPERHOT ES EL SHOOTER MÁS INNOVADOR AL QUE HE JUGADO EN AÑOS!»\n– Washington Post"
     },
     {
       "id": "80",
