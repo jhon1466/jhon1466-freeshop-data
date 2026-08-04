@@ -21,6 +21,7 @@ extern "C" {
 #include "i18n.h"
 }
 
+#include "views/smoke_activity.hpp"
 #include "views/theme.hpp"
 
 int main(int argc, char* argv[])
@@ -59,7 +60,7 @@ int main(int argc, char* argv[])
     // assets that must work with no network. Best-effort.
     romfsInit();
 
-    brls::Application::pushActivity(new brls::Activity());
+    brls::Application::pushActivity(new freeshop::SmokeActivity());
 
     while (brls::Application::mainLoop())
         ;
