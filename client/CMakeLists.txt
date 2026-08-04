@@ -48,6 +48,19 @@ file(GLOB_RECURSE FREESHOP_C_SRC CONFIGURE_DEPENDS
 )
 list(APPEND FREESHOP_C_SRC ${CMAKE_CURRENT_SOURCE_DIR}/source/i18n.c)
 
+# Borealis's own libnx entry hooks. Its CMakeLists globs the Switch platform
+# directory for "*.cpp" only, and this one file is C - so userAppInit() and
+# userAppExit() silently never make it into the library, libnx falls back to
+# its empty defaults, and nothing brings up romfs / setsys / set / psm /
+# nifm / pl / hidsys. SwitchPlatform's constructor then calls
+# setsysGetColorSetId() against an uninitialised service and takes a data
+# abort on a null pointer before a single frame is drawn. Compiling it into
+# the application instead of patching vendored code keeps the vendor tree
+# pristine and re-cloneable.
+if(PLATFORM_SWITCH)
+    list(APPEND FREESHOP_C_SRC ${BOREALIS_LIBRARY}/lib/platforms/switch/switch_wrapper.c)
+endif()
+
 file(GLOB_RECURSE FREESHOP_CXX_SRC CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/source/views/*.cpp
 )
@@ -78,14 +91,27 @@ target_compile_options(${PROJECT_NAME} PRIVATE -Wall -O2)
 # What the devkitPro Makefile's nacptool/elf2nro rules did, expressed
 # through the toolchain's own helper so the outputs stay identical.
 if(PLATFORM_SWITCH)
+    # Borealis is compiled with BRLS_RESOURCES="romfs:/" on Switch (see its
+    # CMakeLists), so its font, XML layouts, material icons and i18n files
+    # must sit at the *root* of the .nro's romfs - not in a subfolder.
+    # Shipping only our own romfs/ meant every asset load failed and the app
+    # died during Application::init(). This stages a merged romfs (Borealis's
+    # resources first, then ours on top) and packs that instead.
+    set(ROMFS_STAGE ${CMAKE_BINARY_DIR}/romfs-stage)
     add_custom_target(${PROJECT_NAME}.nro ALL
         DEPENDS ${PROJECT_NAME}
+        COMMAND ${CMAKE_COMMAND} -E rm -rf ${ROMFS_STAGE}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${ROMFS_STAGE}
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                ${CMAKE_CURRENT_SOURCE_DIR}/vendor/borealis/resources ${ROMFS_STAGE}
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+                ${CMAKE_CURRENT_SOURCE_DIR}/romfs ${ROMFS_STAGE}
         COMMAND ${NX_NACPTOOL_EXE} --create "FreeShop" "jhon1466" "0.1.0"
                 ${CMAKE_BINARY_DIR}/${PROJECT_NAME}.nacp
         COMMAND ${NX_ELF2NRO_EXE} ${CMAKE_BINARY_DIR}/${PROJECT_NAME}.elf
                 ${CMAKE_BINARY_DIR}/${PROJECT_NAME}.nro
                 --icon=${CMAKE_CURRENT_SOURCE_DIR}/icon.jpg
                 --nacp=${CMAKE_BINARY_DIR}/${PROJECT_NAME}.nacp
-                --romfsdir=${CMAKE_CURRENT_SOURCE_DIR}/romfs
+                --romfsdir=${ROMFS_STAGE}
     )
 endif()
