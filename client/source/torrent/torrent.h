@@ -15,6 +15,7 @@
 #include "metainfo.h"
 #include "piece.h"
 #include "dht_engine.h"
+#include <stdbool.h>
 #include <stdint.h>
 
 typedef struct torrent torrent_t;

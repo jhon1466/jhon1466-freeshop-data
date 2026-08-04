@@ -31,3 +31,13 @@ client/*.map
 # OS
 .DS_Store
 Thumbs.db
+
+# Borealis UI framework - vendored, not committed (126MB with submodules).
+# Fetch with:
+#   git clone --depth 1 --branch moonlight_wiliwili --recurse-submodules \
+#     --shallow-submodules https://github.com/XITRIX/borealis.git client/vendor/borealis
+# Same fork/branch pipensx pins in its own .gitmodules.
+client/vendor/borealis/
+
+# CMake build output
+client/build-cmake/
