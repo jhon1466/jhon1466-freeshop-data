@@ -8,11 +8,13 @@
 
 #include <setjmp.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <pthread.h>
 
 #define ICON_CACHE_DIR "sdmc:/switch/freeshop/icon_cache"
 // With decoded icons capped at ICON_MAX_DIM x ICON_MAX_DIM (256x256 RGBA =
@@ -49,7 +51,8 @@ static void icon_debug_log(const char *fmt, ...) {
 }
 
 typedef enum {
-    ICON_LOADING,
+    ICON_LOADING,   // network fetch in flight
+    ICON_DECODING,  // bytes in hand (network or disk cache), queued on the decode worker
     ICON_READY,
     ICON_FAILED,
 } IconState;
@@ -66,12 +69,18 @@ typedef struct {
 
 static IconCacheEntry s_cache[ICON_CACHE_MAX];
 static int s_cache_count = 0;
-// Index into s_cache of the one icon currently being fetched over the
-// network, or -1 - see pump_active_fetch(). Capped at one in flight at a
-// time (matching the old per-frame throttle's intent: don't open a pile of
-// simultaneous connections while the user scrolls through a big grid), the
-// difference now being that request doesn't block anything while it's out.
-static int s_active_index = -1;
+// How many icons this pumps over the network at once. Used to be 1 (the
+// old per-frame throttle's intent carried over: don't open a pile of
+// simultaneous connections while the user scrolls through a big grid) -
+// raised now that a catalog can carry thousands of covers (see sources.h's
+// SOURCE_KIND_TORRENT_CATALOG) and a brand new session has to populate the
+// on-disk cache for all of them one request at a time otherwise. Each
+// fetch is still its own non-blocking HttpAsyncRequest - this only bounds
+// how many are outstanding together, not anything that blocks a frame.
+#define ICON_CONCURRENT_FETCHES 6
+// Indices into s_cache currently being fetched, or -1 - see
+// pump_active_fetches().
+static int s_active_indices[ICON_CONCURRENT_FETCHES] = { -1, -1, -1, -1, -1, -1 };
 
 // A network hiccup (common enough on this app's software-TLS connections -
 // see http.c's own comments on that) shouldn't permanently blank an icon
@@ -86,10 +95,80 @@ static bool icon_should_retry(const IconCacheEntry *slot, u64 now_tick) {
     return armTicksToNs(now_tick - slot->last_attempt_tick) >= ICON_RETRY_DELAY_NS;
 }
 
+// Finds a free slot in s_active_indices (a fetch just completed, or one
+// was never started), or -1 if every concurrent fetch slot is busy.
+static int find_free_fetch_slot(void) {
+    for (int i = 0; i < ICON_CONCURRENT_FETCHES; i++) {
+        if (s_active_indices[i] < 0) return i;
+    }
+    return -1;
+}
+
+static bool is_fetch_active(int cache_idx) {
+    for (int i = 0; i < ICON_CONCURRENT_FETCHES; i++) {
+        if (s_active_indices[i] == cache_idx) return true;
+    }
+    return false;
+}
+
+// A visible entry that finds every fetch slot busy just waits its turn
+// behind whatever six entries happen to be mid-fetch - which, right after a
+// scroll, can be entries that are no longer on screen at all: the grid only
+// calls ui_icons_get() for what it currently draws, so an off-screen
+// fetch's last_used_tick simply stops advancing the moment it scrolls away,
+// while a genuinely visible one gets touched every single frame. This is
+// what a user report of "icons don't load in the order things are actually
+// shown on screen" traces back to - the six slots stay pinned to whatever
+// started first, not to what's currently visible. Reclaiming the stalest
+// slot once it's gone idle for a beat is what makes loading track the
+// screen instead of scroll history. Returns -1 if every active slot was
+// touched too recently to be scrolled away (more visible icons than
+// concurrent slots - a real "just wait" case, not this bug).
+#define ICON_STALE_TOUCH_NS 350000000ULL // ~350ms - a few frames past one scroll step
+static int find_preemptable_fetch_slot(u64 now_tick) {
+    int best_fetch_slot = -1;
+    u64 best_age_ns = 0;
+    for (int i = 0; i < ICON_CONCURRENT_FETCHES; i++) {
+        int cache_idx = s_active_indices[i];
+        if (cache_idx < 0) continue;
+        u64 age_ns = armTicksToNs(now_tick - s_cache[cache_idx].last_used_tick);
+        if (age_ns < ICON_STALE_TOUCH_NS) continue;
+        if (best_fetch_slot < 0 || age_ns > best_age_ns) {
+            best_fetch_slot = i;
+            best_age_ns = age_ns;
+        }
+    }
+    return best_fetch_slot;
+}
+
+// Cancels the in-flight fetch occupying `fetch_slot` (found via
+// find_preemptable_fetch_slot) and frees it for a currently-visible entry.
+// The preempted entry is left ICON_FAILED without bumping attempt_count, so
+// if it scrolls back into view it's retried on the very next ask - see
+// icon_should_retry - rather than treated as one of its real attempts.
+// Safe (a no-op) to call on an already-free slot, so callers don't need to
+// track whether their fetch_slot came from find_free_fetch_slot() or
+// find_preemptable_fetch_slot().
+static void preempt_fetch_slot(int fetch_slot) {
+    int cache_idx = s_active_indices[fetch_slot];
+    if (cache_idx < 0) return;
+    IconCacheEntry *slot = &s_cache[cache_idx];
+    if (slot->req) {
+        http_async_cancel(slot->req);
+        slot->req = NULL;
+    }
+    slot->state = ICON_FAILED;
+    slot->last_attempt_tick = 0; // no cooldown - it never really failed, it just scrolled away
+    icon_debug_log("[%s] preempted (scrolled off-screen) to free a fetch slot", slot->id);
+    s_active_indices[fetch_slot] = -1;
+}
+
 // Starts (or restarts, on retry) a network fetch for `slot`, whose id/index
 // the caller has already set up. Marks FAILED immediately if even starting
-// the request doesn't work.
-static void start_fetch(IconCacheEntry *slot, int idx, const char *icon_url) {
+// the request doesn't work. `fetch_slot` is a free index into
+// s_active_indices, from find_free_fetch_slot() - the caller checks that
+// one exists before setting up `slot` at all.
+static void start_fetch(IconCacheEntry *slot, int idx, int fetch_slot, const char *icon_url) {
     slot->last_attempt_tick = armGetSystemTick();
     slot->attempt_count++;
     slot->req = http_get_async_start(icon_url);
@@ -98,20 +177,26 @@ static void start_fetch(IconCacheEntry *slot, int idx, const char *icon_url) {
         return;
     }
     slot->state = ICON_LOADING;
-    s_active_index = idx;
+    s_active_indices[fetch_slot] = idx;
 }
 
 // Finds the cache slot least recently touched by ui_icons_get(), to reuse
-// once s_cache_count has hit ICON_CACHE_MAX - excludes s_active_index
-// (whatever's mid-fetch right now must not be yanked out from under its own
-// HttpAsyncRequest). Always finds something: s_cache_count is at least 1
-// past ICON_CACHE_MAX to be called at all, and at most one of those entries
-// is the active fetch.
+// once s_cache_count has hit ICON_CACHE_MAX - excludes anything in
+// s_active_indices (whatever's mid-fetch right now must not be yanked out
+// from under its own HttpAsyncRequest). Always finds something:
+// s_cache_count is at least 1 past ICON_CACHE_MAX to be called at all, and
+// at most ICON_CONCURRENT_FETCHES of those entries are active fetches.
 static int find_lru_evictable_slot(void) {
     int best = -1;
     u64 best_tick = 0;
     for (int i = 0; i < s_cache_count; i++) {
-        if (i == s_active_index) continue;
+        if (is_fetch_active(i)) continue;
+        // Also mid-decode (queued or on the worker right now) - evicting it
+        // would let some other icon's decode result land in this slot once
+        // the worker finishes (pump_decode_results only guards against a
+        // *cleared* cache via s_icon_generation, not a slot recycled by
+        // eviction in between).
+        if (s_cache[i].state == ICON_DECODING) continue;
         if (best < 0 || s_cache[i].last_used_tick < best_tick) {
             best = i;
             best_tick = s_cache[i].last_used_tick;
@@ -389,15 +474,163 @@ static SDL_Texture *build_texture(unsigned char *pixels, int w, int h) {
     return tex;
 }
 
+// ---- background decode worker ----
+//
+// decode_icon (libpng/libjpeg + downscale_if_needed) is real CPU work - a
+// few ms for a typical cover, more for an oversized source before it's
+// scaled down - and used to run inline on the render thread the moment raw
+// bytes were available (disk cache hit, or a network fetch finishing). One
+// icon was fine; scrolling into a fresh row of a few-thousand-cover catalog
+// (see sources.h's SOURCE_KIND_TORRENT_CATALOG) means several of those
+// landing in the same frame, which is a real stutter, not a hypothetical
+// one. Moved off the render thread the same way the network fetch already
+// was: one worker thread, a small job queue in, a small result queue out,
+// polled once a frame. SDL_CreateTexture stays on the main thread (build_texture,
+// in pump_decode_results below) - that part is not safe to call from a
+// worker thread against a single SDL_Renderer.
+#define ICON_DECODE_QUEUE_CAP 8
+
+typedef struct {
+    unsigned char *raw; // owned by the queue entry until the worker frees it
+    size_t raw_len;
+    int cache_idx;
+    uint32_t generation;
+} IconDecodeJob;
+
+typedef struct {
+    unsigned char *pixels; // decoded RGBA, NULL if decode failed
+    int w, h;
+    int cache_idx;
+    uint32_t generation;
+} IconDecodeResult;
+
+static pthread_mutex_t s_decode_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t s_decode_cond = PTHREAD_COND_INITIALIZER;
+static pthread_t s_decode_thread;
+static bool s_decode_thread_started = false;
+
+static IconDecodeJob s_decode_queue[ICON_DECODE_QUEUE_CAP];
+static int s_decode_queue_head = 0, s_decode_queue_count = 0;
+static IconDecodeResult s_decode_results[ICON_DECODE_QUEUE_CAP];
+static int s_decode_results_head = 0, s_decode_results_count = 0;
+
+// Bumped by ui_icons_clear() so a decode that was already in flight when
+// the cache was cleared gets its result discarded on pickup instead of
+// being written into whatever unrelated icon now occupies that cache_idx.
+// Written only from the main thread; the worker never reads it directly,
+// only the per-job snapshot copied into IconDecodeJob/IconDecodeResult, so
+// this needs no lock of its own.
+static uint32_t s_icon_generation = 0;
+
+static void *decode_worker_main(void *arg) {
+    (void)arg;
+    for (;;) {
+        pthread_mutex_lock(&s_decode_mutex);
+        while (s_decode_queue_count == 0)
+            pthread_cond_wait(&s_decode_cond, &s_decode_mutex);
+        IconDecodeJob job = s_decode_queue[s_decode_queue_head];
+        s_decode_queue_head = (s_decode_queue_head + 1) % ICON_DECODE_QUEUE_CAP;
+        s_decode_queue_count--;
+        pthread_mutex_unlock(&s_decode_mutex);
+
+        int w = 0, h = 0;
+        unsigned char *pixels = decode_icon(job.raw, job.raw_len, &w, &h);
+        free(job.raw);
+
+        pthread_mutex_lock(&s_decode_mutex);
+        // Capacity matches the job queue's - a result can never be pushed
+        // faster than a job was popped, so this can't overflow.
+        int tail = (s_decode_results_head + s_decode_results_count) % ICON_DECODE_QUEUE_CAP;
+        s_decode_results[tail].pixels = pixels;
+        s_decode_results[tail].w = w;
+        s_decode_results[tail].h = h;
+        s_decode_results[tail].cache_idx = job.cache_idx;
+        s_decode_results[tail].generation = job.generation;
+        s_decode_results_count++;
+        pthread_mutex_unlock(&s_decode_mutex);
+    }
+}
+
+// Hands `raw` (must be malloc'd; freed by the worker either way) off for
+// background decoding. Returns false if the queue is full or the worker
+// couldn't be started, in which case the caller still owns `raw` and must
+// free it. Lazily starts the worker thread on first use.
+static bool submit_decode_job(int cache_idx, unsigned char *raw, size_t raw_len) {
+    if (!s_decode_thread_started) {
+        if (pthread_create(&s_decode_thread, NULL, decode_worker_main, NULL) != 0)
+            return false;
+        s_decode_thread_started = true;
+    }
+    pthread_mutex_lock(&s_decode_mutex);
+    if (s_decode_queue_count >= ICON_DECODE_QUEUE_CAP) {
+        pthread_mutex_unlock(&s_decode_mutex);
+        return false;
+    }
+    int tail = (s_decode_queue_head + s_decode_queue_count) % ICON_DECODE_QUEUE_CAP;
+    s_decode_queue[tail].raw = raw;
+    s_decode_queue[tail].raw_len = raw_len;
+    s_decode_queue[tail].cache_idx = cache_idx;
+    s_decode_queue[tail].generation = s_icon_generation;
+    s_decode_queue_count++;
+    pthread_cond_signal(&s_decode_cond);
+    pthread_mutex_unlock(&s_decode_mutex);
+    return true;
+}
+
+// Picks up every decode the worker has finished since the last call and
+// uploads it as a texture - the one part of this pipeline that has to run
+// on the main thread. Cheap when there is nothing to do (one lock/unlock).
+static void pump_decode_results(void) {
+    for (;;) {
+        pthread_mutex_lock(&s_decode_mutex);
+        if (s_decode_results_count == 0) {
+            pthread_mutex_unlock(&s_decode_mutex);
+            return;
+        }
+        IconDecodeResult result = s_decode_results[s_decode_results_head];
+        s_decode_results_head = (s_decode_results_head + 1) % ICON_DECODE_QUEUE_CAP;
+        s_decode_results_count--;
+        pthread_mutex_unlock(&s_decode_mutex);
+
+        if (result.generation != s_icon_generation) {
+            // ui_icons_clear() ran after this job was submitted - cache_idx
+            // may now be a different icon entirely, or past s_cache_count.
+            free(result.pixels);
+            continue;
+        }
+
+        IconCacheEntry *slot = &s_cache[result.cache_idx];
+        if (result.pixels) {
+            SDL_Texture *tex = build_texture(result.pixels, result.w, result.h);
+            slot->texture = tex;
+            slot->state = tex ? ICON_READY : ICON_FAILED;
+            if (!tex) icon_debug_log("[%s] decoded %dx%d but SDL_CreateTexture FAILED: %s",
+                                     slot->id, result.w, result.h, SDL_GetError());
+        } else {
+            // Decode itself failed - most likely a disk-cache entry that
+            // got cut short on a previous write. Delete it so the next
+            // attempt (the existing FAILED-state retry, which re-fetches
+            // over the network - see icon_should_retry) doesn't just hit
+            // the same corrupt bytes again.
+            icon_debug_log("[%s] decode failed - deleting disk cache entry", slot->id);
+            char cache_path[300];
+            snprintf(cache_path, sizeof(cache_path), "%s/%s", ICON_CACHE_DIR, slot->id);
+            remove(cache_path);
+            slot->state = ICON_FAILED;
+        }
+    }
+}
+
 // Drives the one in-flight network fetch (if any) forward and, once it's
 // done, decodes/uploads it or marks it failed. Cheap and non-blocking -
 // curl_multi_perform() just checks already-readable sockets and returns;
 // safe to call from ui_icons_get() itself rather than needing a dedicated
 // once-per-frame hook, so callers that never call ui_icons_begin_frame()
 // (ui_detail.c's single icon) still drive it correctly.
-static void pump_active_fetch(void) {
-    if (s_active_index < 0) return;
-    IconCacheEntry *slot = &s_cache[s_active_index];
+static void pump_one_fetch(int fetch_slot) {
+    int cache_idx = s_active_indices[fetch_slot];
+    if (cache_idx < 0) return;
+    IconCacheEntry *slot = &s_cache[cache_idx];
 
     HttpAsyncState poll_state = http_async_poll(slot->req);
     if (poll_state == HTTP_ASYNC_RUNNING) return;
@@ -407,7 +640,7 @@ static void pump_active_fetch(void) {
     char err_buf[128] = {0};
     http_async_finish(slot->req, &net_buf, &net_len, err_buf, sizeof(err_buf));
     slot->req = NULL;
-    s_active_index = -1;
+    s_active_indices[fetch_slot] = -1;
 
     slot->state = ICON_FAILED; // pessimistic default, cleared only on full success below
 
@@ -421,25 +654,17 @@ static void pump_active_fetch(void) {
         snprintf(cache_path, sizeof(cache_path), "%s/%s", ICON_CACHE_DIR, slot->id);
         write_cache_file(cache_path, (unsigned char *)net_buf, net_len);
 
-        int w = 0, h = 0;
-        unsigned char *pixels = decode_icon((unsigned char *)net_buf, net_len, &w, &h);
-        if (pixels) {
-            SDL_Texture *tex = build_texture(pixels, w, h);
-            if (tex) {
-                slot->texture = tex;
-                slot->state = ICON_READY;
-                icon_debug_log("[%s] fetch OK, %zu bytes, decoded %dx%d, texture ready", slot->id, net_len, w, h);
-            } else {
-                icon_debug_log("[%s] fetch OK, %zu bytes, decoded %dx%d, but SDL_CreateTexture FAILED: %s",
-                                slot->id, net_len, w, h, SDL_GetError());
-            }
-        } else {
-            icon_debug_log("[%s] fetch OK, %zu bytes, but decode_icon FAILED (bad magic/corrupt/unsupported format - "
-                            "first bytes: %02x %02x %02x %02x)",
-                            slot->id, net_len,
-                            net_len > 0 ? (unsigned char)net_buf[0] : 0, net_len > 1 ? (unsigned char)net_buf[1] : 0,
-                            net_len > 2 ? (unsigned char)net_buf[2] : 0, net_len > 3 ? (unsigned char)net_buf[3] : 0);
+        // Decode happens on the background worker (see submit_decode_job) -
+        // net_buf's ownership passes to it on success. On a full queue
+        // (rare: at most ICON_CONCURRENT_FETCHES=6 fetches ever finish at
+        // once, well under the 8-deep decode queue) this just falls back
+        // to failed-and-retried, same as any other decode failure.
+        if (submit_decode_job(cache_idx, (unsigned char *)net_buf, net_len)) {
+            slot->state = ICON_DECODING;
+            icon_debug_log("[%s] fetch OK, %zu bytes, queued for decode", slot->id, net_len);
+            return;
         }
+        icon_debug_log("[%s] fetch OK, %zu bytes, but decode queue was full", slot->id, net_len);
     } else if (poll_state == HTTP_ASYNC_DONE_OK) {
         icon_debug_log("[%s] fetch OK but empty body (0 bytes)", slot->id);
     }
@@ -447,12 +672,18 @@ static void pump_active_fetch(void) {
     free(net_buf);
 }
 
+static void pump_active_fetches(void) {
+    for (int i = 0; i < ICON_CONCURRENT_FETCHES; i++) pump_one_fetch(i);
+}
+
 void ui_icons_begin_frame(void) {
-    pump_active_fetch();
+    pump_active_fetches();
+    pump_decode_results();
 }
 
 SDL_Texture *ui_icons_get(const AppEntry *entry) {
-    pump_active_fetch();
+    pump_active_fetches();
+    pump_decode_results();
 
     u64 now_tick = armGetSystemTick();
 
@@ -466,18 +697,25 @@ SDL_Texture *ui_icons_get(const AppEntry *entry) {
         // A failed fetch/decode is retried a few times (see
         // ICON_MAX_ATTEMPTS/ICON_RETRY_DELAY_NS) rather than staying blank
         // for the rest of the session over what's often just a momentary
-        // network hiccup - only one fetch in flight at a time, same as a
-        // brand new icon.
-        if (s_active_index < 0 && entry->icon_url[0] && icon_should_retry(slot, now_tick)) {
-            icon_debug_log("[%s] retrying (attempt %d/%d)", slot->id, slot->attempt_count + 1, ICON_MAX_ATTEMPTS);
-            start_fetch(slot, i, entry->icon_url);
+        // network hiccup.
+        if (entry->icon_url[0] && icon_should_retry(slot, now_tick)) {
+            int fetch_slot = find_free_fetch_slot();
+            if (fetch_slot < 0) fetch_slot = find_preemptable_fetch_slot(now_tick);
+            if (fetch_slot >= 0) {
+                preempt_fetch_slot(fetch_slot); // no-op if it was already free
+                icon_debug_log("[%s] retrying (attempt %d/%d)", slot->id, slot->attempt_count + 1, ICON_MAX_ATTEMPTS);
+                start_fetch(slot, i, fetch_slot, entry->icon_url);
+            }
         }
         return NULL;
     }
 
-    if (s_active_index >= 0 || entry->icon_url[0] == '\0') {
-        return NULL; // an icon is already loading, or this entry has nothing to fetch
+    int fetch_slot = find_free_fetch_slot();
+    if (fetch_slot < 0) fetch_slot = find_preemptable_fetch_slot(now_tick);
+    if (fetch_slot < 0 || entry->icon_url[0] == '\0') {
+        return NULL; // every concurrent fetch slot is busy with visible work, or this entry has nothing to fetch
     }
+    preempt_fetch_slot(fetch_slot); // no-op (dereferences nothing) if it was already free
 
     int idx;
     if (s_cache_count < ICON_CACHE_MAX) {
@@ -501,52 +739,58 @@ SDL_Texture *ui_icons_get(const AppEntry *entry) {
     slot->last_attempt_tick = 0;
     slot->last_used_tick = now_tick;
 
-    // A local disk-cache hit is fast (no network involved) - decode it
-    // straight away instead of going through the async machinery below,
-    // which exists specifically to avoid blocking on slow *network* I/O.
+    // A local disk-cache hit needs no network - but decoding it is still
+    // real CPU work, so it goes through the same background worker as a
+    // freshly-downloaded icon rather than blocking this call (see
+    // submit_decode_job's doc comment).
     char cache_path[300];
     snprintf(cache_path, sizeof(cache_path), "%s/%s", ICON_CACHE_DIR, entry->id);
     size_t raw_len = 0;
     unsigned char *raw = read_whole_file(cache_path, &raw_len);
     if (raw) {
-        int w = 0, h = 0;
-        unsigned char *pixels = decode_icon(raw, raw_len, &w, &h);
-        free(raw);
-        SDL_Texture *tex = pixels ? build_texture(pixels, w, h) : NULL;
-        if (tex) {
-            slot->texture = tex;
-            slot->state = ICON_READY;
-            icon_debug_log("[%s] disk cache hit, %zu bytes, decoded %dx%d", slot->id, raw_len, w, h);
-            return tex;
+        if (submit_decode_job(idx, raw, raw_len)) {
+            slot->state = ICON_DECODING;
+            icon_debug_log("[%s] disk cache hit, %zu bytes, queued for decode", slot->id, raw_len);
+            return NULL;
         }
-        // The cached file itself is corrupt (e.g. a previous write got cut
-        // short) - remove it and fall through to a fresh network fetch
-        // instead of marking this icon permanently failed over a bad local
-        // copy that a re-download would fix.
-        icon_debug_log("[%s] disk cache present (%zu bytes) but decode/texture FAILED (pixels=%p) - deleting and "
-                        "re-fetching",
-                        slot->id, raw_len, (void *)pixels);
-        remove(cache_path);
+        // Decode queue was full (rare - 8 deep, drained continuously by
+        // one worker). Once a slot exists for this id, later calls match
+        // it in the loop above instead of re-entering this branch, so
+        // there is no "just try again next frame" here - falling through
+        // to a network re-fetch is wasteful but at least can't leave the
+        // icon stuck in ICON_LOADING forever with nothing left to drive it.
+        free(raw);
+        icon_debug_log("[%s] disk cache hit but decode queue was full, falling back to network fetch",
+                       slot->id);
     }
 
     icon_debug_log("[%s] starting fetch: %s", slot->id, entry->icon_url);
 
-    // Not cached locally (or the cache was corrupt) - kick off a
-    // non-blocking network fetch; pump_active_fetch() above (called every
-    // time anyone asks for an icon) picks up the result once it lands.
-    start_fetch(slot, idx, entry->icon_url);
+    // Not cached locally - kick off a non-blocking network fetch;
+    // pump_active_fetches() above (called every time anyone asks for an
+    // icon) picks up the result once it lands.
+    start_fetch(slot, idx, fetch_slot, entry->icon_url);
     return NULL;
 }
 
 void ui_icons_clear(void) {
-    if (s_active_index >= 0 && s_cache[s_active_index].req) {
-        http_async_cancel(s_cache[s_active_index].req);
+    for (int i = 0; i < ICON_CONCURRENT_FETCHES; i++) {
+        int cache_idx = s_active_indices[i];
+        if (cache_idx >= 0 && s_cache[cache_idx].req) {
+            http_async_cancel(s_cache[cache_idx].req);
+        }
+        s_active_indices[i] = -1;
     }
-    s_active_index = -1;
     for (int i = 0; i < s_cache_count; i++) {
         if (s_cache[i].texture) SDL_DestroyTexture(s_cache[i].texture);
     }
     s_cache_count = 0;
+    // Any decode still in flight for the cleared cache reports back with
+    // the generation it was submitted under (see submit_decode_job) -
+    // bumping this makes pump_decode_results discard that result instead
+    // of writing a texture into whatever unrelated icon reuses its
+    // cache_idx next.
+    s_icon_generation++;
 }
 
 SDL_Texture *ui_icons_load_local(const char *path) {
@@ -559,5 +803,12 @@ SDL_Texture *ui_icons_load_local(const char *path) {
     free(raw);
     if (!pixels) return NULL;
 
+    return build_texture(pixels, w, h);
+}
+
+SDL_Texture *ui_icons_decode_bytes(const unsigned char *data, size_t size) {
+    int w = 0, h = 0;
+    unsigned char *pixels = decode_icon(data, size, &w, &h);
+    if (!pixels) return NULL;
     return build_texture(pixels, w, h);
 }

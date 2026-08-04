@@ -22,6 +22,9 @@ typedef struct {
     // without needing a separate "was this field present" check.
     bool effects_disabled;
     bool sound_disabled;
+    // Main screen's sidebar (see ui_list.c) - icon-only rail vs full width
+    // with labels. Defaults to false (expanded) for a new install.
+    bool sidebar_collapsed;
 } UiListPrefs;
 
 // Loads sdmc:/switch/freeshop/prefs.json into `out`, defaulting every field

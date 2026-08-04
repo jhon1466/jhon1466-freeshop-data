@@ -51,48 +51,63 @@ static const char *const kStrings[STR_COUNT][LANG_COUNT] = {
                                                 "Game/app title (empty to clear the filter)" },
     [STR_LIST_HEADER_SEARCHING_TEMPLATE]   = { "- Catálogo - buscando \"%s\"", "- Catalog - searching \"%s\"" },
     [STR_LIST_HEADER_CATALOG]              = { "- Catálogo", "- Catalog" },
+    [STR_LIST_HEADER_CATALOG_COUNT_TEMPLATE] = { "- Catálogo (%d juegos)", "- Catalog (%d games)" },
+    [STR_LIST_SHELF_RECENT]                = { "Recién agregados", "Recently added" },
+    [STR_LIST_SHELF_SEE_ALL]               = { "Ver todo", "See all" },
+    [STR_LIST_SHELF_FEATURED]              = { "Destacado", "Featured" },
     [STR_LIST_SD_CARD]                     = { "Tarjeta SD", "SD Card" },
     [STR_LIST_COL_NAME]                    = { "Nombre", "Name" },
     [STR_LIST_COL_TYPE]                    = { "Tipo", "Type" },
-    [STR_LIST_COL_VERSION]                 = { "Versión", "Version" },
+    [STR_LIST_COL_VERSION]                 = { "Año", "Year" },
     [STR_LIST_COL_CATEGORY]                = { "Categoría", "Category" },
     [STR_LIST_COL_SIZE]                    = { "Tamaño", "Size" },
-    [STR_LIST_FOOTER1_TEMPLATE]            = { "D-Pad: navegar    A: instalar    ZL/ZR: categoría    "
-                                                "Y: vista %s    X: ordenar (%s)",
-                                                "D-Pad: navigate    A: install    ZL/ZR: category    "
-                                                "Y: view %s    X: sort (%s)" },
     [STR_LIST_VIEW_GRID]                   = { "cuadrícula", "grid" },
     [STR_LIST_VIEW_LIST]                   = { "lista", "list" },
-    [STR_LIST_FOOTER2_QUEUE_TEMPLATE]      = { "R: buscar%s    -: fuentes    L: acerca de    Stick R: explorador    "
-                                                "Stick L: recargar    +: cola (%d)    B: salir",
-                                                "R: search%s    -: sources    L: about    Right stick: explorer    "
-                                                "Left stick: reload    +: queue (%d)    B: exit" },
-    [STR_LIST_FOOTER2_TEMPLATE]            = { "R: buscar%s    -: fuentes    L: acerca de    Stick R: explorador    "
-                                                "Stick L: recargar    +: cola    B: salir",
-                                                "R: search%s    -: sources    L: about    Right stick: explorer    "
-                                                "Left stick: reload    +: queue    B: exit" },
     [STR_LIST_SEARCH_ACTIVE_SUFFIX]        = { " (activa)", " (active)" },
+
+    // ---- ui_list.c (sidebar + footer button-chip hints) ----
+    [STR_LIST_SIDEBAR_CATALOG]             = { "Catálogo", "Catalog" },
+    [STR_LIST_SIDEBAR_EXPLORER]            = { "Explorador", "Explorer" },
+    [STR_LIST_SIDEBAR_QUEUE]               = { "Cola", "Queue" },
+    [STR_LIST_SIDEBAR_SAVES]               = { "Guardados", "Saves" },
+    [STR_LIST_SIDEBAR_MTP]                 = { "MTP", "MTP" },
+    [STR_LIST_SIDEBAR_FTP]                 = { "FTP", "FTP" },
+    [STR_LIST_SIDEBAR_SOURCES]             = { "Fuentes", "Sources" },
+    [STR_LIST_SIDEBAR_ABOUT]               = { "Acerca de", "About" },
+    [STR_LIST_SIDEBAR_COLLAPSE]            = { "colapsar", "collapse" },
+    [STR_LIST_SIDEBAR_EXPAND]              = { "expandir", "expand" },
+    [STR_LIST_HINT_NAVIGATE]               = { "navegar", "navigate" },
+    [STR_LIST_HINT_INSTALL]                = { "instalar", "install" },
+    [STR_LIST_HINT_CATEGORY]               = { "categoría", "category" },
+    [STR_LIST_HINT_VIEW_TEMPLATE]          = { "vista %s", "view %s" },
+    [STR_LIST_HINT_SORT_TEMPLATE]          = { "ordenar (%s)", "sort (%s)" },
+    [STR_LIST_HINT_SEARCH_TEMPLATE]        = { "buscar%s", "search%s" },
+    [STR_LIST_HINT_MENU]                   = { "menú", "menu" },
+    [STR_LIST_HINT_PANEL_TEMPLATE]         = { "%s panel", "%s panel" },
+    [STR_LIST_HINT_RELOAD]                 = { "recargar", "reload" },
+    [STR_LIST_HINT_EXIT]                   = { "salir", "exit" },
+    [STR_LIST_HINT_OPEN]                   = { "abrir", "open" },
+    [STR_LIST_HINT_BACK_TO_CATALOG]        = { "volver al catálogo", "back to catalog" },
 
     // ---- ui_detail.c ----
     [STR_DETAIL_UNKNOWN_SIZE]              = { "tamaño desconocido", "unknown size" },
     [STR_DETAIL_HEADER_TEMPLATE]           = { "por %s   -   v%s   -   %s", "by %s   -   v%s   -   %s" },
+    [STR_DETAIL_HEADER_TEMPLATE_YEAR]      = { "por %s   -   %s   -   %s", "by %s   -   %s   -   %s" },
     [STR_DETAIL_QUEUED_BADGE]              = { "En cola", "Queued" },
     [STR_DETAIL_NSZ_APPLET_HINT]           = { "NSZ: instálalo en modo applet (abre FreeShop desde el álbum)",
                                                 "NSZ: install it in applet mode (open FreeShop from the Album)" },
     [STR_DETAIL_DLC_SECTION_TEMPLATE]      = { "DLC y actualizaciones (%d)", "DLC and updates (%d)" },
-    [STR_DETAIL_HINT_DLC_FOCUS]            = { "Arriba/Abajo: elegir    A: instalar seleccionado    B: volver al juego",
-                                                "Up/Down: choose    A: install selected    B: back to game" },
-    [STR_DETAIL_HINT_NATIVE_WITH_DLC_TEMPLATE] = { "A: instalar    X: instalar vía DBI    "
-                                                    "Y: ver DLC/actualizaciones (%d)    B: volver",
-                                                    "A: install    X: install via DBI    "
-                                                    "Y: view DLC/updates (%d)    B: back" },
-    [STR_DETAIL_HINT_NATIVE]               = { "A: instalar    X: instalar vía DBI    B: volver",
-                                                "A: install    X: install via DBI    B: back" },
-    [STR_DETAIL_HINT_DLC_TEMPLATE]         = { "A: instalar    Y: ver DLC/actualizaciones (%d)    B: volver",
-                                                "A: install    Y: view DLC/updates (%d)    B: back" },
-    [STR_DETAIL_HINT_PLAIN]                = { "A: instalar    B: volver", "A: install    B: back" },
-    [STR_DETAIL_QUEUE_REMOVE_HINT]         = { "+: quitar de la cola", "+: remove from queue" },
-    [STR_DETAIL_QUEUE_ADD_HINT]            = { "+: agregar a la cola", "+: add to queue" },
+    [STR_DETAIL_HINT_CHOOSE]               = { "elegir", "choose" },
+    [STR_DETAIL_HINT_INSTALL_SELECTED]     = { "instalar seleccionado", "install selected" },
+    [STR_DETAIL_HINT_BACK_TO_GAME]         = { "volver al juego", "back to game" },
+    [STR_DETAIL_HINT_INSTALL]              = { "instalar", "install" },
+    [STR_DETAIL_HINT_INSTALL_DBI]          = { "instalar vía DBI", "install via DBI" },
+    [STR_DETAIL_HINT_DLC_TEMPLATE]         = { "ver DLC/actualizaciones (%d)", "view DLC/updates (%d)" },
+    [STR_DETAIL_QUEUE_REMOVE_HINT]         = { "quitar de la cola", "remove from queue" },
+    [STR_DETAIL_QUEUE_ADD_HINT]            = { "agregar a la cola", "add to queue" },
+    [STR_DETAIL_FACT_AUTHOR]               = { "Autor", "Author" },
+    [STR_DETAIL_FACT_YEAR]                 = { "Año", "Year" },
+    [STR_DETAIL_INSTALL_BUTTON]            = { "INSTALAR", "INSTALL" },
 
     // ---- ui_sources.c ----
     [STR_SOURCES_NEW_URL_HEADER]           = { "Nueva fuente - dirección del servidor", "New source - server address" },
@@ -107,8 +122,9 @@ static const char *const kStrings[STR_COUNT][LANG_COUNT] = {
     [STR_SOURCES_NONE_CONFIGURED]          = { "(sin fuentes configuradas)", "(no sources configured)" },
     [STR_SOURCES_ACTIVE]                   = { "[activa]", "[active]" },
     [STR_SOURCES_INACTIVE]                 = { "[inactiva]", "[inactive]" },
-    [STR_SOURCES_FOOTER]                   = { "A: activar/desactivar    Y: agregar    X: eliminar    B: volver",
-                                                "A: enable/disable    Y: add    X: remove    B: back" },
+    [STR_SOURCES_HINT_TOGGLE]              = { "activar/desactivar", "enable/disable" },
+    [STR_SOURCES_HINT_ADD]                 = { "agregar", "add" },
+    [STR_SOURCES_HINT_REMOVE]              = { "eliminar", "remove" },
 
     // ---- ui_about.c ----
     [STR_ABOUT_HEADER]                     = { "- Acerca de", "- About" },
@@ -132,8 +148,9 @@ static const char *const kStrings[STR_COUNT][LANG_COUNT] = {
     [STR_ABOUT_DONATE_SCAN]                = { "Escanea el QR o dona por PayPal a:",
                                                 "Scan the QR code or donate via PayPal to:" },
     [STR_ABOUT_FOOTER]                     = { "B/+: volver", "B/+: back" },
-    [STR_ABOUT_FOOTER_TOGGLES]             = { "X: efectos (%s)    Y: sonido (%s)    B/+: volver",
-                                                "X: effects (%s)    Y: sound (%s)    B/+: back" },
+    [STR_ABOUT_HINT_EFFECTS_TEMPLATE]      = { "efectos (%s)", "effects (%s)" },
+    [STR_ABOUT_HINT_SOUND_TEMPLATE]        = { "sonido (%s)", "sound (%s)" },
+    [STR_ABOUT_HINT_BACK]                  = { "volver", "back" },
     [STR_ON]                               = { "activado", "on" },
     [STR_OFF]                              = { "desactivado", "off" },
 
@@ -146,17 +163,15 @@ static const char *const kStrings[STR_COUNT][LANG_COUNT] = {
     [STR_QUEUE_PHASE_INSTALLING]           = { "Instalando", "Installing" },
     [STR_QUEUE_PHASE_DOWNLOADING]          = { "Descargando", "Downloading" },
     [STR_QUEUE_ITEM_OF_TEMPLATE]           = { "%s %d de %d: %s", "%s %d of %d: %s" },
-    [STR_QUEUE_CANCEL_HINT]                = { "B: cancelar", "B: cancel" },
     [STR_QUEUE_CANCELED_TEMPLATE]          = { "Cancelado - %d de %d instalados.", "Canceled - %d of %d installed." },
     [STR_QUEUE_DONE_TEMPLATE]              = { "Terminado - %d de %d instalados.", "Done - %d of %d installed." },
-    [STR_QUEUE_RESULTS_HINT]               = { "A/B/+: volver", "A/B/+: back" },
     [STR_QUEUE_TITLE_COUNT_TEMPLATE]       = { "Cola de descargas (%d)", "Download queue (%d)" },
     [STR_QUEUE_EMPTY_LINE1]                = { "No hay nada en la cola.", "The queue is empty." },
     [STR_QUEUE_EMPTY_LINE2]                = { "Entra a una app y presiona + para agregarla a la cola.",
                                                 "Open an app and press + to add it to the queue." },
-    [STR_QUEUE_FOOTER_WITH_ITEMS]          = { "D-Pad/Stick: navegar    A: empezar    X: quitar    B/+: volver",
-                                                "D-Pad/Stick: navigate    A: start    X: remove    B/+: back" },
-    [STR_QUEUE_FOOTER_EMPTY]               = { "B/+: volver", "B/+: back" },
+    [STR_QUEUE_HINT_NAVIGATE]              = { "navegar", "navigate" },
+    [STR_QUEUE_HINT_START]                 = { "empezar", "start" },
+    [STR_QUEUE_HINT_REMOVE]                = { "quitar", "remove" },
 
     // ---- main.c ----
     [STR_MAIN_CATALOG_LOAD_ERROR_TEMPLATE] = { "No se pudo cargar el catálogo:\n%s\n\nPuedes seguir usando el "
@@ -169,6 +184,97 @@ static const char *const kStrings[STR_COUNT][LANG_COUNT] = {
                                                      "versión anterior.",
                                                      "Couldn't refresh the catalog:\n%s\n\nStill showing the "
                                                      "previous version." },
+
+    // ---- ui_saves.c ----
+    [STR_SAVES_TITLE]                      = { "- Guardados", "- Saves" },
+    [STR_SAVES_SCANNING]                   = { "Buscando guardados...", "Scanning for saves..." },
+    [STR_SAVES_NONE_FOUND]                 = { "(no se encontraron guardados en la consola)",
+                                                "(no save data found on this console)" },
+    [STR_SAVES_COUNT_TEMPLATE]             = { "%d guardados", "%d saves" },
+    [STR_SAVES_BACKUPS_TITLE]              = { "- Backups", "- Backups" },
+    [STR_SAVES_LIVE_SIZE_TEMPLATE]         = { "Guardado actual: %s", "Current save: %s" },
+    [STR_SAVES_BACKUP_COUNT_TEMPLATE]      = { "%d backups", "%d backups" },
+    [STR_SAVES_MOST_RECENT]                = { "más reciente", "most recent" },
+    [STR_SAVES_NO_BACKUPS]                 = { "(sin backups todavía - presiona Y para crear uno)",
+                                                "(no backups yet - press Y to create one)" },
+    [STR_SAVES_HINT_NAVIGATE]              = { "navegar", "navigate" },
+    [STR_SAVES_HINT_VIEW_BACKUPS]          = { "ver backups", "view backups" },
+    [STR_SAVES_HINT_BACKUP_NOW]            = { "backup ahora", "back up now" },
+    [STR_SAVES_HINT_RESTORE]               = { "restaurar", "restore" },
+    [STR_SAVES_HINT_DELETE]                = { "eliminar", "delete" },
+    [STR_SAVES_HINT_BACK]                  = { "volver", "back" },
+    [STR_SAVES_HINT_CANCEL]                = { "cancelar", "cancel" },
+    [STR_SAVES_BACKING_UP]                 = { "Haciendo backup...", "Backing up..." },
+    [STR_SAVES_RESTORING]                  = { "Restaurando...", "Restoring..." },
+
+    // ---- ui_mtp.c ----
+    [STR_MTP_TITLE]                        = { "Instalar por USB", "Install over USB" },
+    [STR_MTP_WAITING_USB]                  = { "Esperando el cable USB", "Waiting for the USB cable" },
+    [STR_MTP_WAITING_HOST]                 = { "Cable conectado - abriendo la conexión con la PC",
+                                                "Cable connected - opening the connection to the PC" },
+    [STR_MTP_READY]                        = { "Listo para recibir archivos",
+                                                "Ready to receive files" },
+    [STR_MTP_WAITING_USB_HELP]             = { "Conectá la consola a la PC con el cable USB-C.",
+                                                "Connect the console to your PC with the USB-C cable." },
+    [STR_MTP_WAITING_HOST_HELP]            = { "Si la PC no la reconoce, probá desconectar y volver a conectar "
+                                                "el cable.",
+                                                "If the PC doesn't recognise it, try unplugging the cable and "
+                                                "plugging it back in." },
+    [STR_MTP_HELP]                         = { "En la PC, la consola aparece como un dispositivo portátil "
+                                                "(como un celular). Abrila y arrastrá el archivo adentro: se "
+                                                "instala solo, sin ocupar espacio extra en la SD.",
+                                                "On the PC, the console shows up as a portable device (like a "
+                                                "phone). Open it and drag the file in: it installs itself, with "
+                                                "no extra space used on the SD card." },
+    [STR_MTP_FORMATS]                      = { "Formatos: NSP, NSZ, XCI, XCZ", "Formats: NSP, NSZ, XCI, XCZ" },
+    [STR_MTP_RECEIVING]                    = { "Instalando", "Installing" },
+    [STR_MTP_INSTALLING_NOW]               = { "Terminando la instalación...", "Finishing the install..." },
+    [STR_MTP_SESSION_COUNT_TEMPLATE]       = { "%d instalados en esta sesión", "%d installed this session" },
+    [STR_MTP_QUEUE_TITLE]                  = { "Esta sesión", "This session" },
+    [STR_MTP_QUEUE_EMPTY]                  = { "Todavía no se recibió nada.", "Nothing received yet." },
+    [STR_MTP_HINT_EXIT]                    = { "salir", "exit" },
+    [STR_MTP_START_FAILED_TEMPLATE]        = { "No se pudo iniciar MTP:\n%s", "Couldn't start MTP:\n%s" },
+
+    // ---- ui_ftp.c ----
+    [STR_FTP_TITLE]                        = { "Servidor FTP", "FTP Server" },
+    [STR_FTP_WAITING_NETWORK]              = { "Esperando conexión de red", "Waiting for a network connection" },
+    [STR_FTP_WAITING_NETWORK_HELP]         = { "Conectá la consola a Wi-Fi o cable de red desde Ajustes.",
+                                                "Connect the console to Wi-Fi or Ethernet from Settings." },
+    [STR_FTP_LISTENING_TEMPLATE]           = { "Listo - conectate a ftp://%s:5000 desde tu PC.",
+                                                "Ready - connect to ftp://%s:5000 from your PC." },
+    [STR_FTP_LISTENING_HELP]               = { "Usá un cliente FTP (FileZilla, WinSCP) o el explorador de "
+                                                "archivos de Windows. Un archivo/conexión a la vez.",
+                                                "Use an FTP client (FileZilla, WinSCP) or Windows' file explorer. "
+                                                "One file/connection at a time." },
+    [STR_FTP_CONNECTED_TEMPLATE]           = { "Conectado: %s", "Connected: %s" },
+    [STR_FTP_CONNECTED_HELP]               = { "Navegá, subí o bajá archivos desde tu cliente FTP.",
+                                                "Browse, upload or download files from your FTP client." },
+    [STR_FTP_FORMATS]                      = { "Formatos que se instalan solos: NSP, NSZ, XCI, XCZ",
+                                                "Formats that install themselves: NSP, NSZ, XCI, XCZ" },
+    [STR_FTP_TRANSFERRING]                 = { "Transfiriendo", "Transferring" },
+    [STR_FTP_INSTALLING_NOW]               = { "Terminando la instalación...", "Finishing the install..." },
+    [STR_FTP_SESSION_COUNT_TEMPLATE]       = { "%d en esta sesión", "%d this session" },
+    [STR_FTP_QUEUE_TITLE]                  = { "Esta sesión", "This session" },
+    [STR_FTP_QUEUE_EMPTY]                  = { "Todavía no hubo actividad.", "No activity yet." },
+    [STR_FTP_HINT_EXIT]                    = { "salir", "exit" },
+    [STR_FTP_START_FAILED_TEMPLATE]        = { "No se pudo iniciar el servidor FTP:\n%s",
+                                                "Couldn't start the FTP server:\n%s" },
+    [STR_FTP_STATUS_UPLOADED]              = { "Subido", "Uploaded" },
+    [STR_FTP_STATUS_DOWNLOADED]            = { "Descargado", "Downloaded" },
+
+    [STR_SAVES_BACKUP_NOW_CONFIRM_TEMPLATE] = { "¿Crear un backup del guardado de \"%s\"?",
+                                                 "Create a backup of \"%s\"'s save data?" },
+    [STR_SAVES_BACKUP_DONE]                = { "Backup creado correctamente.", "Backup created successfully." },
+    [STR_SAVES_BACKUP_FAILED_TEMPLATE]     = { "No se pudo crear el backup:\n%s", "Couldn't create the backup:\n%s" },
+    [STR_SAVES_RESTORE_CONFIRM_TEMPLATE]   = { "¿Restaurar el backup \"%s\"?\n\nEsto sobrescribe el guardado "
+                                                "actual del juego.",
+                                                "Restore backup \"%s\"?\n\nThis overwrites the game's current "
+                                                "save data." },
+    [STR_SAVES_RESTORE_DONE]               = { "Guardado restaurado correctamente.", "Save data restored successfully." },
+    [STR_SAVES_RESTORE_FAILED_TEMPLATE]    = { "No se pudo restaurar el guardado:\n%s",
+                                                "Couldn't restore the save data:\n%s" },
+    [STR_SAVES_DELETE_CONFIRM_TEMPLATE]    = { "¿Eliminar el backup \"%s\"?\n\nEsta acción no se puede deshacer.",
+                                                "Delete backup \"%s\"?\n\nThis action can't be undone." },
 };
 
 const char *tr(StrId id) {

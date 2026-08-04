@@ -23,7 +23,7 @@ include $(DEVKITPRO)/libnx/switch_rules
 #---------------------------------------------------------------------------------
 TARGET      :=  freeshop-client
 BUILD       :=  build
-SOURCES     :=  source source/net source/ui source/catalog source/install source/update
+SOURCES     :=  source source/net source/ui source/catalog source/install source/update source/saves source/mtp source/ftp source/torrent source/torrent/dht
 INCLUDES    :=  source
 ICON        :=  icon.jpg
 ROMFS       :=  romfs
@@ -65,6 +65,7 @@ LDFLAGS  =  -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir 
 LIBS    :=  -Wl,--start-group -lSDL2_ttf -lSDL2 -lEGL -lstdc++ -lglapi -ldrm_nouveau \
             -lfreetype -lbz2 -lpng16 -lharfbuzz -lz -lm -lpthread \
             -lcurl -lmbedtls -lmbedx509 -lmbedcrypto -ljansson -ljpeg -lzstd \
+            -lminiupnpc \
             -Wl,--end-group -lnx
 
 #---------------------------------------------------------------------------------

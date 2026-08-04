@@ -60,6 +60,7 @@ static bool add_source(SourceList *list) {
     snprintf(dst->name, sizeof(dst->name), "%s", name);
     dst->enabled = true;
     dst->hidden = false; // sources users add are always visible/manageable
+    dst->kind = SOURCE_KIND_STANDARD; // users can't hand-type a torrent-catalog source
     list->count++;
     return true;
 }
@@ -172,23 +173,30 @@ bool ui_show_sources(SourceList *list) {
             int row_y = LIST_TOP + row * ROW_HEIGHT;
             bool is_selected = (row == selected);
 
-            if (is_selected) {
-                ui_draw_rect(LEFT_EDGE, row_y - 8, RIGHT_EDGE - LEFT_EDGE, ROW_HEIGHT - 6, COLOR_ACCENT);
-            } else if (row % 2 == 1) {
+            if (row % 2 == 1) {
                 ui_draw_rect(LEFT_EDGE, row_y - 8, RIGHT_EDGE - LEFT_EDGE, ROW_HEIGHT - 6, COLOR_PANEL);
             }
 
-            SDL_Color text_color = is_selected ? COLOR_BG : COLOR_TEXT;
-            SDL_Color dim_color = is_selected ? COLOR_BG : COLOR_TEXT_DIM;
+            // Rows keep their normal colors whether focused or not - the
+            // Borealis-style focus border below marks the selection instead
+            // of an accent fill the text would have to invert against.
             const char *state = item->enabled ? tr(STR_SOURCES_ACTIVE) : tr(STR_SOURCES_INACTIVE);
 
-            ui_draw_text(g_font_body, LEFT_EDGE + 20, row_y, text_color, item->name);
-            ui_draw_text(g_font_small, LEFT_EDGE + 20, row_y + 26, dim_color, item->base_url);
-            ui_draw_text_right(g_font_body, RIGHT_EDGE - 20, row_y + 4, text_color, state);
+            ui_draw_text(g_font_body, LEFT_EDGE + 20, row_y, COLOR_TEXT, item->name);
+            ui_draw_text(g_font_small, LEFT_EDGE + 20, row_y + 26, COLOR_TEXT_DIM, item->base_url);
+            ui_draw_text_right(g_font_body, RIGHT_EDGE - 20, row_y + 4, COLOR_TEXT, state);
+
+            if (is_selected) {
+                ui_draw_focus_border(LEFT_EDGE, row_y - 8, RIGHT_EDGE - LEFT_EDGE, ROW_HEIGHT - 6, 6);
+            }
         }
 
-        ui_draw_rect(LEFT_EDGE, FOOTER_Y - 10, RIGHT_EDGE - LEFT_EDGE, 1, COLOR_PANEL);
-        ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y, COLOR_TEXT_DIM, tr(STR_SOURCES_FOOTER));
+        ui_draw_rect(LEFT_EDGE, FOOTER_Y - 10, RIGHT_EDGE - LEFT_EDGE, 1, COLOR_SEPARATOR);
+        int hint_x = LEFT_EDGE;
+        hint_x = ui_draw_button_hint(hint_x, FOOTER_Y, UI_BTN_A, tr(STR_SOURCES_HINT_TOGGLE));
+        hint_x = ui_draw_button_hint(hint_x, FOOTER_Y, UI_BTN_Y, tr(STR_SOURCES_HINT_ADD));
+        hint_x = ui_draw_button_hint(hint_x, FOOTER_Y, UI_BTN_X, tr(STR_SOURCES_HINT_REMOVE));
+        ui_draw_button_hint(hint_x, FOOTER_Y, UI_BTN_B, tr(STR_ABOUT_HINT_BACK));
 
         SDL_RenderPresent(g_renderer);
     }

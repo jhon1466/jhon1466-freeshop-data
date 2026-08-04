@@ -30,6 +30,15 @@ typedef struct {
 // malformed string table).
 int pfs0_open(const char *path, Pfs0 *out);
 
+// Same parse, from an in-memory prefix of the container instead of a file -
+// the whole header (magic, entry table, string table) lives at the very
+// start of an NSP, so a caller receiving one as a byte stream can parse the
+// directory before the file data arrives. Returns 0 on success, -2 if the
+// bytes definitively aren't a valid/supported PFS0, or -3 if `len` simply
+// doesn't cover the whole header yet - the caller should accumulate more
+// and call again. On -3, `out` is left unusable.
+int pfs0_parse_buffer(const uint8_t *buf, size_t len, Pfs0 *out);
+
 // Index of the first entry (at or after `start_from`) whose name ends with
 // `suffix` (case-sensitive, e.g. ".cnmt.nca", ".tik", ".cert"), or -1 if none
 // match. Pass 0 for `start_from` to search from the beginning.

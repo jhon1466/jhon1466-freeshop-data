@@ -12,6 +12,8 @@ typedef struct {
     bool charging;
     bool network_ok;         // true if the internet connection is up.
     char network_label[16];  // Always populated: "WiFi"/"Ethernet"/"Sin conexión".
+    bool is_wifi;            // true if the connection is WiFi specifically (vs Ethernet) - drives the signal-bars icon.
+    u32 wifi_strength;       // 0-3 (NifmInternetConnectionStatus's own scale), meaningless unless is_wifi.
 } SystemStatus;
 
 // Display-only status query (clock, battery, network). The caller is

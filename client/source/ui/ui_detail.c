@@ -11,21 +11,61 @@
 #include <string.h>
 
 #define SCREEN_W 1280
-#define DETAIL_ICON_SIZE 160
-#define LEFT_EDGE 90
+#define SCREEN_H 720
 
-#define DLC_SECTION_Y 390
-#define DLC_LIST_TOP (DLC_SECTION_Y + 34)
-#define DLC_ROW_HEIGHT 34
+// pipensx's own game detail screen (src/ui/detail/game_detail.hpp, read
+// directly from https://github.com/i3sey/pipensx) is a two-column
+// eShop-style layout: a fixed-width left column (cover, install button,
+// secondary actions, status), and a right column (facts table, screenshots,
+// description). This mirrors that structure with the facts we actually
+// have on AppEntry - no Title ID/Publisher/Genre/Players/screenshots, since
+// nothing in this catalog's schema carries them (see app_entry.h) - laid
+// out statically instead of in a ScrollingFrame, matching how every other
+// screen in this app already fits fixed content into the fixed 1280x720
+// frame rather than scrolling.
+#define PANEL_X 60
+#define PANEL_Y 60
+#define PANEL_W (SCREEN_W - 120)
+#define PANEL_H 560
+
+#define COL_PAD 40
+#define LEFT_COL_X (PANEL_X + COL_PAD)
+#define LEFT_COL_W 320
+#define COL_GAP 32
+#define RIGHT_COL_X (LEFT_COL_X + LEFT_COL_W + COL_GAP)
+#define RIGHT_COL_W ((PANEL_X + PANEL_W - COL_PAD) - RIGHT_COL_X)
+#define CONTENT_TOP (PANEL_Y + 24)
+#define CONTENT_BOTTOM (PANEL_Y + PANEL_H - 24)
+
+#define COVER_W LEFT_COL_W
+#define COVER_H 200
+
+#define INSTALL_BTN_H 64
+#define INSTALL_BTN_GAP 16
+#define SECONDARY_ROW_GAP 14
+#define SECONDARY_ROW_H 30
+#define STATUS_LINE_GAP 10
+
+#define FACT_ROW_H 26
+#define FACT_LABEL_W 120
+#define FACT_COUNT 5
+
+#define DLC_ROW_HEIGHT 30
 #define DLC_VISIBLE_ROWS 4
+// Header line + rows + a little breathing room above it - reserved from the
+// bottom of the right column whenever there's a DLC/update list to show, so
+// the description above it never has to guess how much room is left.
+#define DLC_SECTION_RESERVED (30 + DLC_VISIBLE_ROWS * DLC_ROW_HEIGHT + 10)
 
-// The title sits to the right of the icon and must stop short of the panel's
-// right edge (the panel spans 60..SCREEN_W-60).
-#define DETAIL_TITLE_X (LEFT_EDGE + DETAIL_ICON_SIZE + 24)
-#define DETAIL_TITLE_MAX_W (SCREEN_W - 60 - DETAIL_TITLE_X - 20)
+#define DETAIL_TITLE_X RIGHT_COL_X
+#define DETAIL_TITLE_MAX_W RIGHT_COL_W
 #define DETAIL_TITLE_MAX_LINES 2
 #define DETAIL_TITLE_LINE_MAX 160
 #define DETAIL_TITLE_LINE_H 36
+
+// Footer button-hint row sits below the panel, aligned to the panel's own
+// left edge rather than the page's outer margin.
+#define FOOTER_HINT_X PANEL_X
 
 typedef enum {
     FOCUS_MAIN = 0,
@@ -118,10 +158,31 @@ static const char *dlc_tag_label(const AppEntry *e) {
 
 // NSP, XCI, and NSZ all install natively now (see install_nsp_native.h,
 // install_xci_native.h, ncz.h) - DBI is only offered as a manual fallback
-// (X) for these, not the primary path.
+// (X) for these, not the primary path. Torrent-catalog entries (via_torrent
+// - see sources.h) are excluded even when their file_type matches: the DBI
+// hand-off (install_nsp_and_launch_dbi) fetches entry->download_url over
+// HTTP, which is a magnet: URI here, not something DBI or that hand-off
+// can use.
 static bool has_native_install(const AppEntry *e) {
-    return e->file_type == APP_FILE_TYPE_NSP || e->file_type == APP_FILE_TYPE_XCI ||
-           e->file_type == APP_FILE_TYPE_NSZ;
+    return !e->via_torrent &&
+           (e->file_type == APP_FILE_TYPE_NSP || e->file_type == APP_FILE_TYPE_XCI ||
+            e->file_type == APP_FILE_TYPE_NSZ);
+}
+
+static const char *file_type_label(AppFileType type) {
+    if (type == APP_FILE_TYPE_NSP) return "NSP";
+    if (type == APP_FILE_TYPE_XCI) return "XCI";
+    if (type == APP_FILE_TYPE_NSZ) return "NSZ";
+    if (type == APP_FILE_TYPE_PORT) return "Port";
+    return "NRO";
+}
+
+// One label/value row of the right column's facts table - dim label in a
+// fixed-width first column, normal-weight value beside it, matching
+// pipensx's own Facts Table row style (dim key, brighter value).
+static void draw_fact_row(int x, int y, const char *label, const char *value) {
+    ui_draw_text(g_font_small, x, y, COLOR_TEXT_DIM, label);
+    ui_draw_text(g_font_small, x + FACT_LABEL_W, y, COLOR_TEXT, value);
 }
 
 UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries, int dlc_count,
@@ -144,16 +205,15 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
         snprintf(size_str, sizeof(size_str), "%.2f MB", entry->file_size / (1024.0 * 1024.0));
     }
 
-    char header[300];
-    snprintf(header, sizeof(header), tr(STR_DETAIL_HEADER_TEMPLATE), entry->author, entry->version, size_str);
-
     // Wrapped once here, not per frame - the title never changes while this
-    // screen is up, and wrap_title measures character by character.
+    // screen is up, and wrap_title measures character by character. Every Y
+    // position below the title (facts table, description, DLC list) is
+    // computed by chaining off facts_y/facts_bottom rather than a fixed
+    // offset, so a two-line title just naturally pushes everything under it
+    // down instead of needing a separate "extra height" correction applied
+    // a second time somewhere else.
     char title_lines[DETAIL_TITLE_MAX_LINES][DETAIL_TITLE_LINE_MAX];
     int title_line_count = wrap_title(g_font_title, entry->title, DETAIL_TITLE_MAX_W, title_lines);
-    // Everything stacked under the title shifts down by whatever extra
-    // lines it took, so a two-line title doesn't collide with the header.
-    int title_extra_y = (title_line_count - 1) * DETAIL_TITLE_LINE_H;
 
     DetailFocus focus = FOCUS_MAIN;
     int dlc_selected = 0;
@@ -230,25 +290,53 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
         SDL_RenderClear(g_renderer);
         ui_fx_draw_background();
 
-        ui_draw_rect(60, 60, SCREEN_W - 120, 560, COLOR_PANEL);
+        ui_draw_rounded_rect(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, 12, COLOR_PANEL);
 
-        int text_x = DETAIL_TITLE_X;
-        ui_draw_rect(LEFT_EDGE, 90, DETAIL_ICON_SIZE, DETAIL_ICON_SIZE, COLOR_BG);
+        // ---- Left column: cover, install button, secondary actions, status ----
+
+        ui_draw_rect(LEFT_COL_X, CONTENT_TOP, COVER_W, COVER_H, COLOR_BG);
         SDL_Texture *icon = ui_icons_get(entry);
         if (icon) {
-            SDL_Rect dst = { LEFT_EDGE, 90, DETAIL_ICON_SIZE, DETAIL_ICON_SIZE };
+            // Our covers are square; pipensx's cover plate is wide (320x200) -
+            // fit the square inside it without stretching, same as
+            // pipensx's own ImageScalingType::FIT, rather than distorting it
+            // to fill the whole plate.
+            int icon_size = COVER_H;
+            int icon_x = LEFT_COL_X + (COVER_W - icon_size) / 2;
+            SDL_Rect dst = { icon_x, CONTENT_TOP, icon_size, icon_size };
             SDL_RenderCopy(g_renderer, icon, NULL, &dst);
         }
+        ui_mask_rounded_corners(LEFT_COL_X, CONTENT_TOP, COVER_W, COVER_H, 12, COLOR_PANEL);
 
-        for (int i = 0; i < title_line_count; i++) {
-            ui_draw_text(g_font_title, text_x, 90 + i * DETAIL_TITLE_LINE_H, COLOR_TEXT, title_lines[i]);
+        int install_btn_y = CONTENT_TOP + COVER_H + INSTALL_BTN_GAP;
+        ui_draw_rounded_rect(LEFT_COL_X, install_btn_y, LEFT_COL_W, INSTALL_BTN_H, 8, COLOR_ACCENT);
+        {
+            const char *install_label = tr(STR_DETAIL_INSTALL_BUTTON);
+            int w = 0, h = 0;
+            TTF_SizeUTF8(g_font_body, install_label, &w, &h);
+            ui_draw_text(g_font_body, LEFT_COL_X + (LEFT_COL_W - w) / 2,
+                         install_btn_y + (INSTALL_BTN_H - h) / 2, COLOR_BG, install_label);
         }
-        ui_draw_text(g_font_body, text_x, 140 + title_extra_y, COLOR_TEXT_DIM, header);
 
-        // "En cola" indicator for whichever entry + would currently toggle.
+        int secondary_y = install_btn_y + INSTALL_BTN_H + SECONDARY_ROW_GAP;
+        {
+            int hx = LEFT_COL_X;
+            hx = ui_draw_button_hint(hx, secondary_y, UI_BTN_PLUS,
+                                     ui_queue_contains(focused->id) ? tr(STR_DETAIL_QUEUE_REMOVE_HINT)
+                                                                     : tr(STR_DETAIL_QUEUE_ADD_HINT));
+            if (focus == FOCUS_MAIN && has_native_install(entry)) {
+                ui_draw_button_hint(hx, secondary_y, UI_BTN_X, tr(STR_DETAIL_HINT_INSTALL_DBI));
+            }
+        }
+
+        // "En cola" indicator for whichever entry + would currently toggle -
+        // its own row so the secondary actions row above doesn't shift
+        // depending on queue state.
+        int status_y = secondary_y + SECONDARY_ROW_H + STATUS_LINE_GAP;
         if (ui_queue_contains(focused->id)) {
-            ui_draw_rect(text_x, 172 + title_extra_y, 90, 26, COLOR_QUEUED);
-            ui_draw_text(g_font_small, text_x + 8, 175 + title_extra_y, COLOR_BG, tr(STR_DETAIL_QUEUED_BADGE));
+            ui_draw_rounded_rect(LEFT_COL_X, status_y, 90, 26, 6, COLOR_QUEUED);
+            ui_draw_text(g_font_small, LEFT_COL_X + 8, status_y + 3, COLOR_BG, tr(STR_DETAIL_QUEUED_BADGE));
+            status_y += 26 + 8;
         }
 
         // Decompressing an NSZ needs far more memory than any other install
@@ -257,33 +345,51 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
         // attempt, since the fix is to relaunch, which means losing whatever
         // else was queued up.
         if (entry->file_type == APP_FILE_TYPE_NSZ) {
-            ui_draw_text(g_font_small, text_x, 206 + title_extra_y, COLOR_TEXT_DIM,
-                         tr(STR_DETAIL_NSZ_APPLET_HINT));
+            ui_draw_text_wrapped(g_font_small, LEFT_COL_X, status_y, LEFT_COL_W, 20, COLOR_TEXT_DIM,
+                                 tr(STR_DETAIL_NSZ_APPLET_HINT));
         }
 
-        int y = LEFT_EDGE + DETAIL_ICON_SIZE + 30;
-        y = ui_draw_text_wrapped(g_font_body, LEFT_EDGE, y, SCREEN_W - 220, 28, COLOR_TEXT, entry->description);
+        // ---- Right column: title, facts table, description, DLC list ----
 
-        if (dlc_count == 0 && entry->long_description[0] != '\0') {
-            y += 16;
-            ui_draw_text_wrapped(g_font_small, LEFT_EDGE, y, SCREEN_W - 220, 24, COLOR_TEXT_DIM,
-                                  entry->long_description);
+        for (int i = 0; i < title_line_count; i++) {
+            ui_draw_text(g_font_title, DETAIL_TITLE_X, CONTENT_TOP + i * DETAIL_TITLE_LINE_H,
+                         COLOR_TEXT, title_lines[i]);
+        }
+
+        int facts_y = CONTENT_TOP + title_line_count * DETAIL_TITLE_LINE_H + 8;
+        // Torrent-catalog entries carry a release year in `version`, not an
+        // app version string (see catalog.c's copy_year_field) - "Versión:
+        // v2019" reads as a typo, "Año: 2019" reads as what it is.
+        draw_fact_row(RIGHT_COL_X, facts_y, tr(STR_DETAIL_FACT_AUTHOR), entry->author);
+        draw_fact_row(RIGHT_COL_X, facts_y + FACT_ROW_H, tr(STR_LIST_COL_CATEGORY), entry->category);
+        draw_fact_row(RIGHT_COL_X, facts_y + FACT_ROW_H * 2, tr(STR_LIST_COL_TYPE), file_type_label(entry->file_type));
+        draw_fact_row(RIGHT_COL_X, facts_y + FACT_ROW_H * 3,
+                     tr(entry->via_torrent ? STR_DETAIL_FACT_YEAR : STR_LIST_COL_VERSION), entry->version);
+        draw_fact_row(RIGHT_COL_X, facts_y + FACT_ROW_H * 4, tr(STR_LIST_COL_SIZE), size_str);
+        int facts_bottom = facts_y + FACT_ROW_H * FACT_COUNT;
+
+        int desc_y = facts_bottom + 16;
+        int desc_bottom = CONTENT_BOTTOM - (dlc_count > 0 ? DLC_SECTION_RESERVED : 0);
+
+        int y = ui_draw_text_wrapped(g_font_body, RIGHT_COL_X, desc_y, RIGHT_COL_W, 26, COLOR_TEXT,
+                                     entry->description);
+        if (dlc_count == 0 && entry->long_description[0] != '\0' && y < desc_bottom) {
+            y += 12;
+            ui_draw_text_wrapped(g_font_small, RIGHT_COL_X, y, RIGHT_COL_W, 22, COLOR_TEXT_DIM,
+                                 entry->long_description);
         }
 
         if (dlc_count > 0) {
+            int dlc_section_y = CONTENT_BOTTOM - DLC_SECTION_RESERVED;
             char section_header[48];
             snprintf(section_header, sizeof(section_header), tr(STR_DETAIL_DLC_SECTION_TEMPLATE), dlc_count);
-            ui_draw_text(g_font_body, LEFT_EDGE, DLC_SECTION_Y, COLOR_TEXT, section_header);
+            ui_draw_text(g_font_body, RIGHT_COL_X, dlc_section_y, COLOR_TEXT, section_header);
 
+            int dlc_list_top = dlc_section_y + 30;
             for (int i = dlc_scroll; i < dlc_count && i < dlc_scroll + DLC_VISIBLE_ROWS; i++) {
                 int row_index = i - dlc_scroll;
-                int row_y = DLC_LIST_TOP + row_index * DLC_ROW_HEIGHT;
+                int row_y = dlc_list_top + row_index * DLC_ROW_HEIGHT;
                 bool is_selected = (focus == FOCUS_DLC_LIST && i == dlc_selected);
-
-                if (is_selected) {
-                    ui_draw_rect(LEFT_EDGE - 10, row_y - 6, SCREEN_W - 220, DLC_ROW_HEIGHT - 4, COLOR_ACCENT);
-                }
-                SDL_Color row_color = is_selected ? COLOR_BG : COLOR_TEXT;
 
                 char row_text[160];
                 snprintf(row_text, sizeof(row_text), "%s %s", dlc_tag_label(&dlc_entries[i]), dlc_entries[i].title);
@@ -291,31 +397,32 @@ UiDetailAction ui_show_detail(const AppEntry *entry, const AppEntry *dlc_entries
                 // Same overflow risk as the main title - clip to the row's
                 // own highlight rect rather than running off the panel.
                 char row_fitted[160];
-                truncate_to_width(g_font_body, row_text, SCREEN_W - 240, row_fitted, sizeof(row_fitted));
-                ui_draw_text(g_font_body, LEFT_EDGE, row_y, row_color, row_fitted);
+                truncate_to_width(g_font_small, row_text, RIGHT_COL_W - 20, row_fitted, sizeof(row_fitted));
+                // Normal color regardless of focus - the Borealis-style
+                // focus border below marks the selection.
+                ui_draw_text(g_font_small, RIGHT_COL_X, row_y, COLOR_TEXT, row_fitted);
+
+                if (is_selected) {
+                    ui_draw_focus_border(RIGHT_COL_X - 10, row_y - 4, RIGHT_COL_W + 10,
+                                         DLC_ROW_HEIGHT - 4, 6);
+                }
             }
         }
 
-        char hint[160];
+        int hint_x = FOOTER_HINT_X;
         if (focus == FOCUS_DLC_LIST) {
-            snprintf(hint, sizeof(hint), "%s", tr(STR_DETAIL_HINT_DLC_FOCUS));
-        } else if (has_native_install(entry)) {
-            if (dlc_count > 0) {
-                snprintf(hint, sizeof(hint), tr(STR_DETAIL_HINT_NATIVE_WITH_DLC_TEMPLATE), dlc_count);
-            } else {
-                snprintf(hint, sizeof(hint), "%s", tr(STR_DETAIL_HINT_NATIVE));
-            }
-        } else if (dlc_count > 0) {
-            snprintf(hint, sizeof(hint), tr(STR_DETAIL_HINT_DLC_TEMPLATE), dlc_count);
+            hint_x = ui_draw_button_hint(hint_x, 664, UI_BTN_UP_DOWN, tr(STR_DETAIL_HINT_CHOOSE));
+            hint_x = ui_draw_button_hint(hint_x, 664, UI_BTN_A, tr(STR_DETAIL_HINT_INSTALL_SELECTED));
+            ui_draw_button_hint(hint_x, 664, UI_BTN_B, tr(STR_DETAIL_HINT_BACK_TO_GAME));
         } else {
-            snprintf(hint, sizeof(hint), "%s", tr(STR_DETAIL_HINT_PLAIN));
+            hint_x = ui_draw_button_hint(hint_x, 664, UI_BTN_A, tr(STR_DETAIL_HINT_INSTALL));
+            if (dlc_count > 0) {
+                char dlc_hint[48];
+                snprintf(dlc_hint, sizeof(dlc_hint), tr(STR_DETAIL_HINT_DLC_TEMPLATE), dlc_count);
+                hint_x = ui_draw_button_hint(hint_x, 664, UI_BTN_Y, dlc_hint);
+            }
+            ui_draw_button_hint(hint_x, 664, UI_BTN_B, tr(STR_ABOUT_HINT_BACK));
         }
-        ui_draw_text(g_font_small, LEFT_EDGE, 664, COLOR_TEXT_DIM, hint);
-
-        // Queue hint on its own line so appending it above wouldn't push the
-        // longest hint variant off the right edge (ui_draw_text doesn't wrap).
-        ui_draw_text(g_font_small, LEFT_EDGE, 688, COLOR_TEXT_DIM,
-                     ui_queue_contains(focused->id) ? tr(STR_DETAIL_QUEUE_REMOVE_HINT) : tr(STR_DETAIL_QUEUE_ADD_HINT));
 
         SDL_RenderPresent(g_renderer);
     }

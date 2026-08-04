@@ -47,8 +47,12 @@ void ncm_format_content_id(const NcmContentId *id, char out_hex[33]);
 // nothing was written - callers rolling back a failed/canceled install need
 // this to avoid deleting content that belongs to some other, already-
 // installed title.
+// `gate` (may be NULL) blocks each chunk read until those bytes have
+// arrived, for a source still being written - see install_common.h's
+// InstallReadGate. It closes/reopens *src, which is why this takes FILE**.
 bool ncm_install_content(NcmContentStorage *cs, const NcmContentId *content_id,
-                          FILE *src, uint64_t file_offset, uint64_t size,
+                          FILE **src, uint64_t file_offset, uint64_t size,
+                          const InstallReadGate *gate,
                           InstallProgressCallback cb, void *userdata,
                           bool *out_registered,
                           char *err_buf, size_t err_buf_size);

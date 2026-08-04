@@ -17,9 +17,16 @@
 
 #define HEADER_Y 40
 #define LIST_TOP 120
-#define ROW_H 60
-#define VISIBLE_ROWS 7
-#define ROW_ICON 44
+// pipensx's own DownloadCell rows (src/ui/downloads/downloads_view.hpp,
+// read directly from https://github.com/i3sey/pipensx) are ~108px tall -
+// close to this, with less breathing room since our install-progress panel
+// below the list needs to keep fitting in the same 720px frame.
+// VISIBLE_ROWS drops from 7 to 4 as a direct consequence: taller, richer
+// rows (icon + title + meta + its own progress strip) instead of more of
+// them fitting without scrolling.
+#define ROW_H 96
+#define VISIBLE_ROWS 4
+#define ROW_ICON 72
 
 // Progress panel shown at the bottom while a batch is installing.
 #define PROGRESS_PANEL_Y 560
@@ -28,7 +35,8 @@
 // same reason main.c's install_progress_cb throttles - see that comment.
 #define QUEUE_WORK_INTERVAL_NS 150000000ULL // ~6-7 times/sec
 
-#define COLOR_ERROR ((SDL_Color){0xd8, 0x5a, 0x5a, 0xff})
+// Matches COLOR_DANGER in ui_app.h (pipensx's dark-mode "Error").
+#define COLOR_ERROR ((SDL_Color){0xff, 0x45, 0x54, 0xff})
 
 typedef enum {
     Q_PENDING,
@@ -98,17 +106,40 @@ static void status_text(QItemStatus st, const char **out_label, SDL_Color *out_c
     }
 }
 
-// Draws one queue row. `status` may be Q_PENDING for the browse view (no
-// install running yet). `highlight` draws the selection/active accent behind it.
+// Truncates `text` to fit within max_w pixels, appending "..." if cut -
+// needed now that a row's title has a real, fairly narrow budget to share
+// with the right-aligned status text (see draw_row) instead of the old
+// smaller row's implicit "probably won't overflow" assumption.
+static void truncate_to_width(TTF_Font *font, const char *text, int max_w, char *out, size_t out_size) {
+    snprintf(out, out_size, "%s", text);
+    int w = 0, h = 0;
+    TTF_SizeUTF8(font, out, &w, &h);
+    if (w <= max_w) return;
+
+    size_t len = strlen(out);
+    while (len > 1) {
+        len--;
+        snprintf(out, out_size, "%.*s...", (int)len, text);
+        TTF_SizeUTF8(font, out, &w, &h);
+        if (w <= max_w) return;
+    }
+}
+
+// Draws one queue row, pipensx DownloadCell-style: icon, title, type/size
+// meta, and a progress strip every row reserves the space for (not just the
+// one actively installing) so the list doesn't visibly reflow row to row as
+// installs start and finish. `status` may be Q_PENDING for the browse view
+// (no install running yet). `highlight` draws the selection/active accent
+// behind it. `active_pct` (0..1) is only meaningful when `status` is
+// Q_ACTIVE - every other status drives the strip's fill from `status`
+// itself (see the switch below).
 static void draw_row(AppEntry *entries, int entry_count, const char *id, int row_y,
-                     QItemStatus status, bool highlight) {
+                     QItemStatus status, bool highlight, float active_pct) {
     const AppEntry *e = resolve(entries, entry_count, id);
 
-    if (highlight) {
-        ui_draw_rect(LEFT_EDGE, row_y, RIGHT_EDGE - LEFT_EDGE, ROW_H - 6, COLOR_PANEL);
-    }
+    ui_draw_rounded_rect(LEFT_EDGE, row_y, RIGHT_EDGE - LEFT_EDGE, ROW_H - 6, 8, COLOR_PANEL);
 
-    int icon_x = LEFT_EDGE + 10;
+    int icon_x = LEFT_EDGE + 12;
     int icon_y = row_y + (ROW_H - 6 - ROW_ICON) / 2;
     ui_draw_rect(icon_x, icon_y, ROW_ICON, ROW_ICON, COLOR_BG);
     if (e) {
@@ -118,22 +149,47 @@ static void draw_row(AppEntry *entries, int entry_count, const char *id, int row
             SDL_RenderCopy(g_renderer, icon, NULL, &dst);
         }
     }
+    ui_mask_rounded_corners(icon_x, icon_y, ROW_ICON, ROW_ICON, 8, COLOR_BG);
 
-    int text_x = icon_x + ROW_ICON + 14;
-    ui_draw_text(g_font_body, text_x, row_y + 8, COLOR_TEXT, e ? e->title : id);
+    int text_x = icon_x + ROW_ICON + 16;
+    // Room for the right-aligned status text (see below) plus a gap, so a
+    // long title truncates before running under it instead of behind it.
+    int text_w = RIGHT_EDGE - 16 - text_x - 90;
+
+    char title_fitted[160];
+    truncate_to_width(g_font_body, e ? e->title : id, text_w, title_fitted, sizeof(title_fitted));
+    ui_draw_text(g_font_body, text_x, row_y + 8, COLOR_TEXT, title_fitted);
 
     if (e) {
         char meta[48];
         char size_str[32];
         ui_format_bytes(e->file_size, size_str, sizeof(size_str));
         snprintf(meta, sizeof(meta), "%s  -  %s", type_label(e->file_type), size_str);
-        ui_draw_text(g_font_small, text_x, row_y + 34, COLOR_TEXT_DIM, meta);
+        ui_draw_text(g_font_small, text_x, row_y + 36, COLOR_TEXT_DIM, meta);
     }
+
+    float pct = 0.0f;
+    SDL_Color fill = COLOR_TRACK; // Q_PENDING - stays an empty track
+    switch (status) {
+        case Q_ACTIVE: pct = active_pct; fill = COLOR_ACCENT; break;
+        case Q_DONE:   pct = 1.0f;       fill = COLOR_QUEUED; break;
+        case Q_FAILED: pct = 1.0f;       fill = COLOR_ERROR;  break;
+        default: break;
+    }
+    ui_draw_progress_bar(text_x, row_y + 64, text_w, 7, pct, fill, COLOR_TRACK);
 
     const char *st_label;
     SDL_Color st_color;
     status_text(status, &st_label, &st_color);
-    ui_draw_text_right(g_font_small, RIGHT_EDGE - 16, row_y + 20, st_color, st_label);
+    ui_draw_text_right(g_font_small, RIGHT_EDGE - 16, row_y + 12, st_color, st_label);
+
+    // Every row now sits on its own COLOR_PANEL card (pipensx's DownloadCell
+    // is a card, not a bare list row), so the selection can't be signalled by
+    // giving only the focused one a background any more - it gets the
+    // Borealis focus border instead, drawn last so it frames the card.
+    if (highlight) {
+        ui_draw_focus_border(LEFT_EDGE, row_y, RIGHT_EDGE - LEFT_EDGE, ROW_H - 6, 8);
+    }
 }
 
 // ---- install-phase progress rendering ----
@@ -165,9 +221,11 @@ static void draw_queue_installing(QueueProgressCtx *ctx, long total, long now) {
     ui_draw_text(g_font_title, LEFT_EDGE, HEADER_Y, COLOR_TEXT, tr(STR_QUEUE_TITLE));
 
     int shown = 0;
+    float active_pct = total > 0 ? (float)now / (float)total : 0.0f;
     for (int i = ctx->scroll_offset; i < s_count && shown < VISIBLE_ROWS; i++, shown++) {
         int row_y = LIST_TOP + shown * ROW_H;
-        draw_row(ctx->entries, ctx->entry_count, s_ids[i], row_y, ctx->statuses[i], i == ctx->active_index);
+        draw_row(ctx->entries, ctx->entry_count, s_ids[i], row_y, ctx->statuses[i], i == ctx->active_index,
+                i == ctx->active_index ? active_pct : 0.0f);
     }
 
     // Progress panel for the active item.
@@ -183,8 +241,8 @@ static void draw_queue_installing(QueueProgressCtx *ctx, long total, long now) {
     ui_draw_text(g_font_body, LEFT_EDGE + 16, PROGRESS_PANEL_Y + 12, COLOR_TEXT, head);
 
     float pct = total > 0 ? (float)now / (float)total : 0.0f;
-    ui_draw_progress_bar(LEFT_EDGE + 16, PROGRESS_PANEL_Y + 48, RIGHT_EDGE - LEFT_EDGE - 32, 20, pct,
-                         COLOR_ACCENT, COLOR_BG);
+    ui_draw_progress_bar(LEFT_EDGE + 16, PROGRESS_PANEL_Y + 48, RIGHT_EDGE - LEFT_EDGE - 32, 7, pct,
+                         COLOR_ACCENT, COLOR_TRACK);
 
     char line[96];
     char done_str[32];
@@ -212,7 +270,7 @@ static void draw_queue_installing(QueueProgressCtx *ctx, long total, long now) {
         }
     }
     ui_draw_text(g_font_small, LEFT_EDGE + 16, PROGRESS_PANEL_Y + 78, COLOR_TEXT_DIM, line);
-    ui_draw_text_right(g_font_small, RIGHT_EDGE - 16, PROGRESS_PANEL_Y + 78, COLOR_TEXT_DIM, tr(STR_QUEUE_CANCEL_HINT));
+    ui_draw_button_hint(RIGHT_EDGE - 90, PROGRESS_PANEL_Y + 78, UI_BTN_B, "cancelar");
 
     SDL_RenderPresent(g_renderer);
 }
@@ -318,7 +376,7 @@ static void run_queue_install(AppEntry *entries, int entry_count) {
         int scroll = 0;
         for (int i = scroll; i < s_count && shown < VISIBLE_ROWS; i++, shown++) {
             int row_y = LIST_TOP + shown * ROW_H;
-            draw_row(entries, entry_count, s_ids[i], row_y, statuses[i], false);
+            draw_row(entries, entry_count, s_ids[i], row_y, statuses[i], false, 0.0f);
         }
 
         char summary[128];
@@ -328,7 +386,9 @@ static void run_queue_install(AppEntry *entries, int entry_count) {
             snprintf(summary, sizeof(summary), tr(STR_QUEUE_DONE_TEMPLATE), ok_count, total_items);
         }
         ui_draw_text(g_font_body, LEFT_EDGE, SCREEN_H - 80, COLOR_TEXT, summary);
-        ui_draw_text(g_font_small, LEFT_EDGE, SCREEN_H - 46, COLOR_TEXT_DIM, tr(STR_QUEUE_RESULTS_HINT));
+        int hint_x = LEFT_EDGE;
+        hint_x = ui_draw_button_hint(hint_x, SCREEN_H - 46, UI_BTN_A, NULL);
+        ui_draw_button_hint(hint_x, SCREEN_H - 46, UI_BTN_B, "volver");
 
         SDL_RenderPresent(g_renderer);
     }
@@ -399,15 +459,18 @@ void ui_show_queue(AppEntry *entries, int count) {
         int shown = 0;
         for (int i = scroll_offset; i < s_count && shown < VISIBLE_ROWS; i++, shown++) {
             int row_y = LIST_TOP + shown * ROW_H;
-            draw_row(entries, count, s_ids[i], row_y, Q_PENDING, i == selected);
+            draw_row(entries, count, s_ids[i], row_y, Q_PENDING, i == selected, 0.0f);
         }
 
-        ui_draw_rect(LEFT_EDGE, SCREEN_H - 56, RIGHT_EDGE - LEFT_EDGE, 1, COLOR_PANEL);
+        ui_draw_rect(LEFT_EDGE, SCREEN_H - 56, RIGHT_EDGE - LEFT_EDGE, 1, COLOR_SEPARATOR);
+        int hint_x2 = LEFT_EDGE;
         if (s_count > 0) {
-            ui_draw_text(g_font_small, LEFT_EDGE, SCREEN_H - 44, COLOR_TEXT_DIM, tr(STR_QUEUE_FOOTER_WITH_ITEMS));
-        } else {
-            ui_draw_text(g_font_small, LEFT_EDGE, SCREEN_H - 44, COLOR_TEXT_DIM, tr(STR_QUEUE_FOOTER_EMPTY));
+            hint_x2 = ui_draw_button_hint(hint_x2, SCREEN_H - 44, UI_BTN_DPAD, tr(STR_QUEUE_HINT_NAVIGATE));
+            hint_x2 = ui_draw_button_hint(hint_x2, SCREEN_H - 44, UI_BTN_A, tr(STR_QUEUE_HINT_START));
+            hint_x2 = ui_draw_button_hint(hint_x2, SCREEN_H - 44, UI_BTN_X, tr(STR_QUEUE_HINT_REMOVE));
         }
+        hint_x2 = ui_draw_button_hint(hint_x2, SCREEN_H - 44, UI_BTN_B, NULL);
+        ui_draw_button_hint(hint_x2, SCREEN_H - 44, UI_BTN_PLUS, tr(STR_ABOUT_HINT_BACK));
 
         SDL_RenderPresent(g_renderer);
     }

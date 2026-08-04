@@ -2,12 +2,25 @@
 #include "install_nsp_native.h"
 #include "install_xci_native.h"
 #include "install_port.h"
+#include "install_torrent.h"
 
 #include <stdio.h>
 
 InstallOneResult install_one_entry(const AppEntry *entry,
                                    InstallProgressCallback cb, InstallPhaseCallback phase_cb, void *userdata,
                                    char *err_buf, size_t err_buf_size) {
+    // Torrent-catalog entries (see sources.h's SOURCE_KIND_TORRENT_CATALOG)
+    // carry a magnet: URI in download_url instead of an HTTP link and go
+    // through an entirely different pipeline - checked first since
+    // entry->source_base_url is meaningless for them (there is no relative
+    // URL to resolve against a base).
+    if (entry->via_torrent) {
+        TorrentInstallResult r = install_torrent(entry, cb, phase_cb, userdata, err_buf, err_buf_size);
+        if (r == TORRENT_INSTALL_OK) return INSTALL_ONE_OK;
+        if (r == TORRENT_INSTALL_ERR_CANCELED) return INSTALL_ONE_CANCELED;
+        return INSTALL_ONE_ERROR;
+    }
+
     const char *base_url = entry->source_base_url;
 
     // NSZ shares the exact same PFS0/CNMT/ticket structure as NSP - the only

@@ -1,18 +1,45 @@
 #include "catalog.h"
 #include "../config.h"
 #include "../net/http.h"
+#include "../torrent/magnet_resolver.h"
+#include "game_metadata.h"
+#include "text_sanitize.h"
 
 #include <ctype.h>
 #include <jansson.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+// The torrent catalog's "year" field is a full RuTracker-style release date
+// ("2023, декабрь" - Russian for "2023, December"), copied wholesale into
+// AppEntry.version. Shown as-is that both defeats the point of a "Versión"
+// column (a bare year is what every other source puts there) and is long
+// enough to overflow the list view's version column into the next one. Only
+// the leading 4-digit year is kept; anything else in the field (the Russian
+// month, or whatever a differently-formatted source puts there) is dropped
+// rather than guessed at.
+static void copy_year_field(const json_t *obj, const char *key, char *dest, size_t dest_size) {
+    const json_t *item = json_object_get(obj, key);
+    const char *s = json_is_string(item) ? json_string_value(item) : NULL;
+    if (s) {
+        for (const char *p = s; *p; p++) {
+            if (isdigit((unsigned char)p[0]) && isdigit((unsigned char)p[1]) &&
+                isdigit((unsigned char)p[2]) && isdigit((unsigned char)p[3])) {
+                snprintf(dest, dest_size, "%.4s", p);
+                return;
+            }
+        }
+    }
+    dest[0] = '\0';
+}
+
 static void copy_str_field(const json_t *obj, const char *key, char *dest, size_t dest_size) {
     const json_t *item = json_object_get(obj, key);
     if (json_is_string(item)) {
-        snprintf(dest, dest_size, "%s", json_string_value(item));
+        utf8_strip_unrenderable(json_string_value(item), dest, dest_size);
     } else {
         dest[0] = '\0';
     }
@@ -318,6 +345,180 @@ static CatalogResult try_fetch_raw_directory(const char *base_url, AppEntry **ou
     AppEntry *shrunk = (AppEntry *)realloc(entries, (size_t)n * sizeof(AppEntry));
     *out_entries = shrunk ? shrunk : entries;
     *out_count = n;
+    return CATALOG_OK;
+}
+
+// Parses a human-readable size like "365.4 MB" / "5.19 GB" (English, as
+// this catalog's own "size" field uses) into bytes. Defensively also
+// recognizes the Cyrillic unit suffixes ("КБ"/"МБ"/"ГБ") this catalog's
+// scraped image_format field sometimes carries, in case a future "size"
+// value ever does too. Unrecognized/missing units are treated as bytes.
+static long parse_human_size(const char *text) {
+    if (!text || !*text) return 0;
+    char *end = NULL;
+    double value = strtod(text, &end);
+    if (end == text) return 0;
+    while (*end == ' ') end++;
+    double mult = 1.0;
+    if (strncmp(end, "GB", 2) == 0 || strncmp(end, "\xd0\x93\xd0\x91", 4) == 0)
+        mult = 1024.0 * 1024.0 * 1024.0;
+    else if (strncmp(end, "MB", 2) == 0 || strncmp(end, "\xd0\x9c\xd0\x91", 4) == 0)
+        mult = 1024.0 * 1024.0;
+    else if (strncmp(end, "KB", 2) == 0 || strncmp(end, "\xd0\x9a\xd0\x91", 4) == 0)
+        mult = 1024.0;
+    return (long)(value * mult);
+}
+
+// Guesses an install format from this catalog's free-text image_format
+// field (e.g. ".NSZ (сжато ~10%, установленный объём 4.00 ГБ)") by
+// substring match. Returns false for NRO/PORT-shaped entries and anything
+// unrecognized - install_torrent.c only drives the native NSP/XCI/NSZ
+// install path today, so those entries are excluded from the merged
+// catalog entirely rather than added in a state nothing can install.
+static bool torrent_file_type_from_format(const char *format, AppFileType *out_type) {
+    if (strstr(format, "NSZ")) { *out_type = APP_FILE_TYPE_NSZ; return true; }
+    // XCZ is an XCI whose content pieces are ncz-compressed - the XCI
+    // install path handles both (see install_local.c's hfs0 .ncz lookup),
+    // so it maps to the same type. Checked before "XCI" only because
+    // neither substring matches the other; order between them is
+    // irrelevant, but both must be here - a bare "XCI" test alone silently
+    // dropped every XCZ release from the catalog.
+    if (strstr(format, "XCZ")) { *out_type = APP_FILE_TYPE_XCI; return true; }
+    if (strstr(format, "XCI")) { *out_type = APP_FILE_TYPE_XCI; return true; }
+    if (strstr(format, "NSP")) { *out_type = APP_FILE_TYPE_NSP; return true; }
+    return false;
+}
+
+static void *game_metadata_ensure_loaded_thread_main(void *arg) {
+    (void)arg;
+    game_metadata_ensure_loaded();
+    return NULL;
+}
+
+CatalogResult catalog_fetch_torrent_json(const char *url, AppEntry **out_entries, int *out_count,
+                                          char *err_buf, size_t err_buf_size) {
+    *out_entries = NULL;
+    *out_count = 0;
+
+    // Kicked off in parallel with the magnet-list fetch+parse below rather
+    // than after it: the pipensx-metadata manifest+index (see
+    // game_metadata.h) has no dependency on this catalog's own document, so
+    // there is no reason the two extra HTTP round-trips it costs should be
+    // paid serially on top of this one. Joined just before the loop that
+    // actually needs it. A failure to start the thread just means it runs
+    // inline instead (same net effect, no parallelism gained).
+    pthread_t meta_thread;
+    bool meta_thread_started =
+        pthread_create(&meta_thread, NULL, game_metadata_ensure_loaded_thread_main, NULL) == 0;
+    if (!meta_thread_started)
+        game_metadata_ensure_loaded();
+
+    char *raw = NULL;
+    size_t raw_len = 0;
+    HttpResult hres = http_get(url, &raw, &raw_len, err_buf, err_buf_size);
+    if (hres != HTTP_OK) {
+        if (meta_thread_started) pthread_join(meta_thread, NULL);
+        return CATALOG_ERR_NETWORK;
+    }
+
+    json_error_t jerr;
+    json_t *root = json_loadb(raw, raw_len, 0, &jerr);
+    free(raw);
+    if (!root || !json_is_array(root)) {
+        if (root) json_decref(root);
+        if (meta_thread_started) pthread_join(meta_thread, NULL);
+        if (err_buf) snprintf(err_buf, err_buf_size, "catálogo de torrents malformado: %s",
+                              root ? "se esperaba un arreglo" : jerr.text);
+        return CATALOG_ERR_PARSE;
+    }
+
+    size_t total = json_array_size(root);
+    AppEntry *entries = (AppEntry *)calloc(total > 0 ? total : 1, sizeof(AppEntry));
+    if (!entries) {
+        json_decref(root);
+        if (meta_thread_started) pthread_join(meta_thread, NULL);
+        if (err_buf) snprintf(err_buf, err_buf_size, "memoria insuficiente para el catálogo de torrents");
+        return CATALOG_ERR_PARSE;
+    }
+
+    // Best-effort: an English title/description for every entry the
+    // pipensx-metadata index matches (see game_metadata.h). A failed fetch
+    // just means every entry falls back to the catalog's own scraped
+    // (Russian) fields below - never fatal to the torrent catalog itself.
+    if (meta_thread_started) pthread_join(meta_thread, NULL);
+
+    size_t count = 0;
+    for (size_t i = 0; i < total; i++) {
+        const json_t *item = json_array_get(root, i);
+
+        char magnet[APP_ENTRY_URL_MAX];
+        copy_str_field(item, "magnet", magnet, sizeof(magnet));
+        if (magnet[0] == '\0') continue;
+
+        char image_format[128];
+        copy_str_field(item, "image_format", image_format, sizeof(image_format));
+        AppFileType file_type;
+        if (!torrent_file_type_from_format(image_format, &file_type)) continue;
+
+        magnet_spec_t spec;
+        char magnet_err[MAGNET_ERROR_MAX];
+        if (!magnet_parse(magnet, &spec, magnet_err)) continue; // no v1 hash, or no trusted tracker
+
+        AppEntry *e = &entries[count];
+        snprintf(e->id, sizeof(e->id), "trt-%s", spec.info_hash_hex);
+
+        // Prefer the pipensx-metadata index's English name/description
+        // (Nintendo eShop-sourced) when this torrent's info hash matches
+        // one; otherwise fall back to the catalog's own scraped (Russian)
+        // fields, same as pipensx does for an entry the index can't match.
+        const char *meta_name = game_metadata_find_name(spec.info_hash_hex);
+        const char *meta_desc = game_metadata_find_description(spec.info_hash_hex);
+        const char *meta_icon = game_metadata_find_icon_url(spec.info_hash_hex);
+        if (meta_name) snprintf(e->title, sizeof(e->title), "%s", meta_name);
+        else copy_str_field(item, "title", e->title, sizeof(e->title));
+
+        copy_str_field(item, "developer", e->author, sizeof(e->author));
+        // "Game" - a torrent-sourced entry lands in the same category
+        // filter bucket as the rest of the real catalog instead of its
+        // own isolated one.
+        snprintf(e->category, sizeof(e->category), "Game");
+        if (meta_desc) {
+            snprintf(e->description, sizeof(e->description), "%s", meta_desc);
+            snprintf(e->long_description, sizeof(e->long_description), "%s", meta_desc);
+        } else {
+            copy_str_field(item, "description", e->description, sizeof(e->description));
+            copy_str_field(item, "description", e->long_description, sizeof(e->long_description));
+        }
+        copy_year_field(item, "year", e->version, sizeof(e->version));
+        // Nintendo eShop CDN cover when the metadata index matched -
+        // noticeably faster/more reliable to fetch than the catalog's own
+        // scraped cover (imageban.ru/fastpic.org).
+        if (meta_icon) snprintf(e->icon_url, sizeof(e->icon_url), "%s", meta_icon);
+        else copy_str_field(item, "cover", e->icon_url, sizeof(e->icon_url));
+        snprintf(e->download_url, sizeof(e->download_url), "%s", magnet);
+        snprintf(e->filename, sizeof(e->filename), "%s", e->id);
+
+        char size_text[64];
+        copy_str_field(item, "size", size_text, sizeof(size_text));
+        e->file_size = parse_human_size(size_text);
+
+        e->file_type = file_type;
+        e->via_torrent = true;
+        snprintf(e->source_base_url, sizeof(e->source_base_url), "%s", url);
+        count++;
+    }
+
+    json_decref(root);
+
+    if (count == 0) {
+        free(entries);
+        if (err_buf) snprintf(err_buf, err_buf_size, "no se encontraron torrents instalables en el catálogo");
+        return CATALOG_ERR_PARSE;
+    }
+
+    AppEntry *shrunk = (AppEntry *)realloc(entries, count * sizeof(AppEntry));
+    *out_entries = shrunk ? shrunk : entries;
+    *out_count = (int)count;
     return CATALOG_OK;
 }
 

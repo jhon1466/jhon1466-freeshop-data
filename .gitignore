@@ -8,6 +8,10 @@ server/.env
 functions/node_modules/
 functions/lib/
 functions/.env
+
+# Cloudflare Worker
+worker/node_modules/
+worker/.wrangler/
 .firebase/
 firebase-debug.log
 *-debug.log

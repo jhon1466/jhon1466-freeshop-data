@@ -6,6 +6,19 @@
 #define SOURCE_URL_MAX 256
 #define SOURCES_MAX 8
 
+// SOURCE_KIND_STANDARD: base_url is a FreeShop-shaped catalog root (tried
+// as <base_url>/data/catalog.json, then <base_url>/api/apps, then a raw
+// directory listing - see catalog.c's catalog_fetch).
+// SOURCE_KIND_TORRENT_CATALOG: base_url is the direct URL of a
+// switch_games.json-shaped array (title/magnet/size/year/genre/...) -
+// fetched as-is, no path appended. See catalog.c's catalog_fetch_torrent_json.
+// Entries from it carry AppEntry.via_torrent and download through
+// install_torrent.c instead of a native HTTP installer.
+typedef enum {
+    SOURCE_KIND_STANDARD = 0,
+    SOURCE_KIND_TORRENT_CATALOG,
+} SourceKind;
+
 typedef struct {
     char name[SOURCE_NAME_MAX];
     char base_url[SOURCE_URL_MAX];
@@ -15,11 +28,18 @@ typedef struct {
     // hidden source, so the operator's own server URL isn't exposed to
     // users there. Sources users add themselves are never hidden.
     bool hidden;
+    SourceKind kind;
 } CatalogSource;
 
 typedef struct {
     CatalogSource items[SOURCES_MAX];
     int count;
+    // One-shot latch: sources_load has already offered (added, once) the
+    // built-in torrent-catalog source to this list. Kept separate from
+    // "is a SOURCE_KIND_TORRENT_CATALOG entry currently present" so a user
+    // who removes it via "Fuentes" doesn't get it silently re-added on the
+    // next load.
+    bool torrent_source_offered;
 } SourceList;
 
 // Loads sdmc:/switch/freeshop/sources.json into `out`. If the file is

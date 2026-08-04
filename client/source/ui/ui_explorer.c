@@ -280,9 +280,13 @@ static void show_text_file(const char *path) {
             ui_draw_text(g_font_small, LEFT_EDGE, LIST_TOP + (i - scroll) * TEXT_VIEW_LINE_HEIGHT, COLOR_TEXT, clipped);
         }
 
-        ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y, COLOR_TEXT_DIM,
-                     editable ? "D-Pad/Stick: desplazar    Y: editar    A/B/+: volver"
-                              : "D-Pad/Stick: desplazar    A/B/+: volver    (archivo muy grande para editar)");
+        int hint_x = LEFT_EDGE;
+        hint_x = ui_draw_button_hint(hint_x, FOOTER_Y, UI_BTN_DPAD, "desplazar");
+        if (editable) hint_x = ui_draw_button_hint(hint_x, FOOTER_Y, UI_BTN_Y, "editar");
+        hint_x = ui_draw_button_hint(hint_x, FOOTER_Y, UI_BTN_B, "volver");
+        if (!editable) {
+            ui_draw_text(g_font_small, hint_x, FOOTER_Y, COLOR_TEXT_DIM, "(archivo muy grande para editar)");
+        }
 
         SDL_RenderPresent(g_renderer);
     }
@@ -476,23 +480,32 @@ UiExplorerAction ui_show_explorer(char *out_path, size_t out_path_size, bool *ou
             int row_y = LIST_TOP + row_index * ROW_HEIGHT;
             bool is_selected = (i == selected);
 
-            if (is_selected) {
-                ui_draw_rect(LEFT_EDGE, row_y - 6, RIGHT_EDGE - LEFT_EDGE, ROW_HEIGHT - 4, COLOR_ACCENT);
-            } else if (row_index % 2 == 1) {
+            if (row_index % 2 == 1) {
                 ui_draw_rect(LEFT_EDGE, row_y - 6, RIGHT_EDGE - LEFT_EDGE, ROW_HEIGHT - 4, COLOR_PANEL);
             }
 
-            SDL_Color text_color = is_selected ? COLOR_BG : COLOR_TEXT;
+            // Normal colors regardless of focus - the Borealis-style focus
+            // border below is what marks the selection now.
             char label[300];
             snprintf(label, sizeof(label), "%s%s", entries[i].is_dir ? "[DIR]  " : "       ", entries[i].name);
-            ui_draw_text(g_font_body, LEFT_EDGE + 10, row_y, text_color, label);
+            ui_draw_text(g_font_body, LEFT_EDGE + 10, row_y, COLOR_TEXT, label);
+
+            if (is_selected) {
+                ui_draw_focus_border(LEFT_EDGE, row_y - 6, RIGHT_EDGE - LEFT_EDGE, ROW_HEIGHT - 4, 6);
+            }
         }
 
-        ui_draw_rect(LEFT_EDGE, FOOTER_Y - 10, RIGHT_EDGE - LEFT_EDGE, 1, COLOR_PANEL);
-        ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y, COLOR_TEXT_DIM,
-                     "D-Pad/Stick: navegar    A: abrir/instalar/ver    B: subir    ZL: limpieza");
-        ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y + 20, COLOR_TEXT_DIM,
-                     "X: info    Y: eliminar    +: salir");
+        ui_draw_rect(LEFT_EDGE, FOOTER_Y - 10, RIGHT_EDGE - LEFT_EDGE, 1, COLOR_SEPARATOR);
+        int hint_x = LEFT_EDGE;
+        hint_x = ui_draw_button_hint(hint_x, FOOTER_Y, UI_BTN_DPAD, "navegar");
+        hint_x = ui_draw_button_hint(hint_x, FOOTER_Y, UI_BTN_A, "abrir/instalar/ver");
+        hint_x = ui_draw_button_hint(hint_x, FOOTER_Y, UI_BTN_B, "subir");
+        ui_draw_button_hint(hint_x, FOOTER_Y, UI_BTN_ZL, "limpieza");
+
+        hint_x = LEFT_EDGE;
+        hint_x = ui_draw_button_hint(hint_x, FOOTER_Y + 24, UI_BTN_X, "info");
+        hint_x = ui_draw_button_hint(hint_x, FOOTER_Y + 24, UI_BTN_Y, "eliminar");
+        ui_draw_button_hint(hint_x, FOOTER_Y + 24, UI_BTN_PLUS, "salir");
 
         SDL_RenderPresent(g_renderer);
     }

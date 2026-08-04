@@ -104,7 +104,8 @@ static void drop_existing_content(NcmContentStorage *cs, const NcmContentId *con
 }
 
 bool ncm_install_content(NcmContentStorage *cs, const NcmContentId *content_id,
-                          FILE *src, uint64_t file_offset, uint64_t size,
+                          FILE **src, uint64_t file_offset, uint64_t size,
+                          const InstallReadGate *gate,
                           InstallProgressCallback cb, void *userdata,
                           bool *out_registered,
                           char *err_buf, size_t err_buf_size) {
@@ -136,12 +137,6 @@ bool ncm_install_content(NcmContentStorage *cs, const NcmContentId *content_id,
         return false;
     }
 
-    if (fseek(src, (long)file_offset, SEEK_SET) != 0) {
-        if (err_buf) snprintf(err_buf, err_buf_size, "no se pudo posicionar en el archivo fuente");
-        ncmContentStorageDeletePlaceHolder(cs, &placeholder_id);
-        return false;
-    }
-
     uint8_t *chunk = install_common_scratch();
     uint64_t written = 0;
     bool canceled = false;
@@ -150,7 +145,24 @@ bool ncm_install_content(NcmContentStorage *cs, const NcmContentId *content_id,
         uint64_t want = size - written;
         if (want > NCM_INSTALL_CHUNK_SIZE) want = NCM_INSTALL_CHUNK_SIZE;
 
-        size_t got = fread(chunk, 1, (size_t)want, src);
+        // Wait for just this chunk, not the whole content piece - that is
+        // what lets a multi-GB NCA install as it downloads. The gate
+        // reopens *src, so the seek below has to happen every iteration
+        // rather than once up front.
+        if (gate && gate->ensure &&
+            (!gate->ensure(gate->user, src, file_offset + written, want) || !*src)) {
+            if (err_buf) snprintf(err_buf, err_buf_size, "instalación cancelada");
+            ncmContentStorageDeletePlaceHolder(cs, &placeholder_id);
+            return false;
+        }
+
+        if (fseek(*src, (long)(file_offset + written), SEEK_SET) != 0) {
+            if (err_buf) snprintf(err_buf, err_buf_size, "no se pudo posicionar en el archivo fuente");
+            ncmContentStorageDeletePlaceHolder(cs, &placeholder_id);
+            return false;
+        }
+
+        size_t got = fread(chunk, 1, (size_t)want, *src);
         if (got != want) {
             if (err_buf) snprintf(err_buf, err_buf_size, "lectura incompleta del archivo fuente");
             ncmContentStorageDeletePlaceHolder(cs, &placeholder_id);

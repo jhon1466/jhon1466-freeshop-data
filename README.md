@@ -24,6 +24,11 @@ Homebrew Menu.
   static routes - see [`functions/README.md`](functions/README.md)).
   [`firebase.json`](firebase.json) has Hosting serve `/admin`, `/icons` and
   `/downloads` directly and rewrite `/api/**` to this Function.
+- [`worker/`](worker/) - Cloudflare Worker that proxies the Switch client's
+  catalog/icon/download reads to the GitHub data repo, so the repo's
+  owner/name never shows up in `sources.json`, the compiled `.nro`'s
+  strings, or a packet capture - only the Worker's own URL does. See
+  [`worker/README.md`](worker/README.md) for deploy steps.
 - [`client/`](client/) - devkitPro/libnx C project (SDL2-rendered, Tinfoil-
   styled list and grid views, cover icons). `.nro` entries are downloaded
   straight into `sdmc:/switch/<id>/`. `.nsp`/`.xci` both install natively -
@@ -50,11 +55,43 @@ Homebrew Menu.
   from whatever `category` values are in the catalog, no "show everything"
   tab - it always has one selected) with `ZL`/`ZR` button-hint boxes in each
   corner; the active tab is underlined so it's obvious which catalog is
-  showing. `R` opens the system keyboard to search by
-  title. `L` opens an "Acerca de" screen (app name/version, a short blurb,
-  and a donations panel with a PayPal QR + email) - the QR is bundled into
-  the `.nro` itself via RomFS (`client/romfs/qr.jpg`, mounted at `romfs:/`
-  in `main.c`), so it's shown without needing network. View mode, sort
+  showing. `R` opens the system keyboard to search by title. A persistent
+  sidebar (Tinfoil-style - see
+  [`ui_list.c`](client/source/ui/ui_list.c)'s `draw_sidebar`) sits to the
+  left of the catalog with every other screen this client has - Explorador,
+  Cola, Guardados, Fuentes, Acerca de - listed by name and a small hand-drawn
+  icon each (`draw_sidebar_icon` - plain rects/lines, the same toolset
+  `draw_queue_badge`'s checkmark already used; no image assets or extra
+  libraries) instead of scattered across single-button shortcuts that used
+  up every button on the controller. `L` moves input focus into the sidebar
+  (`Up`/`Down` to pick a section, `A` to open it, `L` again to come back to
+  the catalog); every other button keeps its usual catalog meaning
+  regardless of which section is highlighted in the sidebar. `-` collapses
+  it to an icon-only rail and back (persisted to `prefs.json`, works from
+  either focus state) - the content area reflows into the freed width
+  (wider list columns, a more centered grid) rather than leaving it empty,
+  and the width itself eases open/closed via `ui_fx_ease` instead of
+  snapping, the same easing already driving the grid's selection zoom and
+  the list's sliding highlight. The touchscreen works alongside the
+  controller on this screen: tapping a sidebar row focuses, selects, and
+  opens it in one gesture, tapping a grid/list entry selects and installs it
+  the same way, and tapping the sidebar's collapse row toggles it, all via a
+  single `hidGetTouchScreenStates()` poll per frame hit-tested against the
+  same rects this screen already renders with (see `ui_show_list`) - the
+  digitizer matches the display 1:1 at 1280x720, so no coordinate scaling is
+  needed. Touch isn't wired up anywhere else yet (Explorador, Cola, Fuentes,
+  Guardados, Acerca de, and every confirmation dialog still need the
+  controller). Every panel/highlight box on this screen (the sidebar, its
+  selection highlight, the storage gauges, the category tab bar, the grid's
+  selection box) is drawn with `ui_draw_rounded_rect`
+  ([`ui_app.c`](client/source/ui/ui_app.c) - filled via horizontal scanline
+  spans from a circle equation, since neither SDL2 nor any linked library
+  has a native rounded-rect/circle primitive) instead of the flat
+  `ui_draw_rect` the rest of the app still uses. "Acerca de" (app name/version, a short
+  blurb, and a donations panel with a PayPal QR + email) is one of those
+  sections - the QR is bundled into the `.nro` itself via RomFS
+  (`client/romfs/qr.jpg`, mounted at `romfs:/` in `main.c`), so it's shown
+  without needing network. View mode, sort
   mode, and the active category filter are saved to
   `sdmc:/switch/freeshop/prefs.json` and restored on the next launch (see
   [`ui_prefs.h`](client/source/ui/ui_prefs.h)). Holding the
@@ -76,7 +113,35 @@ Homebrew Menu.
   setups don't - checked via `envHasNextLoad()` before relying on it) - if
   unavailable, it falls back to directly overwriting the running file's
   on-disk content in place and asking the user to close and reopen manually,
-  same as the original (pre-two-hop) behavior.
+  same as the original (pre-two-hop) behavior. A save-data manager
+  (Guardados, one of the sidebar sections) lists every installed title's
+  Account-type save data on the console, regardless of how it was installed -
+  not limited to the FreeShop catalog (see
+  [`saves/save_scan.c`](client/source/saves/save_scan.c), which
+  enumerates `FsSaveDataInfo` via `fsOpenSaveDataInfoReader` and resolves
+  each title's name/icon via `nsGetApplicationControlData`). `A` opens a
+  title's backups (`Y` there creates a new one with a progress screen of its
+  own - large saves no longer make the screen appear to hang, `A` restores
+  one after a confirmation, `X` deletes one); `Y` from the title list backs
+  up immediately without drilling in. Each backup is a single
+  Deflate-compressed `.zip` (via
+  [`install/zip_create.c`](client/source/install/zip_create.c), the write
+  counterpart to the `.zip`-port installer's own
+  [`zip_extract.c`](client/source/install/zip_extract.c) - same on-disk
+  struct layout, raw deflate via zlib, no external tool/library beyond
+  what's already linked) named `<game name> [<application id hex>]/<profile>/<timestamp>.zip`
+  under `sdmc:/switch/freeshop/saves/` - the game's own (sanitized) name
+  leads the path specifically so a backup is findable in a file explorer
+  without cross-referencing the id against anything else first (see
+  `backup_dir_for_entry` in
+  [`saves/save_backup.c`](client/source/saves/save_backup.c); backups made
+  before this - unzipped folders under an id-only path - aren't picked up
+  by the new scheme, migrating them wasn't worth the complexity for a
+  feature this new). `fsdevMountSaveData` mounts the live save data for
+  both directions; a restore commits the journal (`fsdevCommitDevice`)
+  afterwards, required for a save-data write to actually persist, and only
+  overwrites files the backup has, never deleting files the live save has
+  that the backup doesn't.
 
 ## Quick start
 
@@ -217,3 +282,11 @@ would see it as "available" again).
 This is a v1 walking skeleton: one catalog entry, no search/categories
 filtering, no auth on the public API, no HTTPS. See the "Follow-ups" section
 of the original implementation plan for the rest of the roadmap.
+
+## License
+
+GNU General Public License v3.0 - see [`LICENSE`](LICENSE). The Switch client
+(`client/`) incorporates torrent-download code adapted from
+[pipensx](https://github.com/i3sey/pipensx) (GPL-3.0) and embeds
+[jech/dht](https://github.com/jech/dht) (MIT) - see
+`client/THIRD_PARTY_NOTICES.md` for the full accounting.

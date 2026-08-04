@@ -29,3 +29,9 @@ void ui_icons_clear(void);
 // not cached/tracked by ui_icons_clear(), the caller owns the result and
 // must SDL_DestroyTexture() it. Returns NULL on any read/decode failure.
 SDL_Texture *ui_icons_load_local(const char *path);
+
+// Same as ui_icons_load_local but decodes PNG/JPEG bytes already in memory
+// (e.g. the NACP icon buffer from nsGetApplicationControlData) instead of
+// reading a file - not cached/tracked by ui_icons_clear(), caller owns the
+// result. Returns NULL on any decode failure.
+SDL_Texture *ui_icons_decode_bytes(const unsigned char *data, size_t size);

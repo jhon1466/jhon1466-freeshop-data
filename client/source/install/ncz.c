@@ -673,3 +673,369 @@ bool ncm_install_ncz_content_from_url(NcmContentStorage *cs, const NcmContentId 
     if (out_registered) *out_registered = true;
     return true;
 }
+
+// ---- Push variant - same pipeline, driven by a caller handing over bytes
+// (install_stream.c) instead of this pulling them over HTTP. ----
+
+struct NczPushCtx {
+    // Accumulates the NCA header + NCZSECTN table (NCZ_HEADER_PREFETCH-ish
+    // bytes) before decompression can even begin - the streaming
+    // counterpart of the up-front resolved_url_get_range() fetch above.
+    uint8_t *prefetch_buf;
+    size_t prefetch_len;
+    size_t prefetch_cap;
+    bool sections_ready; // prefetch done, `stream` below is live
+
+    NcmContentStorage *cs;
+    NcmPlaceHolderId placeholder_id;
+    NcmContentId content_id;
+    uint64_t final_size;
+    bool failed;
+
+    // Kept for ncz_push_feed's lazy ncz_push_start_stream call, which has
+    // no err_buf parameter of its own to receive these through (see
+    // ncz_push_feed's own doc comment on why) - same buffer the caller
+    // passed to ncz_push_begin.
+    char *err_buf;
+    size_t err_buf_size;
+
+    NczStreamCtx stream; // reused verbatim once sections_ready
+};
+
+// Parses the now-complete prefetch buffer, sets up the placeholder/zstd/
+// SHA state, writes the verbatim NCA header, and feeds whatever compressed
+// bytes were already sitting past the section table - everything
+// ncm_install_ncz_content_from_url does between its own prefetch fetch and
+// its first ncz_feed_compressed call, just reading from `ctx->prefetch_buf`
+// instead of a freshly-fetched HTTP range.
+static bool ncz_push_start_stream(NczPushCtx *ctx, char *err_buf, size_t err_buf_size) {
+    static NczSection sections[NCZ_MAX_SECTIONS]; // see ncm_install_ncz_content_from_url's own doc note on why static
+    int section_count = 0;
+    size_t stream_start = 0;
+    if (!parse_ncz_sections(ctx->prefetch_buf, ctx->prefetch_len, sections, &section_count,
+                             &stream_start, err_buf, err_buf_size)) {
+        return false;
+    }
+
+    uint64_t window_size = 0;
+    if (ctx->prefetch_len > stream_start) {
+        ZSTD_FrameHeader zfh;
+        if (ZSTD_getFrameHeader(&zfh, ctx->prefetch_buf + stream_start, ctx->prefetch_len - stream_start) == 0) {
+            window_size = zfh.windowSize;
+        }
+    }
+    if (window_size > 0 && !ncz_can_allocate((size_t)window_size + NCZ_MEMORY_HEADROOM)) {
+        if (err_buf) {
+            snprintf(err_buf, err_buf_size,
+                     "este NSZ necesita %llu MB de memoria para descomprimirse y no hay suficiente.\n\n"
+                     "Abre FreeShop en modo applet (desde el álbum) e inténtalo de nuevo.",
+                     (unsigned long long)(window_size / (1024 * 1024)));
+        }
+        return false;
+    }
+
+    ZSTD_DCtx *zds = ZSTD_createDCtx();
+    if (!zds) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "ZSTD_createDCtx falló (memoria insuficiente)");
+        return false;
+    }
+    ZSTD_DCtx_setParameter(zds, ZSTD_d_windowLogMax, ZSTD_WINDOWLOG_MAX);
+
+    memset(&ctx->stream, 0, sizeof(ctx->stream));
+    ctx->stream.cs = ctx->cs;
+    ctx->stream.placeholder_id = &ctx->placeholder_id;
+    ctx->stream.zds = zds;
+    memcpy(ctx->stream.sections, sections, sizeof(sections));
+    ctx->stream.section_count = section_count;
+    ctx->stream.cur_section = 0;
+    ctx->stream.keyed_section = -1;
+    ctx->stream.abs_offset = NCA_HEADER_SIZE;
+    ctx->stream.final_size = ctx->final_size;
+    ctx->stream.window_size = window_size;
+    ctx->stream.flush_buf = install_common_scratch();
+    ctx->stream.flush_cap = INSTALL_SCRATCH_SIZE;
+    ctx->stream.flushed = NCA_HEADER_SIZE; // header written directly, below
+    ctx->stream.err_buf = err_buf;
+    ctx->stream.err_buf_size = err_buf_size;
+
+    mbedtls_sha256_init(&ctx->stream.sha);
+    mbedtls_sha256_starts(&ctx->stream.sha, 0); // 0 = SHA-256, not SHA-224
+    mbedtls_sha256_update(&ctx->stream.sha, ctx->prefetch_buf, NCA_HEADER_SIZE);
+
+    Result rc = ncmContentStorageWritePlaceHolder(ctx->cs, &ctx->placeholder_id, 0, ctx->prefetch_buf, NCA_HEADER_SIZE);
+    if (R_FAILED(rc)) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "ncmContentStorageWritePlaceHolder falló (0x%x)", rc);
+        ZSTD_freeDCtx(zds);
+        mbedtls_sha256_free(&ctx->stream.sha);
+        return false;
+    }
+
+    ctx->sections_ready = true;
+
+    bool ok = true;
+    if (ctx->prefetch_len > stream_start) {
+        ok = ncz_feed_compressed(&ctx->stream, ctx->prefetch_buf + stream_start, ctx->prefetch_len - stream_start);
+    }
+    free(ctx->prefetch_buf);
+    ctx->prefetch_buf = NULL;
+    return ok;
+}
+
+NczPushCtx *ncz_push_begin(NcmContentStorage *cs, const NcmContentId *content_id,
+                            uint64_t compressed_size, uint64_t final_size,
+                            char *err_buf, size_t err_buf_size) {
+    if (compressed_size < NCA_HEADER_SIZE + 16 || final_size < NCA_HEADER_SIZE) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "archivo NCZ demasiado pequeño o tamaño final inválido");
+        return NULL;
+    }
+
+    NczPushCtx *ctx = (NczPushCtx *)calloc(1, sizeof(NczPushCtx));
+    if (!ctx) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "memoria insuficiente");
+        return NULL;
+    }
+
+    ctx->prefetch_cap = NCZ_HEADER_PREFETCH;
+    if ((uint64_t)ctx->prefetch_cap > compressed_size) ctx->prefetch_cap = (size_t)compressed_size;
+    ctx->prefetch_buf = (uint8_t *)malloc(ctx->prefetch_cap);
+    if (!ctx->prefetch_buf) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "memoria insuficiente");
+        free(ctx);
+        return NULL;
+    }
+
+    ctx->cs = cs;
+    ctx->content_id = *content_id;
+    ctx->final_size = final_size;
+    ctx->err_buf = err_buf;
+    ctx->err_buf_size = err_buf_size;
+
+    // Content already present is never taken on trust - see
+    // drop_existing_content()/ncm_install_ncz_content_from_url's own doc note.
+    bool already_has = false;
+    Result rc = ncmContentStorageHas(cs, &already_has, content_id);
+    if (R_SUCCEEDED(rc) && already_has) ncmContentStorageDelete(cs, content_id);
+
+    rc = ncmContentStorageGeneratePlaceHolderId(cs, &ctx->placeholder_id);
+    if (R_FAILED(rc)) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "ncmContentStorageGeneratePlaceHolderId falló (0x%x)", rc);
+        free(ctx->prefetch_buf); free(ctx);
+        return NULL;
+    }
+    ncmContentStorageDeletePlaceHolder(cs, &ctx->placeholder_id);
+
+    rc = ncmContentStorageCreatePlaceHolder(cs, content_id, &ctx->placeholder_id, (s64)final_size);
+    if (R_FAILED(rc)) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "ncmContentStorageCreatePlaceHolder falló (0x%x)", rc);
+        free(ctx->prefetch_buf); free(ctx);
+        return NULL;
+    }
+    rc = ncmContentStorageSetPlaceHolderSize(cs, &ctx->placeholder_id, (s64)final_size);
+    if (R_FAILED(rc)) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "ncmContentStorageSetPlaceHolderSize falló (0x%x)", rc);
+        ncmContentStorageDeletePlaceHolder(cs, &ctx->placeholder_id);
+        free(ctx->prefetch_buf); free(ctx);
+        return NULL;
+    }
+
+    return ctx;
+}
+
+bool ncz_push_feed(NczPushCtx *ctx, const uint8_t *data, size_t len) {
+    if (ctx->failed) return false;
+
+    while (len > 0) {
+        if (ctx->sections_ready) {
+            bool ok = ncz_feed_compressed(&ctx->stream, data, len);
+            if (!ok) ctx->failed = true;
+            return ok;
+        }
+
+        size_t space = ctx->prefetch_cap - ctx->prefetch_len;
+        size_t take = len < space ? len : space;
+        memcpy(ctx->prefetch_buf + ctx->prefetch_len, data, take);
+        ctx->prefetch_len += take;
+        data += take;
+        len -= take;
+
+        if (ctx->prefetch_len == ctx->prefetch_cap) {
+            if (!ncz_push_start_stream(ctx, ctx->err_buf, ctx->err_buf_size)) {
+                ctx->failed = true;
+                return false;
+            }
+            // loop continues - any bytes left in `len` are fed as
+            // already-decompressing stream data on the next iteration.
+        }
+    }
+    return true;
+}
+
+// Same teardown-and-verify sequence as ncm_install_ncz_content_from_url's
+// own tail: free the decoder/AES/SHA state first (regardless of outcome,
+// since sections_ready means they were allocated), then check size, then
+// hash, then register - each step only attempted if everything before it
+// passed, exactly mirroring that function's ordering since it's already
+// proven correct on real hardware.
+bool ncz_push_finish(NczPushCtx *ctx, char *err_buf, size_t err_buf_size) {
+    if (!ctx) return false;
+
+    bool ok = !ctx->failed;
+    uint8_t digest[32];
+    bool have_digest = false;
+
+    if (ctx->sections_ready) {
+        ZSTD_freeDCtx(ctx->stream.zds);
+        mbedtls_aes_free(&ctx->stream.aes);
+        mbedtls_sha256_finish(&ctx->stream.sha, digest);
+        mbedtls_sha256_free(&ctx->stream.sha);
+        have_digest = true;
+    } else if (ok) {
+        // Never even got past the prefetch/section-table phase - the
+        // transfer ended too early to know anything about this content.
+        if (err_buf) snprintf(err_buf, err_buf_size, "la transferencia terminó antes de completar el NCZ");
+        ok = false;
+    }
+
+    if (ok && !ncz_flush(&ctx->stream)) ok = false; // err_buf already filled by ncz_flush on failure
+
+    if (ok && ctx->stream.abs_offset != ctx->stream.final_size) {
+        if (err_buf) snprintf(err_buf, err_buf_size,
+                               "el contenido NCZ descomprimido no coincide con el tamaño esperado (%llu vs %llu bytes)",
+                               (unsigned long long)ctx->stream.abs_offset, (unsigned long long)ctx->stream.final_size);
+        ok = false;
+    }
+
+    // Same integrity rationale as ncm_install_ncz_content_from_url's own
+    // check - see its doc comment.
+    if (ok && have_digest && memcmp(digest, ctx->content_id.c, 16) != 0) {
+        if (err_buf) snprintf(err_buf, err_buf_size,
+                               "el contenido reconstruido del NCZ no coincide con su hash esperado - "
+                               "no se instaló nada.");
+        ok = false;
+    }
+
+    if (ok) {
+        Result rc = ncmContentStorageRegister(ctx->cs, &ctx->content_id, &ctx->placeholder_id);
+        if (R_FAILED(rc)) {
+            if (err_buf) snprintf(err_buf, err_buf_size, "ncmContentStorageRegister falló (0x%x)", rc);
+            ok = false;
+        }
+    }
+
+    // Register moves/consumes the placeholder in the success case - this is
+    // just harmless best-effort cleanup either way, matching
+    // ncm_install_ncz_content_from_url's own final step.
+    ncmContentStorageDeletePlaceHolder(ctx->cs, &ctx->placeholder_id);
+    free(ctx->prefetch_buf);
+    free(ctx);
+    return ok;
+}
+
+void ncz_push_abort(NczPushCtx *ctx) {
+    if (!ctx) return;
+    if (ctx->sections_ready) {
+        ZSTD_freeDCtx(ctx->stream.zds);
+        mbedtls_aes_free(&ctx->stream.aes);
+        mbedtls_sha256_free(&ctx->stream.sha);
+    }
+    ncmContentStorageDeletePlaceHolder(ctx->cs, &ctx->placeholder_id);
+    free(ctx->prefetch_buf);
+    free(ctx);
+}
+
+// Read granularity for the local-file path below. Deliberately its own
+// modest heap buffer rather than install_common_scratch(): ncz_push_begin
+// hands that same shared 4MB buffer to the decompressor as its flush
+// buffer, so reading into it here would corrupt the output mid-install.
+#define NCZ_FILE_READ_CHUNK (256 * 1024)
+
+bool ncm_install_ncz_content_from_file(NcmContentStorage *cs, const NcmContentId *content_id,
+                                        FILE **src, uint64_t entry_offset,
+                                        uint64_t compressed_size, uint64_t final_size,
+                                        const InstallReadGate *gate,
+                                        InstallProgressCallback cb, void *userdata,
+                                        bool *out_registered,
+                                        char *err_buf, size_t err_buf_size) {
+    if (out_registered) *out_registered = false;
+
+    NczPushCtx *ctx = ncz_push_begin(cs, content_id, compressed_size, final_size, err_buf, err_buf_size);
+    if (!ctx) return false;
+
+    uint8_t *chunk = (uint8_t *)malloc(NCZ_FILE_READ_CHUNK);
+    if (!chunk) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "memoria insuficiente para leer el .ncz");
+        ncz_push_abort(ctx);
+        return false;
+    }
+
+    uint64_t read_total = 0;
+    bool canceled = false;
+    bool failed = false;
+
+    while (read_total < compressed_size) {
+        uint64_t want = compressed_size - read_total;
+        if (want > NCZ_FILE_READ_CHUNK) want = NCZ_FILE_READ_CHUNK;
+
+        // Wait for just this chunk (see ncm_install_content's own note) -
+        // the gate reopens *src, hence the per-iteration seek.
+        if (gate && gate->ensure &&
+            (!gate->ensure(gate->user, src, entry_offset + read_total, want) || !*src)) {
+            if (err_buf) snprintf(err_buf, err_buf_size, "instalación cancelada");
+            failed = true;
+            break;
+        }
+
+        if (fseek(*src, (long)(entry_offset + read_total), SEEK_SET) != 0) {
+            if (err_buf) snprintf(err_buf, err_buf_size, "no se pudo posicionar en el archivo fuente");
+            failed = true;
+            break;
+        }
+
+        size_t got = fread(chunk, 1, (size_t)want, *src);
+        if (got != want) {
+            if (err_buf) snprintf(err_buf, err_buf_size, "lectura incompleta del archivo fuente");
+            failed = true;
+            break;
+        }
+
+        if (!ncz_push_feed(ctx, chunk, got)) {
+            failed = true; // err_buf already filled by ncz_push_feed
+            break;
+        }
+
+        read_total += got;
+
+        // Reported in decompressed bytes so this piece's contribution lines
+        // up with what the plain-.nca path reports for its own pieces.
+        // Computed in floating point on purpose: read_total * final_size
+        // overflows a uint64 for the multi-GB sizes involved here.
+        if (cb) {
+            uint64_t scaled = compressed_size > 0
+                ? (uint64_t)((double)read_total / (double)compressed_size * (double)final_size)
+                : 0;
+            if (!cb((long)final_size, (long)scaled, userdata)) {
+                canceled = true;
+                break;
+            }
+        }
+    }
+
+    free(chunk);
+
+    if (canceled) {
+        if (err_buf) snprintf(err_buf, err_buf_size, "instalación cancelada");
+        ncz_push_abort(ctx);
+        return false;
+    }
+    if (failed) {
+        ncz_push_abort(ctx);
+        return false;
+    }
+
+    // Verifies the decompressed size + SHA-256 against content_id and
+    // registers it; frees ctx either way.
+    if (!ncz_push_finish(ctx, err_buf, err_buf_size)) return false;
+
+    if (out_registered) *out_registered = true;
+    return true;
+}

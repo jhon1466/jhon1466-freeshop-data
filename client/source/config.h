@@ -23,7 +23,24 @@
 // TLS certificate verification is disabled in net/http.c (no CA store on
 // Switch) - download integrity is still guaranteed independently via the
 // sha256 check in install/install.c.
-#define CATALOG_BASE_URL "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main"
+//
+// This URL ends up readable in plain text in sdmc:/switch/freeshop/sources.json
+// on every install (see catalog/sources.c) - routed through a Cloudflare
+// Worker (see ../../worker/README.md) instead of straight to
+// raw.githubusercontent.com so the data repo's owner/name isn't exposed
+// there, in the compiled .nro's strings, or on the wire. The Worker also
+// rewrites any absolute raw.githubusercontent.com URLs it finds inside
+// catalog.json (e.g. iconUrl - see "Adding an app to the catalog" in the
+// main README) to point back at itself, since the client uses those as-is
+// (install_common_resolve_url in install_common.c) instead of resolving
+// them against this base URL.
+#define CATALOG_BASE_URL "https://freeshop-proxy.freeshopnx.workers.dev"
+
+// The pre-Worker default, kept only so sources_load can detect and migrate
+// installs whose sources.json still has this baked in as the (hidden)
+// bootstrap entry from before CATALOG_BASE_URL pointed at the Worker - see
+// the migration in catalog/sources.c.
+#define LEGACY_CATALOG_BASE_URL "https://raw.githubusercontent.com/jhon1466/jhon1466-freeshop-data/main"
 
 #define CATALOG_API_PATH "/data/catalog.json"
 
@@ -36,7 +53,7 @@
 // "v<this value>" (a leading "v" is stripped before comparing, either form
 // works), and attach the built freeshop-client.nro as a release asset named
 // exactly "freeshop-client.nro".
-#define CLIENT_VERSION "1.4.4"
+#define CLIENT_VERSION "1.6.0"
 
 // GitHub Releases API endpoint checked for a new client version - see
 // update/self_update.c.

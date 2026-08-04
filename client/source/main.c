@@ -1,5 +1,6 @@
 #include <switch.h>
 #include <curl/curl.h>
+#include <pthread.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -18,6 +19,9 @@
 #include "ui/ui_about.h"
 #include "ui/ui_explorer.h"
 #include "ui/ui_queue.h"
+#include "ui/ui_saves.h"
+#include "ui/ui_mtp.h"
+#include "ui/ui_ftp.h"
 #include "ui/ui_prefs.h"
 #include "ui/ui_sound.h"
 #include "ui/ui_fx.h"
@@ -25,6 +29,7 @@
 #include "install/install_nsp.h"
 #include "install/install_nsp_native.h"
 #include "install/install_xci_native.h"
+#include "install/install_torrent.h"
 #include "install/install_port.h"
 #include "install/install_local.h"
 #include "install/install_dispatch.h"
@@ -47,48 +52,92 @@ static void update_debug_log(const char *fmt, ...) {
     fclose(fp);
 }
 
+typedef struct {
+    const CatalogSource *source;
+    CatalogResult result;
+    AppEntry *entries;
+    int count;
+    char err_buf[160];
+} SourceFetchJob;
+
+static void *source_fetch_thread_main(void *arg) {
+    SourceFetchJob *job = (SourceFetchJob *)arg;
+    job->result = job->source->kind == SOURCE_KIND_TORRENT_CATALOG
+        ? catalog_fetch_torrent_json(job->source->base_url, &job->entries, &job->count,
+                                      job->err_buf, sizeof(job->err_buf))
+        : catalog_fetch(job->source->base_url, &job->entries, &job->count,
+                         job->err_buf, sizeof(job->err_buf));
+    return NULL;
+}
+
 // Fetches each enabled source's catalog and concatenates them into one
 // array. A source that fails to fetch is skipped rather than aborting the
 // whole load - it's only a hard failure if every enabled source fails (or
 // there are none). Each entry remembers which source it came from via
 // AppEntry.source_base_url (stamped by catalog_fetch itself).
+//
+// Every enabled source is fetched on its own thread rather than one after
+// another: each is an independent URL with independent parsing, and the
+// torrent-catalog source alone already costs 3 sequential HTTP round-trips
+// internally (see catalog_fetch_torrent_json). Merged only after every
+// fetch has returned, in source-list order, so the result doesn't depend on
+// which thread happened to finish first.
 static CatalogResult fetch_merged_catalog(const SourceList *sources, AppEntry **out_entries,
                                            int *out_count, char *err_buf, size_t err_buf_size) {
     *out_entries = NULL;
     *out_count = 0;
+
+    SourceFetchJob jobs[SOURCES_MAX];
+    pthread_t threads[SOURCES_MAX];
+    bool started[SOURCES_MAX];
+    int n_jobs = 0;
+
+    for (int i = 0; i < sources->count; i++) {
+        if (!sources->items[i].enabled) continue;
+        memset(&jobs[n_jobs], 0, sizeof(jobs[n_jobs]));
+        jobs[n_jobs].source = &sources->items[i];
+        started[n_jobs] = pthread_create(&threads[n_jobs], NULL, source_fetch_thread_main,
+                                          &jobs[n_jobs]) == 0;
+        if (!started[n_jobs])
+            source_fetch_thread_main(&jobs[n_jobs]); // couldn't start - run inline instead
+        n_jobs++;
+    }
 
     AppEntry *merged = NULL;
     int merged_count = 0;
     int ok_sources = 0;
     char last_err[200] = "";
 
-    for (int i = 0; i < sources->count; i++) {
-        if (!sources->items[i].enabled) continue;
+    for (int i = 0; i < n_jobs; i++) {
+        if (started[i]) pthread_join(threads[i], NULL);
+        SourceFetchJob *job = &jobs[i];
 
-        AppEntry *src_entries = NULL;
-        int src_count = 0;
-        char src_err[160];
-        CatalogResult r = catalog_fetch(sources->items[i].base_url, &src_entries, &src_count,
-                                         src_err, sizeof(src_err));
-        if (r != CATALOG_OK) {
-            snprintf(last_err, sizeof(last_err), "%s: %s", sources->items[i].name, src_err);
+        if (job->result != CATALOG_OK) {
+            snprintf(last_err, sizeof(last_err), "%s: %s", job->source->name, job->err_buf);
             continue;
         }
         ok_sources++;
 
-        if (src_count > 0) {
-            AppEntry *grown = (AppEntry *)realloc(merged, (size_t)(merged_count + src_count) * sizeof(AppEntry));
+        if (job->count > 0) {
+            AppEntry *grown = (AppEntry *)realloc(merged, (size_t)(merged_count + job->count) * sizeof(AppEntry));
             if (!grown) {
-                catalog_free(src_entries);
+                catalog_free(job->entries);
+                // Every remaining job's thread must still be joined and its
+                // result freed - leaving them running/leaked just because
+                // this one allocation failed would leak both.
+                for (int k = i + 1; k < n_jobs; k++) {
+                    if (started[k]) pthread_join(threads[k], NULL);
+                    catalog_free(jobs[k].entries);
+                }
                 free(merged);
                 if (err_buf) snprintf(err_buf, err_buf_size, "memoria insuficiente combinando catálogos");
                 return CATALOG_ERR_PARSE;
             }
             merged = grown;
-            memcpy(merged + merged_count, src_entries, (size_t)src_count * sizeof(AppEntry));
-            merged_count += src_count;
+            memcpy(merged + merged_count, job->entries, (size_t)job->count * sizeof(AppEntry));
+            merged_count += job->count;
         }
-        catalog_free(src_entries);
+        catalog_free(job->entries);
     }
 
     if (ok_sources == 0) {
@@ -103,6 +152,102 @@ static CatalogResult fetch_merged_catalog(const SourceList *sources, AppEntry **
     *out_entries = merged;
     *out_count = merged_count;
     return CATALOG_OK;
+}
+
+// fetch_merged_catalog does several sequential, blocking HTTP round-trips
+// (each enabled source, plus the torrent-catalog source's own extra fetch of
+// the pipensx-metadata manifest and index) followed by parsing and building
+// thousands of AppEntry rows - multiple seconds on a real connection, during
+// which nothing was ever drawn. That looked exactly like a hang: the app
+// launches straight into this call before the list screen exists, so the
+// very first thing a user saw could be a frozen splash for several seconds.
+// This struct/thread pair runs the fetch off the render thread so a loading
+// screen can actually be shown while it works, mirroring the pattern
+// already used for DHT bootstrap/UPnP/icon decode elsewhere in this client.
+typedef struct {
+    pthread_mutex_t mutex;
+    bool done;
+    const SourceList *sources; // input, read-only for the thread's lifetime
+    CatalogResult result;
+    AppEntry *entries;
+    int count;
+    char err_buf[200];
+} CatalogLoadJob;
+
+static void *catalog_load_thread_main(void *arg) {
+    CatalogLoadJob *job = (CatalogLoadJob *)arg;
+
+    AppEntry *entries = NULL;
+    int count = 0;
+    char err_buf[200];
+    CatalogResult r = fetch_merged_catalog(job->sources, &entries, &count, err_buf, sizeof(err_buf));
+
+    pthread_mutex_lock(&job->mutex);
+    job->result = r;
+    job->entries = entries;
+    job->count = count;
+    snprintf(job->err_buf, sizeof(job->err_buf), "%s", err_buf);
+    job->done = true;
+    pthread_mutex_unlock(&job->mutex);
+    return NULL;
+}
+
+// Same contract as fetch_merged_catalog, but renders an animated "Cargando
+// catálogo..." screen while the fetch runs on a background thread instead of
+// leaving the screen frozen. Falls back to a synchronous, spinner-less fetch
+// if the thread can't even be created (a real but exceedingly rare failure
+// mode) rather than failing the catalog load over it.
+static CatalogResult fetch_merged_catalog_with_loading_screen(const SourceList *sources,
+                                                               AppEntry **out_entries, int *out_count,
+                                                               char *err_buf, size_t err_buf_size) {
+    CatalogLoadJob job;
+    memset(&job, 0, sizeof(job));
+    job.sources = sources;
+    pthread_mutex_init(&job.mutex, NULL);
+
+    pthread_t th;
+    if (pthread_create(&th, NULL, catalog_load_thread_main, &job) != 0) {
+        pthread_mutex_destroy(&job.mutex);
+        return fetch_merged_catalog(sources, out_entries, out_count, err_buf, err_buf_size);
+    }
+
+    u64 start_tick = armGetSystemTick();
+    for (;;) {
+        pthread_mutex_lock(&job.mutex);
+        bool done = job.done;
+        pthread_mutex_unlock(&job.mutex);
+        if (done) break;
+
+        SDL_SetRenderDrawColor(g_renderer, COLOR_BG.r, COLOR_BG.g, COLOR_BG.b, COLOR_BG.a);
+        SDL_RenderClear(g_renderer);
+
+        ui_draw_text(g_font_title, 90, 300, COLOR_TEXT, "Cargando catálogo...");
+
+        // Animated dots - cheap, and the point is only to prove the screen
+        // is alive and not frozen, not to show granular progress (the
+        // underlying fetch has no natural progress fraction: it's a handful
+        // of whole-document HTTP GETs, not a byte stream).
+        static const char *const dot_frames[4] = { "", ".", "..", "..." };
+        double elapsed_sec = armTicksToNs(armGetSystemTick() - start_tick) / 1e9;
+        int ndots = ((int)(elapsed_sec * 2.0)) % 4;
+        ui_draw_text(g_font_body, 90, 340, COLOR_TEXT_DIM, dot_frames[ndots]);
+
+        SDL_RenderPresent(g_renderer);
+
+        // appletMainLoop() drives the applet's own housekeeping (sleep/focus
+        // handling); skipping it for the duration of this loop would be
+        // uncharacteristic of the rest of the client, which always polls it
+        // for every rendered frame.
+        appletMainLoop();
+    }
+
+    pthread_join(th, NULL);
+    pthread_mutex_destroy(&job.mutex);
+
+    *out_entries = job.entries;
+    *out_count = job.count;
+    if (err_buf) snprintf(err_buf, err_buf_size, "%s", job.err_buf);
+    return job.result;
 }
 
 // Filters `entries` down to a value-copy array of just the "root" entries
@@ -178,6 +323,24 @@ typedef struct {
     // May be NULL, in which case no name line is drawn at all rather than
     // showing something that could be mistaken for a real title.
     const char *title;
+    // True only for the AppEntry.via_torrent install path - draws an extra
+    // peers/DHT/speed line from install_torrent_last_stats() below the
+    // normal progress bar. Left false (the struct's designated
+    // initializers below don't set it) for every other install kind.
+    bool is_torrent;
+    // Largest (total, now) this callback has ever been handed, so the
+    // displayed counter never visibly regresses. A torrent install feeds
+    // this callback from two different sources that measure different
+    // things: install_torrent.c's gate reports swarm download bytes while
+    // blocked (which can race ahead of what's strictly needed, since peers
+    // pipeline requests beyond the gated range), while install_local.c's
+    // NCM-write progress (install_agg_progress_cb) reports bytes actually
+    // copied into NCM storage for the install phase - genuinely behind the
+    // download at that instant. Both describe "the same file", so clamping
+    // to the running max turns two sawtoothing sources into one monotonic
+    // number instead of showing the raw dip when the source switches.
+    long max_now;
+    long max_total;
 } InstallProgressCtx;
 
 static void on_install_phase(InstallPhase phase, void *userdata) {
@@ -217,6 +380,13 @@ static bool install_progress_cb(long total, long now, void *userdata) {
         return true;
     }
     if (ctx) ctx->last_render_tick = now_tick;
+
+    if (ctx) {
+        if (total > ctx->max_total) ctx->max_total = total;
+        if (now > ctx->max_now) ctx->max_now = now;
+        total = ctx->max_total;
+        now = ctx->max_now;
+    }
 
     PadState *pad = ctx ? ctx->pad : NULL;
     bool cancel = false;
@@ -264,7 +434,7 @@ static bool install_progress_cb(long total, long now, void *userdata) {
         snprintf(line, sizeof(line), "%s descargados", done_str);
     }
     ui_draw_text(g_font_body, 90, 340, COLOR_TEXT_DIM, line);
-    ui_draw_progress_bar(90, 380, 1100, 24, pct, COLOR_ACCENT, COLOR_PANEL);
+    ui_draw_progress_bar(90, 380, 1100, 7, pct, COLOR_ACCENT, COLOR_TRACK);
 
     // Average speed since the download started (simple and robust - no
     // ring buffer to size/manage - trades a little responsiveness to
@@ -286,7 +456,37 @@ static bool install_progress_cb(long total, long now, void *userdata) {
         }
     }
 
-    ui_draw_text(g_font_small, 90, 450, COLOR_TEXT_DIM, "B: cancelar");
+    // Torrent-specific detail (peers/DHT/instantaneous speed) - a byte
+    // progress bar alone doesn't say why a torrent install is slow (no
+    // peers yet vs. a slow swarm) the way it does for a plain HTTP
+    // download. Pushes the cancel hint down to make room only when shown.
+    int cancel_hint_y = 450;
+    if (ctx && ctx->is_torrent) {
+        TorrentInstallStats ts = install_torrent_last_stats();
+        char torrent_line[96];
+        if (ts.resolving) {
+            if (ts.resolve_peer_count > 0) {
+                snprintf(torrent_line, sizeof(torrent_line), "Resolviendo magnet... peer %u/%u",
+                         ts.resolve_peer_index, ts.resolve_peer_count);
+            } else {
+                snprintf(torrent_line, sizeof(torrent_line), "Resolviendo magnet...");
+            }
+        } else if (ts.total_files > 1) {
+            // Base game + DLC bundled in the same torrent install one file
+            // at a time (see install_torrent.c) - without this, the swarm
+            // detail line looks identical whether 1 or 56 files are queued.
+            snprintf(torrent_line, sizeof(torrent_line), "Archivo %u/%u - %u peers (%u activos) - %.1f MB/s",
+                     ts.current_file_index, ts.total_files, ts.peers, ts.active_peers,
+                     ts.speed_bps / (1024.0 * 1024.0));
+        } else {
+            snprintf(torrent_line, sizeof(torrent_line), "%u peers (%u activos) - DHT: %u nodos - %.1f MB/s",
+                     ts.peers, ts.active_peers, ts.dht_good, ts.speed_bps / (1024.0 * 1024.0));
+        }
+        ui_draw_text(g_font_small, 90, 450, COLOR_TEXT_DIM, torrent_line);
+        cancel_hint_y = 480;
+    }
+
+    ui_draw_button_hint(90, cancel_hint_y, UI_BTN_B, "cancelar");
 
     SDL_RenderPresent(g_renderer);
 
@@ -551,7 +751,7 @@ int main(int argc, char **argv) {
     AppEntry *entries = NULL;
     int count = 0;
 
-    CatalogResult cres = fetch_merged_catalog(&sources, &entries, &count, err_buf, sizeof(err_buf));
+    CatalogResult cres = fetch_merged_catalog_with_loading_screen(&sources, &entries, &count, err_buf, sizeof(err_buf));
     if (cres != CATALOG_OK) {
         // Not fatal: the explorer, cleanup, and sources screens (all
         // reachable from the same list screen ui_show_list draws below -
@@ -588,7 +788,7 @@ int main(int argc, char **argv) {
                 // catalog even though the one it had a second ago was fine.
                 AppEntry *new_entries = NULL;
                 int new_count = 0;
-                CatalogResult cres2 = fetch_merged_catalog(&sources, &new_entries, &new_count,
+                CatalogResult cres2 = fetch_merged_catalog_with_loading_screen(&sources, &new_entries, &new_count,
                                                             err_buf, sizeof(err_buf));
                 if (cres2 != CATALOG_OK) {
                     char msg[640];
@@ -620,7 +820,7 @@ int main(int argc, char **argv) {
             // up fetching anything.
             AppEntry *new_entries = NULL;
             int new_count = 0;
-            CatalogResult cres2 = fetch_merged_catalog(&sources, &new_entries, &new_count,
+            CatalogResult cres2 = fetch_merged_catalog_with_loading_screen(&sources, &new_entries, &new_count,
                                                         err_buf, sizeof(err_buf));
             if (cres2 != CATALOG_OK) {
                 char msg[640];
@@ -642,6 +842,21 @@ int main(int argc, char **argv) {
             // so ui_show_queue can resolve every queued id. It handles
             // browsing, starting, and installing the whole batch itself.
             ui_show_queue(entries, count);
+            continue;
+        }
+
+        if (selected == UI_LIST_OPEN_SAVES) {
+            ui_show_saves();
+            continue;
+        }
+
+        if (selected == UI_LIST_OPEN_MTP) {
+            ui_show_mtp();
+            continue;
+        }
+
+        if (selected == UI_LIST_OPEN_FTP) {
+            ui_show_ftp();
             continue;
         }
 
@@ -713,7 +928,8 @@ int main(int argc, char **argv) {
         padInitializeDefault(&install_pad);
         InstallProgressCtx progress_ctx = { .pad = &install_pad, .start_tick = 0, .started = false,
                                              .phase = INSTALL_PHASE_DOWNLOADING,
-                                             .title = install_target->title };
+                                             .title = install_target->title,
+                                             .is_torrent = install_target->via_torrent };
 
         // Entries from different enabled sources need their own base URL,
         // not a single global one - see AppEntry.source_base_url.
@@ -762,7 +978,7 @@ int main(int argc, char **argv) {
             ui_app_show_message(msg);
         } else if (ires == INSTALL_ONE_CANCELED) {
             ui_app_show_message("Descarga cancelada.");
-        } else if (install_suggests_dbi_fallback(install_target->file_type)) {
+        } else if (!install_target->via_torrent && install_suggests_dbi_fallback(install_target->file_type)) {
             snprintf(msg, sizeof(msg),
                      "Error de instalación: %s\n\nSi el problema persiste, prueba \"Instalar vía DBI\" (botón X) desde esta misma pantalla.",
                      err_buf);

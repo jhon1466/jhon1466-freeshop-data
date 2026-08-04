@@ -3,6 +3,7 @@
 #include "../net/http.h"
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 
 // Creates dir if missing. Real failures (e.g. read-only SD, invalid path)
 // surface later when the caller tries to open a file inside this directory
@@ -52,6 +53,25 @@ int install_common_copy_file(const char *src, const char *dst);
 // entry at a time, and the queue runs them sequentially).
 #define INSTALL_SCRATCH_SIZE (4 * 1024 * 1024)
 uint8_t *install_common_scratch(void);
+
+// Gates reads on a source file that is still being written - a torrent
+// install reading its container as it downloads (see install_local.h's
+// InstallLocalGate and install_torrent.c). Handed down into the content
+// readers rather than only checked per-NCA, because these containers are
+// routinely one huge content piece spanning almost the whole file:
+// waiting for that entire byte range before starting is indistinguishable
+// from downloading first and installing after.
+typedef struct {
+    // Blocks until [offset, offset+len) of the source is readable.
+    // CLOSES *src for the duration and reopens it before returning - the
+    // Switch filesystem refuses to open a file for reading while it is
+    // still open for writing elsewhere, so the reader and the downloader
+    // have to take turns. Callers must therefore re-read *src afterwards
+    // and re-seek, since the reopened handle starts at offset 0.
+    // Returns false to abort (canceled, or the download failed).
+    bool (*ensure)(void *user, FILE **src, uint64_t offset, uint64_t len);
+    void *user;
+} InstallReadGate;
 
 // Folds a title's several content pieces into one continuous progress
 // readout.

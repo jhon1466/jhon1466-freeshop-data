@@ -108,12 +108,15 @@ void ui_show_about(void) {
         ty += 28;
         ui_draw_text(g_font_body, donate_x, ty, COLOR_TEXT, "mastergarden1112@gmail.com");
 
-        ui_draw_rect(LEFT_EDGE, FOOTER_Y - 10, RIGHT_EDGE - LEFT_EDGE, 1, COLOR_PANEL);
-        char footer[160];
-        snprintf(footer, sizeof(footer), tr(STR_ABOUT_FOOTER_TOGGLES),
-                 tr(ui_fx_enabled() ? STR_ON : STR_OFF),
+        ui_draw_rect(LEFT_EDGE, FOOTER_Y - 10, RIGHT_EDGE - LEFT_EDGE, 1, COLOR_SEPARATOR);
+        char fx_hint[32], sound_hint[32];
+        snprintf(fx_hint, sizeof(fx_hint), tr(STR_ABOUT_HINT_EFFECTS_TEMPLATE), tr(ui_fx_enabled() ? STR_ON : STR_OFF));
+        snprintf(sound_hint, sizeof(sound_hint), tr(STR_ABOUT_HINT_SOUND_TEMPLATE),
                  tr(ui_sound_enabled() ? STR_ON : STR_OFF));
-        ui_draw_text(g_font_small, LEFT_EDGE, FOOTER_Y, COLOR_TEXT_DIM, footer);
+        int hint_x = LEFT_EDGE;
+        hint_x = ui_draw_button_hint(hint_x, FOOTER_Y, UI_BTN_X, fx_hint);
+        hint_x = ui_draw_button_hint(hint_x, FOOTER_Y, UI_BTN_Y, sound_hint);
+        ui_draw_button_hint(hint_x, FOOTER_Y, UI_BTN_B, tr(STR_ABOUT_HINT_BACK));
 
         SDL_RenderPresent(g_renderer);
     }

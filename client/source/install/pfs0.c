@@ -75,6 +75,43 @@ int pfs0_open(const char *path, Pfs0 *out) {
     return 0;
 }
 
+int pfs0_parse_buffer(const uint8_t *buf, size_t len, Pfs0 *out) {
+    memset(out, 0, sizeof(*out));
+
+    if (len < sizeof(Pfs0Header)) return -3;
+
+    Pfs0Header header;
+    memcpy(&header, buf, sizeof(header));
+
+    if (memcmp(header.magic, "PFS0", 4) != 0) return -2;
+    if (header.num_files == 0 || header.num_files > PFS0_MAX_ENTRIES) return -2;
+    if (header.string_table_size == 0 || header.string_table_size > 64 * 1024) return -2;
+
+    size_t entries_size = (size_t)header.num_files * sizeof(Pfs0FileEntry);
+    size_t header_total = sizeof(Pfs0Header) + entries_size + header.string_table_size;
+    if (len < header_total) return -3;
+
+    memcpy(out->entries, buf + sizeof(Pfs0Header), entries_size);
+
+    const char *string_table = (const char *)(buf + sizeof(Pfs0Header) + entries_size);
+    out->count = (int)header.num_files;
+    for (int i = 0; i < out->count; i++) {
+        uint32_t off = out->entries[i].string_table_offset;
+        if (off >= header.string_table_size) return -2;
+        // Bounded by the string table's own size rather than trusting it to
+        // be NUL-terminated - unlike pfs0_open, which reads the table into a
+        // buffer it allocates one byte larger specifically to guarantee that.
+        size_t avail = (size_t)header.string_table_size - off;
+        size_t name_len = strnlen(string_table + off, avail);
+        if (name_len >= sizeof(out->names[i])) name_len = sizeof(out->names[i]) - 1;
+        memcpy(out->names[i], string_table + off, name_len);
+        out->names[i][name_len] = '\0';
+    }
+
+    out->data_region_offset = header_total;
+    return 0;
+}
+
 static int ends_with(const char *s, const char *suffix) {
     size_t sl = strlen(s), xl = strlen(suffix);
     if (xl > sl) return 0;

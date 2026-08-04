@@ -9,6 +9,8 @@ void ui_status_refresh(SystemStatus *out) {
     out->battery_percent = 0;
     out->charging = false;
     out->network_ok = false;
+    out->is_wifi = false;
+    out->wifi_strength = 0;
     snprintf(out->network_label, sizeof(out->network_label), "Sin conexión");
 
     Result rc = timeInitialize();
@@ -46,8 +48,10 @@ void ui_status_refresh(SystemStatus *out) {
         if (R_SUCCEEDED(nifmGetInternetConnectionStatus(&conn_type, &wifi_strength, &conn_status))) {
             out->network_ok = (conn_status == NifmInternetConnectionStatus_Connected);
             if (out->network_ok) {
+                out->is_wifi = conn_type != NifmInternetConnectionType_Ethernet;
+                out->wifi_strength = wifi_strength;
                 snprintf(out->network_label, sizeof(out->network_label),
-                         "%s", conn_type == NifmInternetConnectionType_Ethernet ? "Ethernet" : "WiFi");
+                         "%s", out->is_wifi ? "WiFi" : "Ethernet");
             }
         }
         nifmExit();

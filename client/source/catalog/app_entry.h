@@ -1,4 +1,5 @@
 #pragma once
+#include <stdbool.h>
 #include <stddef.h>
 
 #define APP_ENTRY_ID_MAX 64
@@ -64,4 +65,10 @@ typedef struct {
     // this instead of a single global base URL now that multiple sources
     // can be merged into one list. See sources.h.
     char source_base_url[APP_ENTRY_URL_MAX];
+    // True for entries from a SOURCE_KIND_TORRENT_CATALOG source (see
+    // sources.h): download_url holds a magnet: URI instead of an HTTP(S)
+    // link, and install_dispatch.c routes these through install_torrent.c
+    // (resolve magnet -> download via client/source/torrent/ -> install
+    // the resulting local file) instead of a native HTTP installer.
+    bool via_torrent;
 } AppEntry;
