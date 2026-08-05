@@ -162,6 +162,24 @@ static bool torrent_gate_ensure(void *user, uint64_t offset, uint64_t len) {
 
     if (torrent_range_complete(g->t, abs_offset, len)) {
         torrent_gate_pump(g);
+        // torrent_gate_pump can write newly-arrived pieces (torrent_tick ->
+        // cb_block -> storage_write), which reopens a DISK file's write
+        // handle if storage_commit had closed it (see
+        // torrent_storage.c's open_disk_file). Left open, that write handle
+        // is exactly what install_local.c's gate_ensure() then races against
+        // - it fopen(path, "rb")s the same file right after this call
+        // returns, and the Switch's filesystem refuses to open a file for
+        // reading while it's still open for writing elsewhere, silently
+        // failing that fopen. gate_ensure has no way to tell that apart from
+        // a real cancel, so this surfaced as "Descarga cancelada" on an
+        // install that was actually still fine - and only once the download
+        // was already racing ahead of the installer (this fast path is only
+        // taken once a range is already complete), which is why it took a
+        // few pieces to start happening, not every gate call. The slow path
+        // below already flushes via torrent_flush before returning true;
+        // this mirrors that so both paths hand back a file the installer
+        // can actually reopen.
+        torrent_flush(g->t);
         return true;
     }
 
@@ -395,9 +413,20 @@ static TorrentInstallResult install_torrent_impl(const AppEntry *entry,
 
         // A download failure surfaces as an install failure (the gate gave
         // up); report the torrent's own reason, which is the useful one.
+        // install_local.c's gate_ensure()==false path always labels this
+        // INSTALL_LOCAL_ERR_CANCELED - it has no way to tell "the user held
+        // B" apart from "the torrent gave up for a real reason" (a fatal
+        // piece/storage error - see piece.c's got_block, or peer/DHT/tracker
+        // exhaustion), since both reach it as the exact same "gate refused"
+        // signal. gate_ctx.download_failed is that distinction (only set on
+        // torrent.c's own r<0 path, never on the user-canceled one - see
+        // torrent_gate_ensure), so reclassify here: a real torrent failure
+        // must not go on to read as "Descarga cancelada." to the user, which
+        // reported an install as self-canceling when it had actually failed.
         if (lr != INSTALL_LOCAL_OK && gate_ctx.download_failed) {
             const char *terr = torrent_last_error(t);
             snprintf(err_buf, err_buf_size, "%s", terr[0] ? terr : "La descarga por torrent fallo.");
+            if (lr == INSTALL_LOCAL_ERR_CANCELED) lr = INSTALL_LOCAL_ERR_NCM;
         }
 
         torrent_destroy(t);

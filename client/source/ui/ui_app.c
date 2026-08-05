@@ -1,8 +1,13 @@
 #include "ui_app.h"
 
 #include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+// Defined with the rendered-text cache further down; called from
+// ui_app_shutdown, which sits above it.
+static void text_cache_clear(void);
 
 SDL_Renderer *g_renderer = NULL;
 TTF_Font *g_font_title = NULL;
@@ -175,6 +180,8 @@ bool ui_app_init(char *err_buf, size_t err_buf_size) {
 }
 
 void ui_app_shutdown(void) {
+    // Before the renderer goes away - these are its textures.
+    text_cache_clear();
     if (g_font_title) { TTF_CloseFont(g_font_title); g_font_title = NULL; }
     if (g_font_body) { TTF_CloseFont(g_font_body); g_font_body = NULL; }
     if (g_font_small) { TTF_CloseFont(g_font_small); g_font_small = NULL; }
@@ -186,8 +193,148 @@ void ui_app_shutdown(void) {
     if (s_pl_initialized) { plExit(); s_pl_initialized = false; }
 }
 
+// ---- rendered-text texture cache ----
+//
+// ui_draw_text used to rasterize its string (TTF_RenderUTF8_Blended - real
+// per-glyph work) and upload it as a brand new GPU texture on EVERY call,
+// then throw the texture away, EVERY frame. Nothing was reused between
+// frames even though the overwhelming majority of on-screen text is
+// identical from one frame to the next: the sidebar's labels, the column
+// headers, the footer's button hints, every visible grid cell's title.
+//
+// That is what actually made this app slow, and it took several wrong
+// guesses (icon fetch concurrency, thread priorities, SD I/O) to find,
+// because it is invisible to any icon-pipeline measurement. The evidence
+// that finally pinned it: a user-captured log showed ~17 frames per second
+// over 50ms while the catalog grid sat completely idle - not scrolling, no
+// network fetches in flight, no decodes queued. With icons demonstrably
+// doing nothing, the only per-frame work left was drawing, and text is by
+// far the most expensive thing this UI draws (a full screen is 30-40
+// separate ui_draw_text calls).
+//
+// So: keep the textures, keyed by (font, exact string, exact color). A
+// steady screen then rasterizes nothing at all after its first frame and
+// just blits. Entries are evicted least-recently-used once full.
+#define TEXT_CACHE_MAX 256
+// Strings longer than this bypass the cache entirely (rendered the old
+// way). Long strings are rare, usually one-off (a wrapped description
+// paragraph), and would otherwise evict many small reusable entries.
+#define TEXT_CACHE_MAX_LEN 96
+
+typedef struct {
+    uint32_t hash; // 0 = empty slot
+    TTF_Font *font;
+    SDL_Color color;
+    char text[TEXT_CACHE_MAX_LEN];
+    SDL_Texture *tex;
+    int w, h;
+    u64 last_used;
+} TextCacheEntry;
+
+static TextCacheEntry s_text_cache[TEXT_CACHE_MAX];
+static u64 s_text_cache_clock = 0;
+
+static void text_cache_clear(void) {
+    for (int i = 0; i < TEXT_CACHE_MAX; i++) {
+        if (s_text_cache[i].tex) SDL_DestroyTexture(s_text_cache[i].tex);
+        s_text_cache[i].tex = NULL;
+        s_text_cache[i].hash = 0;
+    }
+}
+
+// FNV-1a over the string plus the font pointer and color - everything that
+// makes two draws of "the same text" actually different pixels.
+static uint32_t text_cache_hash(TTF_Font *font, SDL_Color color, const char *text) {
+    uint32_t h = 2166136261u;
+    for (const unsigned char *p = (const unsigned char *)text; *p; p++) {
+        h ^= *p;
+        h *= 16777619u;
+    }
+    uintptr_t fp = (uintptr_t)font;
+    for (size_t i = 0; i < sizeof(fp); i++) {
+        h ^= (uint32_t)((fp >> (i * 8)) & 0xFF);
+        h *= 16777619u;
+    }
+    uint32_t rgba = ((uint32_t)color.r << 24) | ((uint32_t)color.g << 16) |
+                    ((uint32_t)color.b << 8) | (uint32_t)color.a;
+    for (int i = 0; i < 4; i++) {
+        h ^= (rgba >> (i * 8)) & 0xFF;
+        h *= 16777619u;
+    }
+    return h ? h : 1; // never 0 - that marks an empty slot
+}
+
+// Returns a cached (or freshly rendered and now cached) texture for this
+// exact font/color/string, with its size in *out_w/*out_h. NULL if the
+// string can't be cached or rendering failed - the caller then falls back
+// to the uncached path.
+static SDL_Texture *text_cache_get(TTF_Font *font, SDL_Color color, const char *text,
+                                    int *out_w, int *out_h) {
+    uint32_t hash = text_cache_hash(font, color, text);
+
+    int free_slot = -1, lru_slot = 0;
+    u64 lru_clock = (u64)-1;
+    for (int i = 0; i < TEXT_CACHE_MAX; i++) {
+        TextCacheEntry *e = &s_text_cache[i];
+        if (e->hash == 0) {
+            if (free_slot < 0) free_slot = i;
+            continue;
+        }
+        // Hash first (an integer compare rejects almost everything), then
+        // confirm properly - a hash collision must not return wrong pixels.
+        if (e->hash == hash && e->font == font &&
+            e->color.r == color.r && e->color.g == color.g &&
+            e->color.b == color.b && e->color.a == color.a &&
+            strcmp(e->text, text) == 0) {
+            e->last_used = ++s_text_cache_clock;
+            *out_w = e->w;
+            *out_h = e->h;
+            return e->tex;
+        }
+        if (e->last_used < lru_clock) {
+            lru_clock = e->last_used;
+            lru_slot = i;
+        }
+    }
+
+    SDL_Surface *surf = TTF_RenderUTF8_Blended(font, text, color);
+    if (!surf) return NULL;
+    SDL_Texture *tex = SDL_CreateTextureFromSurface(g_renderer, surf);
+    int w = surf->w, h = surf->h;
+    SDL_FreeSurface(surf);
+    if (!tex) return NULL;
+
+    int slot = free_slot >= 0 ? free_slot : lru_slot;
+    TextCacheEntry *e = &s_text_cache[slot];
+    if (e->hash != 0 && e->tex) SDL_DestroyTexture(e->tex);
+    e->hash = hash;
+    e->font = font;
+    e->color = color;
+    snprintf(e->text, sizeof(e->text), "%s", text);
+    e->tex = tex;
+    e->w = w;
+    e->h = h;
+    e->last_used = ++s_text_cache_clock;
+
+    *out_w = w;
+    *out_h = h;
+    return tex;
+}
+
 void ui_draw_text(TTF_Font *font, int x, int y, SDL_Color color, const char *text) {
     if (!font || !text || !text[0]) return;
+
+    if (strlen(text) < TEXT_CACHE_MAX_LEN) {
+        int w = 0, h = 0;
+        SDL_Texture *tex = text_cache_get(font, color, text, &w, &h);
+        if (tex) {
+            SDL_Rect dst = { x, y, w, h };
+            SDL_RenderCopy(g_renderer, tex, NULL, &dst);
+            return;
+        }
+        // Fall through to the uncached path on any failure above.
+    }
+
     SDL_Surface *surf = TTF_RenderUTF8_Blended(font, text, color);
     if (!surf) return;
     SDL_Texture *tex = SDL_CreateTextureFromSurface(g_renderer, surf);

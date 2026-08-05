@@ -116,13 +116,8 @@
 #define GRID_CELL_W 192
 #define GRID_CELL_H 224
 // pipensx's own cover art is 180x180 - this stops short of that (160) rather
-// than matching it exactly: GRID_CELL_W's 192 only leaves 192-icon_size of
-// slack before the next column starts, and the focused card's GRID_ZOOM_TARGET
-// (12% pop) needs headroom out of that same slack too - at a literal 180 the
-// zoomed card would grow past the next column's cell. 160 keeps 32px of
-// slack, comfortably more than the ~19px the zoom needs, without widening
-// GRID_CELL_W past what 5 columns already fits in the sidebar-expanded
-// worst case (~980px content width, see the comment above GRID_TOP).
+// than matching it exactly, to keep 5 columns fitting the sidebar-expanded
+// worst case content width (~980px, see the comment above GRID_TOP).
 #define GRID_ICON_SIZE 160
 // Rounded-corner radius for grid cover art (see ui_mask_rounded_corners) -
 // pipensx's own cover art uses exactly this ("medium" rounding, 8px - see
@@ -134,11 +129,6 @@
 
 // Vertically centered in Borealis's 73px footer band (below its rule).
 #define FOOTER_Y (SCREEN_H - UI_FRAME_FOOTER_H + UI_FRAME_FOOTER_H / 2 - 12)
-
-// A generous fixed cap on distinct categories, matching this file's
-// existing style (VISIBLE_ROWS/GRID_COLS etc. are fixed too) rather than
-// dynamically sizing for the 1280x720 layout this whole screen assumes.
-#define MAX_CATEGORIES 16
 
 // Indices into `entries` that pass the current category filter. Used to be
 // 256 on the assumption a homebrew catalog would never be huge - the
@@ -189,29 +179,6 @@ static void apply_sort(AppEntry *entries, int count, SortMode mode) {
     qsort(entries, (size_t)count, sizeof(AppEntry), cmp);
 }
 
-// Every distinct, non-empty `category` value across `entries`, in first-seen
-// order. Used to populate the category tab bar - "Todos" (all of them) is
-// handled separately by the caller, not included here.
-static int collect_categories(const AppEntry *entries, int count,
-                               char categories[][APP_ENTRY_CATEGORY_MAX]) {
-    int n = 0;
-    for (int i = 0; i < count && n < MAX_CATEGORIES; i++) {
-        if (entries[i].category[0] == '\0') continue;
-        bool found = false;
-        for (int j = 0; j < n; j++) {
-            if (strcmp(categories[j], entries[i].category) == 0) {
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            snprintf(categories[n], APP_ENTRY_CATEGORY_MAX, "%s", entries[i].category);
-            n++;
-        }
-    }
-    return n;
-}
-
 // Indices into `entries` whose category matches `filter` ("" = everything).
 // Rebuilt whenever the filter or `entries`' order changes (sort, category
 // pick) - cheap enough for a homebrew-catalog-sized list to just redo
@@ -237,79 +204,6 @@ static int build_visible(const AppEntry *entries, int count, const char *categor
         if (!title_contains(entries[i].title, search_query)) continue;
         out_visible[n++] = i;
     }
-    return n;
-}
-
-// The catalog home screen (pipensx-style, see ui_show_list's shelf-home
-// state below) shows a handful of horizontally-scrolling shelves instead of
-// one flat grid. pipensx's own default shelves ("Popular" by peer count,
-// "New"/"Recently Updated" by precise publish/update timestamps) need
-// catalog metadata this app's sources don't carry - AppEntry has no peer
-// count and no publish timestamp finer than the bare year catalog.c's
-// copy_year_field extracts. So instead: one "Recién agregados" shelf (every
-// root entry, newest year first) plus one shelf per real category, which is
-// data this catalog actually has.
-#define MAX_SHELVES 8
-// Bounded window per shelf so building/redrawing them is cheap regardless of
-// catalog size - "Ver todo" (the trailing virtual card every shelf gets,
-// see draw_shelf) is the escape hatch into the rest via the existing
-// flat grid/list and its own category_filter.
-#define SHELF_MAX_ITEMS 20
-
-typedef struct {
-    char label[APP_ENTRY_CATEGORY_MAX + 16];
-    // "" for the "Recién agregados" shelf (spans every category); a real
-    // category name for the rest - fed straight into build_visible()'s
-    // category_filter when its "Ver todo" card is picked.
-    char category_filter[APP_ENTRY_CATEGORY_MAX];
-    int indices[SHELF_MAX_ITEMS];
-    int count;
-} Shelf;
-
-// Sorts a small index array by entries[i].version descending (newest year
-// first) - insertion sort, SHELF_MAX_ITEMS is tiny, not worth qsort's
-// comparator ceremony for this. Same string-compare basis cmp_by_version
-// already uses (4-digit years compare correctly as plain strings), just the
-// opposite direction.
-static void sort_indices_by_version_desc(const AppEntry *entries, int *indices, int n) {
-    for (int i = 1; i < n; i++) {
-        int key = indices[i];
-        const char *key_version = entries[key].version;
-        int j = i;
-        while (j > 0 && strcasecmp(entries[indices[j - 1]].version, key_version) < 0) {
-            indices[j] = indices[j - 1];
-            j--;
-        }
-        indices[j] = key;
-    }
-}
-
-static int build_shelves(const AppEntry *entries, int count,
-                          const char categories[][APP_ENTRY_CATEGORY_MAX], int category_count,
-                          Shelf *out_shelves) {
-    int n = 0;
-
-    Shelf *recent = &out_shelves[n];
-    snprintf(recent->label, sizeof(recent->label), "%s", tr(STR_LIST_SHELF_RECENT));
-    recent->category_filter[0] = '\0';
-    recent->count = 0;
-    for (int i = 0; i < count && recent->count < SHELF_MAX_ITEMS; i++)
-        recent->indices[recent->count++] = i;
-    sort_indices_by_version_desc(entries, recent->indices, recent->count);
-    if (recent->count > 0) n++;
-
-    for (int c = 0; c < category_count && n < MAX_SHELVES; c++) {
-        Shelf *shelf = &out_shelves[n];
-        snprintf(shelf->label, sizeof(shelf->label), "%s", categories[c]);
-        snprintf(shelf->category_filter, sizeof(shelf->category_filter), "%s", categories[c]);
-        shelf->count = 0;
-        for (int i = 0; i < count && shelf->count < SHELF_MAX_ITEMS; i++) {
-            if (strcmp(entries[i].category, categories[c]) == 0)
-                shelf->indices[shelf->count++] = i;
-        }
-        if (shelf->count > 0) n++;
-    }
-
     return n;
 }
 
@@ -418,19 +312,34 @@ static void draw_status_bar(int right_x, int y, const SystemStatus *status) {
 }
 
 // Truncates `text` to fit within max_w pixels, appending "..." if cut.
+//
+// Binary search on the cut length, not the one-character-at-a-time walk
+// this used to be. TTF_SizeUTF8 measures every glyph in the string, so the
+// old loop cost O(n) measurements of an O(n) string for a title that needed
+// a lot trimmed - and this runs for every visible cell, every frame. Binary
+// search makes it ~7 measurements regardless of length.
+//
+// Cuts are snapped back to a UTF-8 character boundary (continuation bytes
+// are 10xxxxxx) so a multi-byte character is never split in half - the old
+// version could, leaving an invalid sequence for the renderer.
 static void truncate_to_width(TTF_Font *font, const char *text, int max_w, char *out, size_t out_size) {
     snprintf(out, out_size, "%s", text);
     int w = 0, h = 0;
     TTF_SizeUTF8(font, out, &w, &h);
     if (w <= max_w) return;
 
-    size_t len = strlen(out);
-    while (len > 1) {
-        len--;
-        snprintf(out, out_size, "%.*s...", (int)len, text);
+    size_t full_len = strlen(text);
+    size_t lo = 0, hi = full_len; // longest prefix known to fit / shortest known not to
+    while (lo < hi) {
+        size_t mid = lo + (hi - lo + 1) / 2;
+        while (mid > lo && ((unsigned char)text[mid] & 0xC0) == 0x80) mid--; // back off to a char boundary
+        if (mid == lo) break;
+        snprintf(out, out_size, "%.*s...", (int)mid, text);
         TTF_SizeUTF8(font, out, &w, &h);
-        if (w <= max_w) return;
+        if (w <= max_w) lo = mid;
+        else hi = mid - 1;
     }
+    snprintf(out, out_size, "%.*s...", (int)lo, text);
 }
 
 // Highlight box padding around the icon+title, symmetric on every side -
@@ -461,25 +370,8 @@ static void draw_queue_badge(int x, int y, int size) {
     }
 }
 
-// How much the selected cell's icon grows (12%) - GRID_CELL_W - GRID_ICON_SIZE
-// (56px) is the slack between icons before the next column starts, so this
-// has plenty of room without touching a neighboring cell.
-#define GRID_ZOOM_TARGET 1.12f
-// Eased toward GRID_ZOOM_TARGET by this fraction of the remaining distance
-// each drawn frame - at ~60fps this settles in well under a second, fast
-// enough to feel responsive to cursor movement rather than sluggish.
-#define GRID_ZOOM_EASE 0.35f
-
-// `zoom` (1.0 = no scaling) grows the icon in place - only meaningful when
-// is_selected, callers pass 1.0 for every other cell. Anchored to the
-// icon's bottom edge (grows up and sideways, never down) rather than
-// centered on all four sides, so it never grows into the title drawn right
-// below it. The highlight box and title stay fixed size, so it reads as the
-// icon popping slightly out of its frame rather than the whole cell resizing.
-static void draw_grid_cell(int x, int y, const AppEntry *entry, bool is_selected, float zoom) {
-    int icon_size = (int)(GRID_ICON_SIZE * zoom);
-    int grow = icon_size - GRID_ICON_SIZE;
-    SDL_Rect icon_rect = { x - grow / 2, y - grow, icon_size, icon_size };
+static void draw_grid_cell(int x, int y, const AppEntry *entry, bool is_selected) {
+    SDL_Rect icon_rect = { x, y, GRID_ICON_SIZE, GRID_ICON_SIZE };
 
     ui_draw_rect(icon_rect.x, icon_rect.y, icon_rect.w, icon_rect.h, COLOR_PANEL);
 
@@ -501,9 +393,6 @@ static void draw_grid_cell(int x, int y, const AppEntry *entry, bool is_selected
 
     // Download-queue badge (hold A to toggle) - top-right corner, matching
     // the usual "marked for multi-select" convention (Google Photos etc.).
-    // Anchored to the icon's original bounds (not `icon_rect`, which shifts
-    // during the selected icon's zoom-pop), so it stays put regardless of
-    // selection/zoom state.
     if (ui_queue_contains(entry->id)) {
         draw_queue_badge(x + GRID_ICON_SIZE - 20, y, 20);
     }
@@ -524,255 +413,6 @@ static void draw_grid_cell(int x, int y, const AppEntry *entry, bool is_selected
     }
 }
 
-// Catalog home screen (pipensx-style) - hero banner + shelves. See
-// build_shelves()'s doc comment for what data this is built from.
-#define HERO_H 160
-#define HERO_ICON_SIZE 130
-#define HERO_PAD 16
-#define SHELF_LABEL_H 26
-#define SHELF_ROW_H (SHELF_LABEL_H + GRID_CELL_H)
-
-#define HERO_DESC_MAX_LINES 6
-#define HERO_DESC_LINE_MAX 160
-
-// Word-wraps `text` into `out_lines` without drawing anything - same
-// algorithm ui_draw_text_wrapped uses (word by word, TTF_SizeUTF8 per
-// candidate line), just producing lines instead of drawing them. Callers
-// that redraw the same text every frame (draw_hero does, since it's on
-// screen for as long as the catalog home screen is up) should call this
-// ONCE and cache the result rather than re-wrapping - measuring text width
-// is real per-word work, and doing it 60 times a second for a multi-
-// sentence description is exactly the kind of per-frame cost that reads as
-// the whole screen being sluggish.
-static int wrap_text_into_lines(TTF_Font *font, const char *text, int max_width,
-                                char out_lines[][HERO_DESC_LINE_MAX], int max_lines) {
-    if (!font || !text) return 0;
-
-    char buf[1024];
-    snprintf(buf, sizeof(buf), "%s", text);
-
-    int line_count = 0;
-    char line[HERO_DESC_LINE_MAX] = "";
-    char *saveptr = NULL;
-    char *word = strtok_r(buf, " ", &saveptr);
-
-    while (word && line_count < max_lines) {
-        char candidate[HERO_DESC_LINE_MAX];
-        if (line[0] == '\0') {
-            snprintf(candidate, sizeof(candidate), "%s", word);
-        } else {
-            snprintf(candidate, sizeof(candidate), "%s %s", line, word);
-        }
-
-        int w = 0, h = 0;
-        TTF_SizeUTF8(font, candidate, &w, &h);
-
-        if (w > max_width && line[0] != '\0') {
-            snprintf(out_lines[line_count++], HERO_DESC_LINE_MAX, "%s", line);
-            snprintf(line, sizeof(line), "%s", word);
-        } else {
-            snprintf(line, sizeof(line), "%s", candidate);
-        }
-
-        word = strtok_r(NULL, " ", &saveptr);
-    }
-    if (line[0] != '\0' && line_count < max_lines) {
-        snprintf(out_lines[line_count++], HERO_DESC_LINE_MAX, "%s", line);
-    }
-    return line_count;
-}
-
-// One large card for the currently-picked "featured" entry (see
-// ui_show_list's hero_index) - icon on the left (the same rounded-corner
-// treatment as a grid card, just bigger), title + a pre-wrapped description
-// snippet (see wrap_text_into_lines - computed once when hero_index is
-// picked, not per frame) on the right. `focused` draws the same accent-
-// border treatment draw_grid_cell uses for a selected card, just around the
-// whole panel.
-static void draw_hero(int x, int y, int w, const AppEntry *entry, bool focused,
-                      const char desc_lines[][HERO_DESC_LINE_MAX], int desc_line_count) {
-    ui_draw_rounded_rect(x, y, w, HERO_H, 8, COLOR_PANEL);
-
-    int icon_x = x + HERO_PAD, icon_y = y + (HERO_H - HERO_ICON_SIZE) / 2;
-    SDL_Texture *icon = ui_icons_get(entry);
-    if (icon) {
-        SDL_Rect icon_rect = { icon_x, icon_y, HERO_ICON_SIZE, HERO_ICON_SIZE };
-        SDL_RenderCopy(g_renderer, icon, NULL, &icon_rect);
-    } else {
-        ui_draw_rect(icon_x, icon_y, HERO_ICON_SIZE, HERO_ICON_SIZE, COLOR_BG);
-        char initial[2] = { entry->title[0] ? entry->title[0] : '?', '\0' };
-        ui_draw_text(g_font_title, icon_x + HERO_ICON_SIZE / 2 - 8, icon_y + HERO_ICON_SIZE / 2 - 16,
-                     COLOR_TEXT_DIM, initial);
-    }
-    ui_mask_rounded_corners(icon_x, icon_y, HERO_ICON_SIZE, HERO_ICON_SIZE, GRID_ICON_RADIUS, COLOR_PANEL);
-
-    int text_x = icon_x + HERO_ICON_SIZE + HERO_PAD;
-    int text_w = x + w - HERO_PAD - text_x;
-    int ty = y + HERO_PAD;
-    ui_draw_text(g_font_small, text_x, ty, COLOR_ACCENT, tr(STR_LIST_SHELF_FEATURED));
-    ty += 22;
-    char title_line[96];
-    truncate_to_width(g_font_title, entry->title, text_w, title_line, sizeof(title_line));
-    ui_draw_text(g_font_title, text_x, ty, COLOR_TEXT, title_line);
-    ty += 36;
-    for (int i = 0; i < desc_line_count; i++) {
-        ui_draw_text(g_font_small, text_x, ty, COLOR_TEXT_DIM, desc_lines[i]);
-        ty += 20;
-    }
-
-    if (focused) ui_draw_focus_border(x, y, w, HERO_H, 8);
-}
-
-// One shelf: a label followed by a horizontally-scrolling row of cards
-// (reusing draw_grid_cell as-is, so shelf cards look identical to the flat
-// grid's), plus a trailing virtual "Ver todo" card past the real ones -
-// every shelf gets one, since SHELF_MAX_ITEMS is a display cap, not the
-// real count of matching entries. `*scroll` is the shelf's first visible
-// card index, updated in place to keep `focus_col` in view whenever
-// `row_focused` - the same "keep the active index in view" idea
-// draw_category_tabs uses for the category strip, simplified here since
-// every card is the same fixed width (no need to measure text first).
-static void draw_shelf(int content_left, int content_w, int y, const Shelf *shelf,
-                       const AppEntry *entries, int focus_col, int *scroll, bool row_focused) {
-    ui_draw_text(g_font_body, content_left, y, COLOR_TEXT, shelf->label);
-
-    int cards_visible = content_w / GRID_CELL_W;
-    if (cards_visible < 1) cards_visible = 1;
-    int total_slots = shelf->count + 1; // + the virtual "Ver todo" card
-
-    if (row_focused) {
-        if (focus_col < *scroll) *scroll = focus_col;
-        if (focus_col >= *scroll + cards_visible) *scroll = focus_col - cards_visible + 1;
-    }
-    if (*scroll > total_slots - cards_visible) *scroll = total_slots - cards_visible;
-    if (*scroll < 0) *scroll = 0;
-
-    int card_y = y + SHELF_LABEL_H;
-    int x = content_left;
-    for (int i = *scroll; i < total_slots && x + GRID_CELL_W <= content_left + content_w; i++) {
-        bool is_focused_card = row_focused && (i == focus_col);
-        if (i < shelf->count) {
-            draw_grid_cell(x, card_y, &entries[shelf->indices[i]], is_focused_card, 1.0f);
-        } else {
-            // Virtual "Ver todo" card - same selection-box sizing as a real
-            // card's (see draw_grid_cell/GRID_SELECT_PAD) so the focus
-            // border doesn't visibly change size sliding onto it.
-            ui_draw_rounded_rect(x, card_y, GRID_ICON_SIZE, GRID_ICON_SIZE, GRID_ICON_RADIUS, COLOR_PANEL);
-            int w = 0, h = 0;
-            TTF_SizeUTF8(g_font_body, tr(STR_LIST_SHELF_SEE_ALL), &w, &h);
-            ui_draw_text(g_font_body, x + (GRID_ICON_SIZE - w) / 2, card_y + GRID_ICON_SIZE / 2 - h / 2,
-                         is_focused_card ? COLOR_TEXT : COLOR_TEXT_DIM, tr(STR_LIST_SHELF_SEE_ALL));
-            if (is_focused_card) {
-                int box_w = GRID_ICON_SIZE + GRID_SELECT_PAD * 2;
-                int box_h = GRID_ICON_SIZE + GRID_SELECT_TITLE_H + GRID_SELECT_PAD * 2;
-                ui_draw_focus_border(x - GRID_SELECT_PAD, card_y - GRID_SELECT_PAD, box_w, box_h, 12);
-            }
-        }
-        x += GRID_CELL_W;
-    }
-}
-
-// No "show everything" tab - a catalog is expected to always have at least
-// one category, so category_filter always names a real one (see the
-// still-valid check in ui_show_list, which defaults it to categories[0]
-// whenever it's empty or stale). Returns the matching tab index, or 0 as a
-// safe fallback if category_filter doesn't (yet) match anything.
-static int category_tab_index(const char categories[][APP_ENTRY_CATEGORY_MAX], int category_count,
-                               const char *category_filter) {
-    for (int i = 0; i < category_count; i++) {
-        if (strcmp(categories[i], category_filter) == 0) return i;
-    }
-    return 0;
-}
-
-// Always-visible horizontal tab strip (replaces the old L-toggled sidebar -
-// users reported categories were too easy to miss tucked behind a hidden
-// panel). The active tab gets a brighter label plus an accent underline so
-// it's unambiguous which catalog is showing, matching how a plain color
-// swatch could get lost at a glance. ZL/ZR step between tabs one at a time -
-// button-hint boxes in both corners show which ones, since that's not
-// otherwise obvious from the tab strip alone. Since more categories can
-// exist than fit across 1280px, `tab_scroll_start` (persisted by the caller
-// across frames) tracks which tab the strip currently starts rendering
-// from, auto-advancing to keep the active tab in view. Returns the
-// (possibly adjusted) tab_scroll_start for the caller to keep.
-static int draw_category_tabs(const char categories[][APP_ENTRY_CATEGORY_MAX], int category_count,
-                               const char *category_filter, int tab_scroll_start, int tabs_left) {
-    ui_draw_rounded_rect(tabs_left, TAB_BAR_Y, RIGHT_EDGE - tabs_left, TAB_BAR_H, 8, COLOR_PANEL);
-
-    // ZL/ZR button-hint boxes - always drawn the same way (not
-    // dimmed/disabled), since they always do something: cycling wraps
-    // around rather than stopping.
-    int box_y = TAB_BAR_Y + (TAB_BAR_H - TAB_BAR_ARROW_BOX) / 2;
-    int left_box_x = tabs_left + 6;
-    int right_box_x = RIGHT_EDGE - 6 - TAB_BAR_ARROW_BOX;
-    const char *zl_glyph = ui_button_glyph(UI_BTN_ZL);
-    const char *zr_glyph = ui_button_glyph(UI_BTN_ZR);
-    ui_draw_rect(left_box_x, box_y, TAB_BAR_ARROW_BOX, TAB_BAR_ARROW_BOX, COLOR_ACCENT);
-    ui_draw_rect(left_box_x + 2, box_y + 2, TAB_BAR_ARROW_BOX - 4, TAB_BAR_ARROW_BOX - 4, COLOR_PANEL);
-    if (zl_glyph) {
-        ui_draw_text(g_font_glyph, left_box_x + 3, box_y + 1, COLOR_TEXT, zl_glyph);
-    } else {
-        ui_draw_text(g_font_small, left_box_x + 4, box_y + 7, COLOR_TEXT, "ZL");
-    }
-    ui_draw_rect(right_box_x, box_y, TAB_BAR_ARROW_BOX, TAB_BAR_ARROW_BOX, COLOR_ACCENT);
-    ui_draw_rect(right_box_x + 2, box_y + 2, TAB_BAR_ARROW_BOX - 4, TAB_BAR_ARROW_BOX - 4, COLOR_PANEL);
-    if (zr_glyph) {
-        ui_draw_text(g_font_glyph, right_box_x + 3, box_y + 1, COLOR_TEXT, zr_glyph);
-    } else {
-        ui_draw_text(g_font_small, right_box_x + 4, box_y + 7, COLOR_TEXT, "ZR");
-    }
-
-    if (category_count == 0) {
-        ui_draw_text(g_font_small, left_box_x + TAB_BAR_ARROW_BOX + 16, TAB_BAR_Y + 8,
-                     COLOR_TEXT_DIM, tr(STR_LIST_NO_CATEGORIES));
-        return 0;
-    }
-
-    int current_index = category_tab_index(categories, category_count, category_filter);
-
-    int content_left = tabs_left + TAB_BAR_ARROW_W;
-    int content_right = RIGHT_EDGE - TAB_BAR_ARROW_W;
-    int content_w = content_right - content_left;
-
-    if (current_index < tab_scroll_start) tab_scroll_start = current_index;
-    for (;;) {
-        int x = 0;
-        bool fits_current = false;
-        for (int i = tab_scroll_start; i < category_count; i++) {
-            int w, h;
-            TTF_SizeUTF8(g_font_body, categories[i], &w, &h);
-            int tab_w = w + TAB_BAR_PAD_X * 2;
-            if (x + tab_w > content_w) break;
-            x += tab_w;
-            if (i == current_index) fits_current = true;
-        }
-        if (fits_current || tab_scroll_start >= current_index) break;
-        tab_scroll_start++;
-    }
-
-    int x = content_left;
-    for (int i = tab_scroll_start; i < category_count; i++) {
-        int w, h;
-        TTF_SizeUTF8(g_font_body, categories[i], &w, &h);
-        int tab_w = w + TAB_BAR_PAD_X * 2;
-        if (x + tab_w > content_right) break;
-
-        bool is_active = (i == current_index);
-        ui_draw_text(g_font_body, x + TAB_BAR_PAD_X, TAB_BAR_Y + 8,
-                     is_active ? COLOR_TEXT : COLOR_TEXT_DIM, categories[i]);
-        if (is_active) {
-            ui_draw_rect(x, TAB_BAR_Y + TAB_BAR_H - TAB_BAR_UNDERLINE_H, tab_w, TAB_BAR_UNDERLINE_H, COLOR_ACCENT);
-        }
-        if (i + 1 < category_count) {
-            ui_draw_rect(x + tab_w, TAB_BAR_Y + 6, 1, TAB_BAR_H - 12, COLOR_BG);
-        }
-        x += tab_w;
-    }
-
-    return tab_scroll_start;
-}
-
 typedef enum {
     SIDEBAR_CATALOG = 0,
     SIDEBAR_EXPLORER,
@@ -786,10 +426,9 @@ typedef enum {
 } SidebarSection;
 
 // Draws a `color`-bordered box with a `bg`-filled interior, 2px in on every
-// side - the same two-rect trick draw_category_tabs already uses for its
-// ZL/ZR hint boxes, reused here for every icon that needs an outline rather
-// than a solid fill (ui_draw_rect only ever fills; there's no stroke
-// primitive, and no SDL_gfx or similar linked in to add one).
+// side - for every icon that needs an outline rather than a solid fill
+// (ui_draw_rect only ever fills; there's no stroke primitive, and no
+// SDL_gfx or similar linked in to add one).
 static void draw_icon_outline(int x, int y, int w, int h, SDL_Color color, SDL_Color bg) {
     ui_draw_rect(x, y, w, h, color);
     ui_draw_rect(x + 2, y + 2, w - 4, h - 4, bg);
@@ -958,9 +597,25 @@ static void draw_sidebar(int selected_item, bool sidebar_has_focus, bool collaps
     }
 }
 
+// Diagnosing a user report of scroll stutter on a large (thousands-of-entry)
+// catalog - not reproduced from here, so instead of guessing at a cause
+// (icon cache churn from browsing the whole catalog unfiltered, most
+// likely, but unconfirmed), this logs any frame that takes meaningfully
+// longer than a 60Hz frame budget into the same icon_debug.log the icon
+// pipeline already writes to (see ui_icons_debug_log/ui_icons_debug_snapshot),
+// so the two are trivially correlated in one place next time it happens.
+// ~3x the 16.6ms/frame budget at 60Hz - comfortably past normal per-frame
+// variance, so this only fires on an actual visible hitch.
+#define FRAME_STALL_THRESHOLD_NS 50000000ULL // 50ms
+
 int ui_show_list(AppEntry *entries, int count) {
     static ViewMode view_mode = VIEW_LIST;
     static SortMode sort_mode = SORT_TITLE;
+    // No category filter, no shelves/hero home screen - every game shows at
+    // once (build_visible treats an empty filter as "match everything").
+    // Kept as an always-empty local, rather than removed outright, so
+    // build_visible/save_prefs/empty_state_message don't need separate
+    // no-filter signatures.
     static char category_filter[APP_ENTRY_CATEGORY_MAX] = "";
     static char search_query[64] = "";
     // Icon-only rail vs full width with labels - toggled with "-" from
@@ -969,9 +624,9 @@ int ui_show_list(AppEntry *entries, int count) {
     // just below, so it survives a relaunch.
     static bool sidebar_collapsed = false;
 
-    // Only on the very first call this process - view_mode/sort_mode/
-    // category_filter are already persisted in-memory (via `static`) across
-    // re-entries from the detail screen, same as selected/scroll_offset.
+    // Only on the very first call this process - view_mode/sort_mode are
+    // already persisted in-memory (via `static`) across re-entries from the
+    // detail screen, same as selected/scroll_offset.
     static bool prefs_loaded_once = false;
     if (!prefs_loaded_once) {
         prefs_loaded_once = true;
@@ -983,7 +638,6 @@ int ui_show_list(AppEntry *entries, int count) {
         if (prefs.sort_mode >= 0 && prefs.sort_mode < SORT_MODE_COUNT) {
             sort_mode = (SortMode)prefs.sort_mode;
         }
-        snprintf(category_filter, sizeof(category_filter), "%s", prefs.category_filter);
         sidebar_collapsed = prefs.sidebar_collapsed;
         // sort_mode otherwise only actually gets applied to `entries` when
         // the user next presses X - without this, a loaded non-default
@@ -992,147 +646,26 @@ int ui_show_list(AppEntry *entries, int count) {
         apply_sort(entries, count, sort_mode);
     }
 
-    // collect_categories/build_visible are O(catalog size) string scans -
-    // fine as a "redo wholesale" once per actual change (that's still what
-    // happens at every mutation site below: X/sort, category cycle,
-    // search), but this whole function is called once per rendered frame
-    // (see main.c's `while (running && appletMainLoop())`), and unlike
-    // those sites, this top-level pair used to run unconditionally on
-    // *every* frame regardless of whether anything changed - fine at a
-    // few hundred entries, a measurable per-frame cost at this catalog's
-    // current size (thousands, once the torrent source is enabled - see
-    // sources.h). Cached and only rebuilt when what they depend on
-    // (entries/count identity, category_filter, search_query) actually
-    // changed since the last call.
+    // build_visible is an O(catalog size) string scan - fine as a "redo
+    // wholesale" once per actual change (that's still what happens at every
+    // mutation site below: X/sort, search), but this whole function is
+    // called once per rendered frame (see main.c's `while (running &&
+    // appletMainLoop())`), so it's cached and only rebuilt when what it
+    // depends on (entries/count identity, search_query) actually changed
+    // since the last call.
     static const AppEntry *cached_entries_ptr = NULL;
     static int cached_count = -1;
-    static char cached_category_filter[APP_ENTRY_CATEGORY_MAX] = "\x01";  // never a real filter value
     static char cached_search_query[64] = "";
-    static char categories[MAX_CATEGORIES][APP_ENTRY_CATEGORY_MAX];
-    static int category_count = 0;
     static int visible[VISIBLE_MAX];
     static int visible_count = 0;
 
-    // Catalog home screen (pipensx-style shelves + hero) - see
-    // build_shelves()'s own doc comment for why the shelf criteria differ
-    // from pipensx's. Rebuilt in the same lists_dirty block below (shelves
-    // only actually depend on entries/count + categories, not
-    // category_filter/search_query, but redoing them alongside those is
-    // cheap - bounded by MAX_SHELVES * count, not proportional to how often
-    // search/category actually change).
-    static Shelf shelves[MAX_SHELVES];
-    static int shelf_count = 0;
-    // false = shelves (the default landing view); true = today's flat
-    // grid/list, reached via a shelf's "Ver todo" card, Y, or a non-empty
-    // search query (search always drops out of shelves, matching pipensx).
-    static bool drilldown_active = false;
-    // -1 = the hero card is focused; 0..shelf_count-1 = that shelf row.
-    static int shelf_focus_row = -1;
-    static int shelf_focus_col[MAX_SHELVES] = {0};
-    static int shelf_scroll[MAX_SHELVES] = {0}; // first visible card index, per shelf
-    static int shelf_row_scroll = 0; // first visible shelf row (shelves scroll vertically too)
-    static int hero_index = -1;
-    // Pre-wrapped alongside hero_index (see wrap_text_into_lines) instead of
-    // re-wrapping draw_hero's description every frame - the hero is on
-    // screen for as long as the catalog home is, so re-measuring a whole
-    // paragraph word by word 60 times a second was a real, avoidable cost.
-    static char hero_desc_lines[HERO_DESC_MAX_LINES][HERO_DESC_LINE_MAX];
-    static int hero_desc_line_count = 0;
-
-    // Split out from lists_dirty below (which also fires on a
-    // category_filter/search_query-only change) because hero_index is an
-    // index into `entries` itself - it MUST be re-picked whenever `entries`
-    // is a genuinely different array (a catalog reload swaps it for a new
-    // one; the old index could point at freed memory or just the wrong
-    // game), but re-picking it on every category/search change alone would
-    // make the "featured" pick change disruptively while the user is just
-    // searching, which is not what "changes each time you open the app"
-    // means.
     bool entries_changed = cached_entries_ptr != entries || cached_count != count;
-    bool lists_dirty = entries_changed ||
-                       strcmp(cached_category_filter, category_filter) != 0 ||
-                       strcmp(cached_search_query, search_query) != 0;
+    bool lists_dirty = entries_changed || strcmp(cached_search_query, search_query) != 0;
     if (lists_dirty) {
-        category_count = collect_categories(entries, count, categories);
-
-        // No "Todos" tab - category_filter should always name a real
-        // category. Default it to the first one whenever it's empty
-        // (first launch, no saved preference yet) or stale (the catalog
-        // changed since - sources reload, or the category itself got
-        // renamed/removed) rather than leaving it pointing at nothing.
-        bool still_valid = false;
-        for (int i = 0; i < category_count; i++) {
-            if (strcmp(categories[i], category_filter) == 0) {
-                still_valid = true;
-                break;
-            }
-        }
-        if (!still_valid) {
-            if (category_count > 0) {
-                snprintf(category_filter, sizeof(category_filter), "%s", categories[0]);
-            } else {
-                category_filter[0] = '\0';
-            }
-        }
-
         visible_count = build_visible(entries, count, category_filter, search_query, visible);
-        shelf_count = build_shelves(entries, count, categories, category_count, shelves);
-        if (shelf_focus_row >= shelf_count) shelf_focus_row = shelf_count - 1;
-        // Without this, a reload that shrinks the shelf count could leave
-        // shelf_row_scroll pointing past the end - the render loop below
-        // starts from shelf_row_scroll and just draws nothing past
-        // shelf_count, so the screen would show blank shelves until the
-        // user happened to press up/down (the only other place this gets
-        // clamped).
-        if (shelf_row_scroll > shelf_count - 1) shelf_row_scroll = shelf_count > 0 ? shelf_count - 1 : 0;
-
         cached_entries_ptr = entries;
         cached_count = count;
-        snprintf(cached_category_filter, sizeof(cached_category_filter), "%s", category_filter);
         snprintf(cached_search_query, sizeof(cached_search_query), "%s", search_query);
-    }
-
-    if (entries_changed) {
-        // Invalidated unconditionally first - `entries` just became a
-        // different array (or count changed), so any previous hero_index is
-        // an index into memory this function no longer owns even if a
-        // replacement can't be picked below (e.g. a reload leaving
-        // shelf_count at 0).
-        hero_index = -1;
-        if (shelf_count > 0) {
-            // Top few of the "Recién agregados" shelf (already newest-first,
-            // see build_shelves), one picked pseudo-randomly so the hero
-            // isn't the exact same title every single launch. Only entries
-            // with real cover art are eligible - a hero banner with no icon
-            // reads as broken, not "featured".
-            const Shelf *recent = &shelves[0];
-            int candidates[8];
-            int candidate_count = 0;
-            for (int i = 0; i < recent->count && candidate_count < 8; i++) {
-                if (entries[recent->indices[i]].icon_url[0])
-                    candidates[candidate_count++] = recent->indices[i];
-            }
-            if (candidate_count > 0) {
-                hero_index = candidates[armGetSystemTick() % (u64)candidate_count];
-            }
-        }
-
-        hero_desc_line_count = 0;
-        if (hero_index >= 0) {
-            // Wrapped to the narrowest the hero panel can ever be (sidebar
-            // expanded - see draw_hero's own text_w derivation, mirrored
-            // here) rather than whatever content_left happens to be this
-            // frame, since that animates with the sidebar collapsing/
-            // expanding - wrapping once to the worst case means the cached
-            // lines always fit, just with a little extra breathing room on
-            // the right while the sidebar is collapsed.
-            int conservative_content_left = SIDEBAR_X + SIDEBAR_W_EXPANDED + SIDEBAR_GAP;
-            int conservative_hero_w = RIGHT_EDGE - conservative_content_left;
-            int conservative_text_w = conservative_hero_w - 3 * HERO_PAD - HERO_ICON_SIZE;
-            hero_desc_line_count = wrap_text_into_lines(g_font_small, entries[hero_index].description,
-                                                        conservative_text_w, hero_desc_lines,
-                                                        HERO_DESC_MAX_LINES);
-        }
     }
 
     StorageInfo storage;
@@ -1155,17 +688,9 @@ int ui_show_list(AppEntry *entries, int count) {
     static bool sidebar_focused = false;
     static int sidebar_selected = SIDEBAR_CATALOG;
 
-    // Grid view's selected-icon "pop": eases toward GRID_ZOOM_TARGET each
-    // frame rather than jumping there instantly, and resets to 1.0
-    // whenever the selection changes so every new focus re-triggers the pop
-    // instead of picking up mid-animation. Persisted across calls like
-    // `selected` above, for the same reason.
-    static float grid_zoom = 1.0f;
-    static int grid_zoom_selected = -1;
-
     // Eases toward SIDEBAR_W_EXPANDED/COLLAPSED on collapse/expand instead
-    // of snapping - same ui_fx_ease() pattern as grid_zoom above (and
-    // instant when effects are off, since ui_fx_ease already does that).
+    // of snapping (instant when effects are off, since ui_fx_ease already
+    // does that).
     // Seeded to -1 so the very first frame snaps to whatever
     // sidebar_collapsed loaded as, rather than animating in from 0.
     static float sidebar_w_anim = -1.0f;
@@ -1184,11 +709,6 @@ int ui_show_list(AppEntry *entries, int count) {
     if (selected >= visible_count) selected = visible_count > 0 ? visible_count - 1 : 0;
     if (selected < 0) selected = 0;
 
-    // Which tab the always-visible category strip currently starts
-    // rendering from - not persisted across re-entries (recomputed to keep
-    // the active tab in view the moment this screen is shown again).
-    int tab_scroll_start = 0;
-
     PadState pad;
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
     padInitializeDefault(&pad);
@@ -1205,7 +725,43 @@ int ui_show_list(AppEntry *entries, int count) {
     // reuses the exact same rects this screen renders with, no scaling.
     static bool touch_was_down = false;
 
+    // See FRAME_STALL_THRESHOLD_NS above - measures wall time from the top
+    // of one iteration to the top of the next, i.e. the full cost of the
+    // previous frame (input, navigation, render, SDL_RenderPresent's vsync
+    // wait included).
+    u64 frame_start_tick = armGetSystemTick();
+    // Stall logging is rate-limited to one line per second, reporting the
+    // worst frame plus how many stalled in that window. Writing a line per
+    // stalled frame fed the problem it was measuring: each line is an
+    // fflush to the SD card, whose cost lands in the *next* frame, pushing
+    // that one over the threshold too - one real hitch snowballed into
+    // hundreds of consecutive logged "stalls" in a user-captured log.
+    u64 stall_window_start_tick = frame_start_tick;
+    int stall_count_in_window = 0;
+    u64 worst_stall_ns = 0;
+
     while (appletMainLoop()) {
+        u64 frame_tick_now = armGetSystemTick();
+        u64 frame_ns = armTicksToNs(frame_tick_now - frame_start_tick);
+        if (frame_ns > FRAME_STALL_THRESHOLD_NS) {
+            stall_count_in_window++;
+            if (frame_ns > worst_stall_ns) worst_stall_ns = frame_ns;
+        }
+        if (stall_count_in_window > 0 &&
+            armTicksToNs(frame_tick_now - stall_window_start_tick) >= 1000000000ULL) {
+            char icon_snapshot[96];
+            ui_icons_debug_snapshot(icon_snapshot, sizeof(icon_snapshot));
+            ui_icons_debug_log("[stall] %d frames >50ms in 1s, worst %lldms view=%s visible=%d selected=%d scroll=%d icons: %s",
+                               stall_count_in_window,
+                               (long long)(worst_stall_ns / 1000000ULL),
+                               view_mode == VIEW_GRID ? "grid" : "list",
+                               visible_count, selected, scroll_offset, icon_snapshot);
+            stall_window_start_tick = frame_tick_now;
+            stall_count_in_window = 0;
+            worst_stall_ns = 0;
+        }
+        frame_start_tick = frame_tick_now;
+
         padUpdate(&pad);
         u64 kDown = padGetButtonsDown(&pad);
 
@@ -1226,7 +782,7 @@ int ui_show_list(AppEntry *entries, int count) {
             last_status_tick = now_tick;
         }
 
-        bool show_full_title = (drilldown_active || search_query[0]) && visible_count > 0;
+        bool show_full_title = visible_count > 0;
 
         // Sidebar width (eased) and everything the content area derives
         // from it - recomputed every frame since sidebar_collapsed can
@@ -1273,13 +829,6 @@ int ui_show_list(AppEntry *entries, int count) {
                     sidebar_focused = true;
                     touch_activate_sidebar = true;
                 }
-            } else if (!(drilldown_active || search_query[0])) {
-                // Catalog home screen (shelves) isn't hit-tested yet - a tap
-                // here does nothing rather than falling through to the flat
-                // grid/list's own (currently unrendered) cell rects, which
-                // would wrongly activate whatever the D-Pad happens to have
-                // focused. Controller/keyboard navigation is fully wired for
-                // this screen; touch is a known gap to add separately.
             } else if (visible_count > 0 && view_mode == VIEW_GRID) {
                 int first = scroll_offset * GRID_COLS;
                 int last_vi = first + GRID_ROWS_VISIBLE * GRID_COLS;
@@ -1361,9 +910,7 @@ int ui_show_list(AppEntry *entries, int count) {
             // Held state for repeat purposes - D-Pad or left stick, either
             // one counts. (Stick Y follows the usual up=positive convention;
             // if this ends up inverted on real hardware it's this one sign
-            // that needs flipping.) Shared by both branches below - the flat
-            // grid/list navigation and the catalog home screen's hero/shelf
-            // navigation feel the same either way.
+            // that needs flipping.)
             u64 kHeld = padGetButtons(&pad);
             HidAnalogStickState stick = padGetStickPos(&pad, 0);
             bool held_up = (kHeld & HidNpadButton_Up) || stick.y > NAV_STICK_DEADZONE;
@@ -1371,7 +918,7 @@ int ui_show_list(AppEntry *entries, int count) {
             bool held_left = (kHeld & HidNpadButton_Left) || stick.x < -NAV_STICK_DEADZONE;
             bool held_right = (kHeld & HidNpadButton_Right) || stick.x > NAV_STICK_DEADZONE;
 
-            if (drilldown_active || search_query[0]) {
+            {
                 int cols = (view_mode == VIEW_GRID) ? GRID_COLS : 1;
                 // One navigate tone per actual move, driven off the
                 // selection changing rather than off each button check -
@@ -1418,20 +965,14 @@ int ui_show_list(AppEntry *entries, int count) {
                 }
                 if (kDown & HidNpadButton_B) {
                     ui_sound_play(UI_SOUND_BACK);
-                    // A search query takes precedence over just backing out
-                    // of a drilldown - B clears the search first (mirrors
-                    // pipensx: B backs out of a search before it backs out
-                    // of whatever's underneath it), and only falls all the
-                    // way to exiting the app once neither a search nor a
-                    // drilldown is active - i.e. once already back at the
-                    // shelf home.
+                    // A search query takes precedence over exiting outright -
+                    // B clears the search first, and only exits once no
+                    // search is active.
                     if (search_query[0]) {
                         search_query[0] = '\0';
                         visible_count = build_visible(entries, count, category_filter, search_query, visible);
                         selected = 0;
                         scroll_offset = 0;
-                    } else if (drilldown_active) {
-                        drilldown_active = false;
                     } else {
                         return UI_LIST_EXIT;
                     }
@@ -1457,118 +998,6 @@ int ui_show_list(AppEntry *entries, int count) {
                     scroll_offset = 0;
                     ui_sound_play(UI_SOUND_NAVIGATE);
                     save_prefs(view_mode, sort_mode, category_filter, sidebar_collapsed);
-                }
-                if ((kDown & (HidNpadButton_ZL | HidNpadButton_ZR)) && category_count > 0) {
-                    // Steps directly to the next/previous category tab, no
-                    // "Todos" - wraps around at either end.
-                    int current_index = category_tab_index(categories, category_count, category_filter);
-                    int step = (kDown & HidNpadButton_ZL) ? -1 : 1;
-                    int new_index = (current_index + step + category_count) % category_count;
-                    snprintf(category_filter, sizeof(category_filter), "%s", categories[new_index]);
-                    visible_count = build_visible(entries, count, category_filter, search_query, visible);
-                    selected = 0;
-                    scroll_offset = 0;
-                    ui_sound_play(UI_SOUND_NAVIGATE);
-                    save_prefs(view_mode, sort_mode, category_filter, sidebar_collapsed);
-                }
-            } else {
-                // Catalog home screen: hero (row -1) + shelves (row
-                // 0..shelf_count-1), each with its own remembered column -
-                // see ui_show_list's shelf_focus_row/shelf_focus_col.
-                int row_before = shelf_focus_row;
-                int col_before = shelf_focus_row >= 0 ? shelf_focus_col[shelf_focus_row] : 0;
-
-                if (nav_repeat_step(&nav_down, held_down, now_tick) && shelf_focus_row < shelf_count - 1) {
-                    shelf_focus_row++;
-                }
-                if (nav_repeat_step(&nav_up, held_up, now_tick) && shelf_focus_row > -1) {
-                    shelf_focus_row--;
-                }
-                if (shelf_focus_row >= shelf_count) shelf_focus_row = shelf_count - 1;
-
-                if (shelf_focus_row >= 0) {
-                    // Selectable slots on this row = real cards + 1 virtual
-                    // "Ver todo" (see draw_shelf) - max_col is that virtual
-                    // slot's own index, i.e. an inclusive upper bound.
-                    int max_col = shelves[shelf_focus_row].count;
-                    if (nav_repeat_step(&nav_right, held_right, now_tick) &&
-                        shelf_focus_col[shelf_focus_row] < max_col) {
-                        shelf_focus_col[shelf_focus_row]++;
-                    }
-                    if (nav_repeat_step(&nav_left, held_left, now_tick) &&
-                        shelf_focus_col[shelf_focus_row] > 0) {
-                        shelf_focus_col[shelf_focus_row]--;
-                    }
-                    if (shelf_focus_col[shelf_focus_row] > max_col) shelf_focus_col[shelf_focus_row] = max_col;
-                } else {
-                    nav_left.was_held = false;
-                    nav_right.was_held = false;
-                }
-
-                // Keep the focused shelf row in view - same "keep the
-                // active index in view" idea as everywhere else in this
-                // file (draw_category_tabs, scroll_offset above), just for
-                // whole shelf rows instead of grid rows/list rows/tabs.
-                int focus_row_for_scroll = shelf_focus_row < 0 ? 0 : shelf_focus_row;
-                if (focus_row_for_scroll < shelf_row_scroll) shelf_row_scroll = focus_row_for_scroll;
-                if (shelf_focus_row >= 0) {
-                    int shelves_top = TAB_BAR_Y + HERO_H + 16;
-                    int visible_shelf_rows = (FOOTER_Y - 40 - shelves_top) / SHELF_ROW_H;
-                    if (visible_shelf_rows < 1) visible_shelf_rows = 1;
-                    if (shelf_focus_row >= shelf_row_scroll + visible_shelf_rows)
-                        shelf_row_scroll = shelf_focus_row - visible_shelf_rows + 1;
-                }
-
-                if (shelf_focus_row != row_before ||
-                    (shelf_focus_row >= 0 && shelf_focus_col[shelf_focus_row] != col_before)) {
-                    ui_sound_play(UI_SOUND_NAVIGATE);
-                }
-
-                if ((kDown & HidNpadButton_A) || touch_activate_content) {
-                    if (shelf_focus_row < 0) {
-                        if (hero_index >= 0) {
-                            ui_sound_play(UI_SOUND_CONFIRM);
-                            return hero_index;
-                        }
-                    } else {
-                        const Shelf *shelf = &shelves[shelf_focus_row];
-                        int col = shelf_focus_col[shelf_focus_row];
-                        if (col < shelf->count) {
-                            ui_sound_play(UI_SOUND_CONFIRM);
-                            return shelf->indices[col];
-                        }
-                        // The virtual "Ver todo" slot - drop into the
-                        // existing flat grid/list. A category shelf filters
-                        // to that category; the "Recién agregados" shelf
-                        // has no single category (its own category_filter
-                        // is ""), so instead it just sorts whatever
-                        // category is already selected by year - the flat
-                        // view has no "every category at once" mode (see
-                        // category_tab_index's doc comment on why
-                        // category_filter always names a real category).
-                        ui_sound_play(UI_SOUND_CONFIRM);
-                        if (shelf->category_filter[0]) {
-                            snprintf(category_filter, sizeof(category_filter), "%s", shelf->category_filter);
-                        } else {
-                            sort_mode = SORT_VERSION;
-                            apply_sort(entries, count, sort_mode);
-                        }
-                        visible_count = build_visible(entries, count, category_filter, search_query, visible);
-                        selected = 0;
-                        scroll_offset = 0;
-                        drilldown_active = true;
-                        save_prefs(view_mode, sort_mode, category_filter, sidebar_collapsed);
-                    }
-                }
-                if (kDown & HidNpadButton_Y) {
-                    ui_sound_play(UI_SOUND_NAVIGATE);
-                    drilldown_active = true;
-                    selected = 0;
-                    scroll_offset = 0;
-                }
-                if (kDown & HidNpadButton_B) {
-                    ui_sound_play(UI_SOUND_BACK);
-                    return UI_LIST_EXIT;
                 }
             }
 
@@ -1631,38 +1060,6 @@ int ui_show_list(AppEntry *entries, int count) {
         // exactly the states the rail is narrow in.
         draw_sidebar(sidebar_selected, sidebar_focused, sidebar_collapsed || !sidebar_focused,
                      sidebar_w, ui_queue_count(), &storage);
-
-        if (!drilldown_active && !search_query[0]) {
-            ui_icons_begin_frame();
-
-            int hero_y = TAB_BAR_Y;
-            bool hero_focused = shelf_focus_row < 0;
-            if (hero_index >= 0) {
-                draw_hero(content_left, hero_y, RIGHT_EDGE - content_left, &entries[hero_index], hero_focused,
-                         hero_desc_lines, hero_desc_line_count);
-            } else {
-                ui_draw_rounded_rect(content_left, hero_y, RIGHT_EDGE - content_left, HERO_H, 8, COLOR_PANEL);
-            }
-
-            int shelves_top = hero_y + HERO_H + 16;
-            int shelves_bottom = FOOTER_Y - 40;
-            int visible_shelf_rows = (shelves_bottom - shelves_top) / SHELF_ROW_H;
-            if (visible_shelf_rows < 1) visible_shelf_rows = 1;
-
-            if (shelf_count == 0) {
-                ui_draw_text(g_font_body, content_left, shelves_top, COLOR_TEXT_DIM,
-                             empty_state_message(count, category_filter, search_query));
-            }
-
-            for (int r = shelf_row_scroll; r < shelf_count && r < shelf_row_scroll + visible_shelf_rows; r++) {
-                int row_y = shelves_top + (r - shelf_row_scroll) * SHELF_ROW_H;
-                bool row_focused = (r == shelf_focus_row);
-                draw_shelf(content_left, RIGHT_EDGE - content_left, row_y, &shelves[r], entries,
-                          shelf_focus_col[r], &shelf_scroll[r], row_focused);
-            }
-        } else {
-        tab_scroll_start = draw_category_tabs(categories, category_count, category_filter, tab_scroll_start,
-                                               content_left);
 
         if (view_mode == VIEW_LIST) {
             ui_draw_rect(content_left, COL_HEADER_Y, RIGHT_EDGE - content_left, COL_HEADER_H, COLOR_PANEL);
@@ -1747,12 +1144,6 @@ int ui_show_list(AppEntry *entries, int count) {
         } else {
             ui_icons_begin_frame();
 
-            if (selected != grid_zoom_selected) {
-                grid_zoom = 1.0f;
-                grid_zoom_selected = selected;
-            }
-            grid_zoom = ui_fx_ease(grid_zoom, GRID_ZOOM_TARGET, GRID_ZOOM_EASE);
-
             int selected_row = selected / GRID_COLS;
             if (selected_row < scroll_offset) scroll_offset = selected_row;
             if (selected_row >= scroll_offset + GRID_ROWS_VISIBLE) scroll_offset = selected_row - GRID_ROWS_VISIBLE + 1;
@@ -1771,9 +1162,8 @@ int ui_show_list(AppEntry *entries, int count) {
                 int cell_x = grid_left + col * GRID_CELL_W;
                 int cell_y = GRID_TOP + row_in_view * GRID_CELL_H;
                 bool is_selected = vi == selected;
-                draw_grid_cell(cell_x, cell_y, &entries[i], is_selected, is_selected ? grid_zoom : 1.0f);
+                draw_grid_cell(cell_x, cell_y, &entries[i], is_selected);
             }
-        }
         }
 
         // Titles get cut short with "..." to fit the grid's narrow cells
@@ -1812,8 +1202,6 @@ int ui_show_list(AppEntry *entries, int count) {
             int fx = LEFT_EDGE;
             fx = ui_draw_button_hint(fx, FOOTER_Y, UI_BTN_DPAD, tr(STR_LIST_HINT_NAVIGATE));
             fx = ui_draw_button_hint(fx, FOOTER_Y, UI_BTN_A, tr(STR_LIST_HINT_INSTALL));
-            fx = ui_draw_button_hint(fx, FOOTER_Y, UI_BTN_ZL, NULL);
-            fx = ui_draw_button_hint(fx, FOOTER_Y, UI_BTN_ZR, tr(STR_LIST_HINT_CATEGORY));
             fx = ui_draw_button_hint(fx, FOOTER_Y, UI_BTN_Y, view_hint);
             ui_draw_button_hint(fx, FOOTER_Y, UI_BTN_X, sort_hint);
 

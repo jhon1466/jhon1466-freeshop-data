@@ -72,15 +72,17 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/source
 )
 
-# The same set the Makefile linked, minus SDL2/SDL2_ttf and their font
-# stack (freetype/harfbuzz/bz2/png/z) - Borealis brings its own renderer
-# and font handling. Kept in a link group for the same reason the Makefile
-# used --start-group: these have circular static dependencies.
+# The same set the Makefile linked, minus SDL2/SDL2_ttf and the font-shaping
+# half of their stack (freetype/harfbuzz/png) - Borealis brings its own
+# renderer and font handling. z stays: curl's content-encoding and our own
+# zip_extract.c both call zlib directly, independent of SDL2_ttf's font
+# stack that pulled it in before. Kept in a link group for the same reason
+# the Makefile used --start-group: these have circular static dependencies.
 target_link_libraries(${PROJECT_NAME} PRIVATE
     borealis
     -Wl,--start-group
     curl mbedtls mbedx509 mbedcrypto
-    jansson jpeg zstd miniupnpc
+    jansson jpeg zstd miniupnpc z
     -Wl,--end-group
 )
 

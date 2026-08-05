@@ -18,7 +18,10 @@ const REPO = "jhon1466/jhon1466-freeshop-data";
 const ASSET_NAME = "freeshop-client.nro";
 
 const root = path.resolve(__dirname, "..");
-const nroPath = path.join(root, "client", ASSET_NAME);
+// client/build-cmake/, not client/ - the client build moved from a
+// devkitPro Makefile to CMake (see client/CMakeLists.txt) when the UI
+// moved onto Borealis.
+const nroPath = path.join(root, "client", "build-cmake", ASSET_NAME);
 const versionHeader = path.join(root, "client", "source", "config.h");
 
 function readToken() {

@@ -222,22 +222,45 @@ void piece_mgr_mark_pending(piece_mgr_t *pm, uint32_t idx) {
 
 int piece_mgr_got_block(piece_mgr_t *pm, uint32_t idx, uint32_t offset,
                         const uint8_t *data, uint32_t len) {
-    if (idx >= pm->num_pieces || !data) return -1;
+    // Every -1 here becomes a fatal error one layer up (see torrent.c's
+    // cb_block), which the installer then surfaces as "Descarga cancelada"
+    // - indistinguishable, before this logging existed, from a real user
+    // cancel (a user report of installs "canceling themselves" turned out
+    // to be one of these, not a button press - see install_torrent.c's
+    // download_failed/gate_ctx handling). Logged here, not just at the
+    // fatal_error site, because idx/offset/len/sl state is only available
+    // in this scope.
+    if (idx >= pm->num_pieces || !data) {
+        torrent_debug_log("[piece] got_block reject: idx=%u num_pieces=%u data=%p",
+                          idx, pm->num_pieces, (const void*)data);
+        return -1;
+    }
     piece_slot_t *sl = &pm->slots[idx];
     if (sl->state == PS_DONE)
         return 1; // already have it
 
     int64_t plen = piece_len(pm, idx);
-    if (offset % BLOCK_SIZE != 0 || (int64_t)offset >= plen) return -1;
+    if (offset % BLOCK_SIZE != 0 || (int64_t)offset >= plen) {
+        torrent_debug_log("[piece] got_block reject piece %u: bad offset=%u plen=%lld",
+                          idx, offset, (long long)plen);
+        return -1;
+    }
 
     uint32_t blk = offset / BLOCK_SIZE;
     uint32_t expected_len = ((int64_t)offset + BLOCK_SIZE <= plen)
                           ? BLOCK_SIZE : (uint32_t)(plen - offset);
-    if (blk >= sl->num_blocks || len != expected_len) return -1;
+    if (blk >= sl->num_blocks || len != expected_len) {
+        torrent_debug_log("[piece] got_block reject piece %u: blk=%u num_blocks=%u len=%u expected=%u",
+                          idx, blk, sl->num_blocks, len, expected_len);
+        return -1;
+    }
 
     if (!sl->buf) {
         sl->buf = piece_buf_get(pm);
-        if (!sl->buf) return -1;
+        if (!sl->buf) {
+            torrent_debug_log("[piece] got_block piece %u: buffer allocation failed (out of memory?)", idx);
+            return -1;
+        }
     }
     sl->state = PS_PENDING;
     memcpy(sl->buf + offset, data, len);

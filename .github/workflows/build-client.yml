@@ -20,11 +20,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install extra devkitPro packages
+        run: dkp-pacman -Sy --noconfirm switch-libjpeg-turbo
+
+      # Borealis (the UI framework - see client/CMakeLists.txt's own
+      # comment) is vendored but not committed - see the root .gitignore.
+      - name: Fetch Borealis
+        run: |
+          git clone --depth 1 --branch moonlight_wiliwili --recurse-submodules \
+            --shallow-submodules https://github.com/XITRIX/borealis.git client/vendor/borealis
+
+      - name: Configure
+        run: cmake -S client -B client/build-cmake -DCMAKE_BUILD_TYPE=Release
+
       - name: Build .nro
-        run: make -C client
+        run: cmake --build client/build-cmake -j"$(nproc)"
 
       - name: Upload .nro artifact
         uses: actions/upload-artifact@v4
         with:
           name: freeshop-client
-          path: client/freeshop-client.nro
+          path: client/build-cmake/freeshop-client.nro

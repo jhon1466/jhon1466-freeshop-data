@@ -1,9 +1,9 @@
 #pragma once
 // Small UTF-8 helper shared by catalog.c and game_metadata.c: strips
-// codepoints the console's bundled/shared TTF font has no glyph for before
-// any scraped/third-party text (catalog JSON, pipensx-metadata descriptions)
+// codepoints the console's fonts have no glyph for before any
+// scraped/third-party text (catalog JSON, pipensx-metadata descriptions)
 // reaches an AppEntry field. Without this, a description that uses emoji or
-// dingbat bullets (a mountain, a game controller, a star, "*") as section
+// dingbat bullets (a mountain, a game controller, a star) as section
 // markers - common in Nintendo eShop-style copy - renders each one as a
 // "tofu" missing-glyph box on screen instead of nothing.
 #include <stdint.h>
@@ -38,11 +38,27 @@ static inline uint32_t utf8_decode_cp(const unsigned char *s, size_t remaining, 
 // geometric shapes, misc symbols, dingbats, and the emoji/supplemental
 // symbol planes - exactly the blocks used for decorative bullets/section
 // markers. Ordinary text - Latin, Latin-1/Extended, general punctuation
-// (em/en dash, curly quotes, all below U+2190), and Cyrillic - is untouched.
+// (em/en dash, curly quotes, all below U+2190), Cyrillic and CJK - is
+// untouched: Borealis loads Nintendo's own shared CJK/Korean fonts as
+// NanoVG fallbacks (see its lib/platforms/switch/switch_font.cpp), so a
+// Russian or Japanese title from the torrent catalog renders fine.
+//
+// This was briefly widened into an aggressive ASCII+Latin-only whitelist
+// while chasing a crash that surfaced inside the font renderer
+// (nvgTextWithCursor -> stb_truetype, null deref). That turned out to be
+// the wrong culprit: the real bug was a use-after-free in the catalog tab
+// (see CatalogTab's `alive` flag) writing over an already-deleted Label,
+// after which the renderer was simply reading garbage. Reverted, since
+// dropping every non-Latin script would mutilate legitimate catalog text.
 static inline int utf8_cp_is_unrenderable(uint32_t cp) {
     return (cp >= 0x2190 && cp <= 0x2BFF)
         || (cp >= 0xFE00 && cp <= 0xFE0F)   // variation selectors
-        || (cp >= 0x1F000 && cp <= 0x1FFFF); // emoji & supplemental symbols
+        || (cp >= 0x1F000 && cp <= 0x1FFFF) // emoji & supplemental symbols
+        // What utf8_decode_cp() returns for a malformed/truncated byte
+        // sequence - common enough in scraped third-party catalog text, and
+        // cheap to drop rather than hand a replacement-character glyph
+        // request to the renderer.
+        || cp == 0xFFFD;
 }
 
 // Copies `in` into `out` (NUL-terminated, at most out_size-1 bytes),

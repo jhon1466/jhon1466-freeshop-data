@@ -29,119 +29,59 @@ Homebrew Menu.
   owner/name never shows up in `sources.json`, the compiled `.nro`'s
   strings, or a packet capture - only the Worker's own URL does. See
   [`worker/README.md`](worker/README.md) for deploy steps.
-- [`client/`](client/) - devkitPro/libnx C project (SDL2-rendered, Tinfoil-
-  styled list and grid views, cover icons). `.nro` entries are downloaded
-  straight into `sdmc:/switch/<id>/`. `.nsp`/`.xci` both install natively -
-  the client parses the container (PFS0 for `.nsp`, the nested "secure" HFS0
-  partition for `.xci`), streams every NCA straight into NCM content
-  storage, commits the content-meta record, imports the ticket if present,
-  and pushes the application record, all without leaving the app (see
-  [`install_nsp_native.h`](client/source/install/install_nsp_native.h) /
-  [`install_xci_native.h`](client/source/install/install_xci_native.h));
-  "Instalar vía DBI" (X button) remains as a manual fallback to
-  [DBI](https://github.com/rashevskyv/dbi) for both while this is still
-  being verified across real hardware. `.zip`-packaged ports (an `.nro` plus
-  the data files/subfolders it needs, already folder-structured the way
-  they'd sit on an SD card) use `fileType: "port"` - the client extracts
-  them straight into `sdmc:/switch/` (not nested under the entry's `id`) so
-  the zip's own top-level folder ends up where the port expects it (see
-  [`zip_extract.h`](client/source/install/zip_extract.h)/
-  [`install_port.h`](client/source/install/install_port.h)). `sha256` is verified
-  when the catalog entry provides one, otherwise skipped (see
-  [`docs/catalog-schema.md`](docs/catalog-schema.md)). It always fetches
-  fresh on launch, so any edit made in `/admin` is picked up the next time
-  the client is opened - no extra "update detection" logic needed. An
-  always-visible category tab strip sits below the storage panels (built
-  from whatever `category` values are in the catalog, no "show everything"
-  tab - it always has one selected) with `ZL`/`ZR` button-hint boxes in each
-  corner; the active tab is underlined so it's obvious which catalog is
-  showing. `R` opens the system keyboard to search by title. A persistent
-  sidebar (Tinfoil-style - see
-  [`ui_list.c`](client/source/ui/ui_list.c)'s `draw_sidebar`) sits to the
-  left of the catalog with every other screen this client has - Explorador,
-  Cola, Guardados, Fuentes, Acerca de - listed by name and a small hand-drawn
-  icon each (`draw_sidebar_icon` - plain rects/lines, the same toolset
-  `draw_queue_badge`'s checkmark already used; no image assets or extra
-  libraries) instead of scattered across single-button shortcuts that used
-  up every button on the controller. `L` moves input focus into the sidebar
-  (`Up`/`Down` to pick a section, `A` to open it, `L` again to come back to
-  the catalog); every other button keeps its usual catalog meaning
-  regardless of which section is highlighted in the sidebar. `-` collapses
-  it to an icon-only rail and back (persisted to `prefs.json`, works from
-  either focus state) - the content area reflows into the freed width
-  (wider list columns, a more centered grid) rather than leaving it empty,
-  and the width itself eases open/closed via `ui_fx_ease` instead of
-  snapping, the same easing already driving the grid's selection zoom and
-  the list's sliding highlight. The touchscreen works alongside the
-  controller on this screen: tapping a sidebar row focuses, selects, and
-  opens it in one gesture, tapping a grid/list entry selects and installs it
-  the same way, and tapping the sidebar's collapse row toggles it, all via a
-  single `hidGetTouchScreenStates()` poll per frame hit-tested against the
-  same rects this screen already renders with (see `ui_show_list`) - the
-  digitizer matches the display 1:1 at 1280x720, so no coordinate scaling is
-  needed. Touch isn't wired up anywhere else yet (Explorador, Cola, Fuentes,
-  Guardados, Acerca de, and every confirmation dialog still need the
-  controller). Every panel/highlight box on this screen (the sidebar, its
-  selection highlight, the storage gauges, the category tab bar, the grid's
-  selection box) is drawn with `ui_draw_rounded_rect`
-  ([`ui_app.c`](client/source/ui/ui_app.c) - filled via horizontal scanline
-  spans from a circle equation, since neither SDL2 nor any linked library
-  has a native rounded-rect/circle primitive) instead of the flat
-  `ui_draw_rect` the rest of the app still uses. "Acerca de" (app name/version, a short
-  blurb, and a donations panel with a PayPal QR + email) is one of those
-  sections - the QR is bundled into the `.nro` itself via RomFS
-  (`client/romfs/qr.jpg`, mounted at `romfs:/` in `main.c`), so it's shown
-  without needing network. View mode, sort
-  mode, and the active category filter are saved to
-  `sdmc:/switch/freeshop/prefs.json` and restored on the next launch (see
-  [`ui_prefs.h`](client/source/ui/ui_prefs.h)). Holding the
-  selection still for 1s reveals a title's full, untruncated name (grid
-  cells especially cut long titles short). The install screen shows a live
-  speed/time-remaining estimate. The client itself also self-updates: on
-  launch it checks the data repo's GitHub Releases for a newer version
-  (showing that release's own notes before asking for confirmation) and,
-  if confirmed, downloads and replaces its own `.nro` - see
-  [Publishing a client update](#publishing-a-client-update) below. The
-  replace itself is a two-hop chain-load (a running `.nro` can't
-  remove()/rename() itself on real hardware): the update downloads to a
-  `.update`-suffixed staging copy next to the current file, chain-loads into
-  it, and *that* process (now running from a different file) swaps the
-  staging copy onto the canonical path and chain-loads back - so from the
-  user's side it's just a couple of quick screen flashes, no manual
-  close/reopen needed. Chain-loading (`envSetNextLoad`) only works in launch
-  environments that support it (plain hbmenu launches do; some NSP-forwarder
-  setups don't - checked via `envHasNextLoad()` before relying on it) - if
-  unavailable, it falls back to directly overwriting the running file's
-  on-disk content in place and asking the user to close and reopen manually,
-  same as the original (pre-two-hop) behavior. A save-data manager
-  (Guardados, one of the sidebar sections) lists every installed title's
-  Account-type save data on the console, regardless of how it was installed -
-  not limited to the FreeShop catalog (see
-  [`saves/save_scan.c`](client/source/saves/save_scan.c), which
-  enumerates `FsSaveDataInfo` via `fsOpenSaveDataInfoReader` and resolves
-  each title's name/icon via `nsGetApplicationControlData`). `A` opens a
-  title's backups (`Y` there creates a new one with a progress screen of its
-  own - large saves no longer make the screen appear to hang, `A` restores
-  one after a confirmation, `X` deletes one); `Y` from the title list backs
-  up immediately without drilling in. Each backup is a single
-  Deflate-compressed `.zip` (via
-  [`install/zip_create.c`](client/source/install/zip_create.c), the write
-  counterpart to the `.zip`-port installer's own
-  [`zip_extract.c`](client/source/install/zip_extract.c) - same on-disk
-  struct layout, raw deflate via zlib, no external tool/library beyond
-  what's already linked) named `<game name> [<application id hex>]/<profile>/<timestamp>.zip`
-  under `sdmc:/switch/freeshop/saves/` - the game's own (sanitized) name
-  leads the path specifically so a backup is findable in a file explorer
-  without cross-referencing the id against anything else first (see
-  `backup_dir_for_entry` in
-  [`saves/save_backup.c`](client/source/saves/save_backup.c); backups made
-  before this - unzipped folders under an id-only path - aren't picked up
-  by the new scheme, migrating them wasn't worth the complexity for a
-  feature this new). `fsdevMountSaveData` mounts the live save data for
-  both directions; a restore commits the journal (`fsdevCommitDevice`)
-  afterwards, required for a save-data write to actually persist, and only
-  overwrites files the backup has, never deleting files the live save has
-  that the backup doesn't.
+- [`client/`](client/) - devkitPro/libnx C/C++ project. The UI is built on
+  [Borealis](https://github.com/XITRIX/borealis) (`moonlight_wiliwili`
+  branch - the same fork/branch [pipensx](https://github.com/i3sey/pipensx)
+  itself uses, vendored under `client/vendor/borealis/` but not committed,
+  see [`CMakeLists.txt`](client/CMakeLists.txt)), themed with pipensx's own
+  design tokens (see [`views/theme.cpp`](client/source/views/theme.cpp)).
+  Everything below the UI - catalog fetching, the torrent engine, NSP/XCI/NSZ
+  installers, MTP/FTP, save backups - is plain C, reached from the C++ views
+  via `extern "C"` headers; none of that changed in the move to Borealis.
+  The app shell ([`views/main_frame.cpp`](client/source/views/main_frame.cpp))
+  is a `TabFrame` sidebar with eight sections:
+  - **Catalogo** - a 5-column `RecyclerFrame` grid
+    ([`views/catalog_tab.cpp`](client/source/views/catalog_tab.cpp)) fed by
+    every enabled source ([`views/catalog_service.cpp`](client/source/views/catalog_service.cpp)),
+    cover art loaded async and disk-cached
+    ([`views/async_cover.cpp`](client/source/views/async_cover.cpp)).
+    Selecting a game opens
+    [`views/game_detail_activity.cpp`](client/source/views/game_detail_activity.cpp) -
+    facts, description, an install button with live progress/cancel, a
+    queue toggle, and a DLC/update list where each row reuses the same
+    detail screen recursively.
+  - **Cola** - the download queue
+    ([`views/queue_tab.cpp`](client/source/views/queue_tab.cpp)), installing
+    queued titles one at a time with live progress and cancel; the queued-id
+    set itself lives in
+    [`install/download_queue.c`](client/source/install/download_queue.c).
+  - **Explorador** - a plain SD file browser
+    ([`views/explorer_tab.cpp`](client/source/views/explorer_tab.cpp)):
+    navigate folders, delete files/folders.
+  - **Guardados** - every installed title's Account-type save data on the
+    console ([`views/saves_tab.cpp`](client/source/views/saves_tab.cpp)),
+    each opening a backup/restore/delete screen
+    ([`views/save_detail_activity.cpp`](client/source/views/save_detail_activity.cpp))
+    backed by [`saves/save_scan.c`](client/source/saves/save_scan.c) /
+    [`saves/save_backup.c`](client/source/saves/save_backup.c) - unchanged
+    from before the Borealis move.
+  - **MTP** / **FTP** - start/stop the PTP responder / FTP server and watch
+    live status and transfer history
+    ([`views/mtp_tab.cpp`](client/source/views/mtp_tab.cpp),
+    [`views/ftp_tab.cpp`](client/source/views/ftp_tab.cpp)), each polling its
+    blocking C step function from its own background thread so a transfer
+    never freezes the UI.
+  - **Fuentes** - toggle, remove, or add a catalog source
+    ([`views/sources_tab.cpp`](client/source/views/sources_tab.cpp)), typing
+    a new one's URL with the Switch's own software keyboard
+    (`brls::Application::getImeManager()`).
+  - **Acerca de** - app name/version and attribution
+    ([`views/about_tab.cpp`](client/source/views/about_tab.cpp)).
+
+  Known gap from the pre-Borealis client: self-update (checking the data
+  repo's GitHub Releases and chain-loading a replacement `.nro` - see
+  [Publishing a client update](#publishing-a-client-update) below) hasn't
+  been ported to a Borealis screen yet.
 
 ## Quick start
 
@@ -174,10 +114,16 @@ requiring a native devkitPro install - see
 
 ```
 docker build -t freeshop-client-builder client/
-docker run --rm -v "${PWD}/client:/workspace" freeshop-client-builder make
+git clone --depth 1 --branch moonlight_wiliwili --recurse-submodules \
+  --shallow-submodules https://github.com/XITRIX/borealis.git client/vendor/borealis
+docker run --rm -v "${PWD}/client:/workspace" freeshop-client-builder \
+  sh -c "cmake -S . -B build-cmake -DCMAKE_BUILD_TYPE=Release && cmake --build build-cmake -j4"
 ```
 
-Produces `client/freeshop-client.nro`. It reads the catalog directly from
+Produces `client/build-cmake/freeshop-client.nro`. Borealis (see the client
+paragraph above) is vendored but not committed - clone it once as shown
+above; `client/CMakeLists.txt` fails fast with that same command if it's
+missing. It reads the catalog directly from
 the GitHub data repo's raw content CDN (`client/source/config.h`'s
 `CATALOG_BASE_URL`/`CATALOG_API_PATH`) rather than from the Firebase-hosted
 server - real-hardware testing found libnx's network stack couldn't
@@ -248,8 +194,8 @@ version on every launch (see
 [`self_update.h`](client/source/update/self_update.h)) - to ship one:
 
 1. Bump `CLIENT_VERSION` in [`config.h`](client/source/config.h).
-2. Build (`docker build -t freeshop-client-builder client/` once, then
-   `docker run --rm -v "$(pwd)/client:/workspace" freeshop-client-builder sh -c "cd /workspace && make"`).
+2. Build - see [Client](#client) above for the one-time Borealis clone, then
+   `docker run --rm -v "$(pwd)/client:/workspace" freeshop-client-builder sh -c "cmake -S . -B build-cmake -DCMAKE_BUILD_TYPE=Release && cmake --build build-cmake -j4"`.
 3. Publish it:
 
    ```

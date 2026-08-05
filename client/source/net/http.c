@@ -691,15 +691,44 @@ static void http_async_thread_func(void *arg) {
     __atomic_store_n(&req->done, true, __ATOMIC_RELEASE);
 }
 
+// Defined with the abandoned-request list below (http_async_cancel).
+static void reap_abandoned(void);
+
 HttpAsyncRequest *http_get_async_start(const char *url) {
+    // Cheap, never blocks - keeps canceled-but-finished requests from
+    // lingering when the caller cancels rarely but starts often.
+    reap_abandoned();
+
     HttpAsyncRequest *req = (HttpAsyncRequest *)calloc(1, sizeof(HttpAsyncRequest));
     if (!req) return NULL;
     snprintf(req->url, sizeof(req->url), "%s", url);
 
-    // Default priority/core (0x2C, -2) - same as every other thread this
-    // app creates implicitly via libnx's own defaults; nothing about a
-    // small icon fetch needs different scheduling treatment.
-    Result rc = threadCreate(&req->thread, http_async_thread_func, req, NULL, HTTP_ASYNC_STACK_SIZE, 0x2C, -2);
+    // A couple of points lower priority (0x2E) than the render/main
+    // thread's default 0x2C - NOT the default this used to run at. Up to
+    // ICON_CONCURRENT_FETCHES of these run at once, each doing a real
+    // curl_easy_perform() with mbedtls's TLS handshake and AES done in
+    // software (see this file's own comments on that) - genuinely
+    // CPU-heavy work, not just I/O wait. At equal priority with the render
+    // thread and no core pinned (-2 = any core), several of these
+    // competing for the same core as the render thread was measured
+    // (icon_debug.log evidence: frame times tracking fetches-in-flight
+    // almost exactly, even while the app was otherwise idle/stationary)
+    // starving it of CPU time - not blocked on anything, just not getting
+    // scheduled.
+    //
+    // This first shipped as 0x3F (63, the lowest value HOS's priority range
+    // allows) on the reasoning that these are cosmetic background work and
+    // should always lose to the render thread - measured on hardware as
+    // starving them completely instead (0 of 885 fetches in one session
+    // ever completed, not even with an error - see icon_debug.log's
+    // "starting fetch" vs "fetch OK"/"fetch failed" counts). HOS's
+    // scheduler is strictly priority-preemptive - any lower priority than
+    // the render thread already gets it preempted the instant the render
+    // thread is ready to run, so the full drop to 63 bought nothing over a
+    // small one and apparently hit some other threshold instead (this
+    // devkitPro build's own priority clamping, most likely). A small gap is
+    // both sufficient and, empirically, actually works.
+    Result rc = threadCreate(&req->thread, http_async_thread_func, req, NULL, HTTP_ASYNC_STACK_SIZE, 0x2E, -2);
     if (R_FAILED(rc)) {
         free(req);
         return NULL;
@@ -746,20 +775,80 @@ void http_async_finish(HttpAsyncRequest *req, char **out_buf, size_t *out_len,
     free(req);
 }
 
+// ---- abandoned (canceled-but-still-running) requests ----
+//
+// There's no safe way to forcibly kill a thread mid curl_easy_perform -
+// mbedtls/curl state would be left in an unknown state - so a canceled
+// request has to be allowed to finish on its own.
+//
+// This used to be done by simply blocking in http_async_cancel() until the
+// thread exited, on the theory that cancellation only happened on a rare
+// event like switching catalog sources. That stopped being true: the icon
+// cache cancels a fetch every time one scrolls off-screen (see ui_icons.c's
+// preempt_fetch_slot), which happens constantly while scrolling - and
+// http_async_cancel runs on the render thread. A user-captured log caught
+// the result: a single 16.5-SECOND frozen frame during a fast scroll, which
+// is exactly this blocking wait sitting out a stuck connection's full
+// HTTP_ASYNC_TOTAL_TIMEOUT_S.
+//
+// Instead: hand the request over here and return immediately. Its thread is
+// already detached from anything the UI cares about (nothing will read its
+// buffer), so it just needs collecting once it finishes on its own - which
+// reap_abandoned() does, without ever waiting.
+#define HTTP_ASYNC_MAX_ABANDONED 32
+static HttpAsyncRequest *s_abandoned[HTTP_ASYNC_MAX_ABANDONED];
+static int s_abandoned_count = 0;
+
+// Frees every abandoned request whose thread has already exited. Never
+// blocks: a still-running one is simply left for a later sweep.
+static void reap_abandoned(void) {
+    for (int i = 0; i < s_abandoned_count; ) {
+        HttpAsyncRequest *req = s_abandoned[i];
+        if (!__atomic_load_n(&req->done, __ATOMIC_ACQUIRE)) {
+            i++;
+            continue;
+        }
+        threadWaitForExit(&req->thread); // already exited - returns at once
+        threadClose(&req->thread);
+        free(req->buf.data);
+        free(req);
+        s_abandoned[i] = s_abandoned[--s_abandoned_count];
+    }
+}
+
 void http_async_cancel(HttpAsyncRequest *req) {
     if (!req) return;
-    // Unlike http_async_finish(), this can be called before the thread has
-    // finished (e.g. switching catalog sources mid-fetch) - there's no safe
-    // way to forcibly kill it mid curl_easy_perform (mbedtls/curl state
-    // would be left in an unknown state), so this waits for it to finish on
-    // its own. Bounded by HTTP_ASYNC_CONNECT_TIMEOUT_S/HTTP_ASYNC_TOTAL_TIMEOUT_S
-    // (20s worst case) - not instant, but a source switch is rare enough
-    // that this is an acceptable trade-off against the complexity of a
-    // proper fire-and-forget abandon path.
-    if (req->started) {
+
+    // Collect anything abandoned earlier that has since finished, so the
+    // list stays short without needing its own timer or public API.
+    reap_abandoned();
+
+    if (!req->started) {
+        free(req->buf.data);
+        free(req);
+        return;
+    }
+
+    if (__atomic_load_n(&req->done, __ATOMIC_ACQUIRE)) {
+        // Already finished - collecting it costs nothing.
         threadWaitForExit(&req->thread);
         threadClose(&req->thread);
+        free(req->buf.data);
+        free(req);
+        return;
     }
+
+    if (s_abandoned_count < HTTP_ASYNC_MAX_ABANDONED) {
+        s_abandoned[s_abandoned_count++] = req;
+        return;
+    }
+
+    // The abandoned list is full - fall back to the old blocking wait
+    // rather than leaking. Reaching this needs 32 separate fetches to be
+    // simultaneously canceled AND still running, which the caller's own
+    // concurrency cap makes unreachable in practice.
+    threadWaitForExit(&req->thread);
+    threadClose(&req->thread);
     free(req->buf.data);
     free(req);
 }

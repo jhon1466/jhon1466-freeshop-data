@@ -7,7 +7,6 @@
 
 #include <ctype.h>
 #include <jansson.h>
-#include <pthread.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -389,35 +388,33 @@ static bool torrent_file_type_from_format(const char *format, AppFileType *out_t
     return false;
 }
 
-static void *game_metadata_ensure_loaded_thread_main(void *arg) {
-    (void)arg;
-    game_metadata_ensure_loaded();
-    return NULL;
-}
-
 CatalogResult catalog_fetch_torrent_json(const char *url, AppEntry **out_entries, int *out_count,
                                           char *err_buf, size_t err_buf_size) {
     *out_entries = NULL;
     *out_count = 0;
 
-    // Kicked off in parallel with the magnet-list fetch+parse below rather
-    // than after it: the pipensx-metadata manifest+index (see
-    // game_metadata.h) has no dependency on this catalog's own document, so
-    // there is no reason the two extra HTTP round-trips it costs should be
-    // paid serially on top of this one. Joined just before the loop that
-    // actually needs it. A failure to start the thread just means it runs
-    // inline instead (same net effect, no parallelism gained).
-    pthread_t meta_thread;
-    bool meta_thread_started =
-        pthread_create(&meta_thread, NULL, game_metadata_ensure_loaded_thread_main, NULL) == 0;
-    if (!meta_thread_started)
-        game_metadata_ensure_loaded();
+    // Run serially, not on its own thread. This used to be kicked off in
+    // parallel with the magnet-list fetch below (the pipensx-metadata
+    // manifest+index has no dependency on this catalog's own document, so
+    // the two extra HTTP round-trips it costs didn't need to be paid
+    // serially on top of this one) - but libnx's socket layer does not
+    // tolerate two curl transfers running at once: _socketGetFd races its
+    // own fd table and hands back a descriptor with a null fileStruct,
+    // which crashes deep inside poll(). Every hardware crash report during
+    // this port traced back to exactly that, and this thread - entirely
+    // inside the C backend, invisible to the C++ views layer's own
+    // network-serialising NetworkGate - was the one path that kept
+    // recreating it no matter how the caller side was locked down.
+    // game_metadata_ensure_loaded() only ever does real network work once
+    // per process (see its own g_load_attempted guard), so every call
+    // after the first is a cheap no-op - the parallelism this gave up was
+    // a few hundred ms, exactly once.
+    game_metadata_ensure_loaded();
 
     char *raw = NULL;
     size_t raw_len = 0;
     HttpResult hres = http_get(url, &raw, &raw_len, err_buf, err_buf_size);
     if (hres != HTTP_OK) {
-        if (meta_thread_started) pthread_join(meta_thread, NULL);
         return CATALOG_ERR_NETWORK;
     }
 
@@ -426,7 +423,6 @@ CatalogResult catalog_fetch_torrent_json(const char *url, AppEntry **out_entries
     free(raw);
     if (!root || !json_is_array(root)) {
         if (root) json_decref(root);
-        if (meta_thread_started) pthread_join(meta_thread, NULL);
         if (err_buf) snprintf(err_buf, err_buf_size, "catálogo de torrents malformado: %s",
                               root ? "se esperaba un arreglo" : jerr.text);
         return CATALOG_ERR_PARSE;
@@ -436,16 +432,9 @@ CatalogResult catalog_fetch_torrent_json(const char *url, AppEntry **out_entries
     AppEntry *entries = (AppEntry *)calloc(total > 0 ? total : 1, sizeof(AppEntry));
     if (!entries) {
         json_decref(root);
-        if (meta_thread_started) pthread_join(meta_thread, NULL);
         if (err_buf) snprintf(err_buf, err_buf_size, "memoria insuficiente para el catálogo de torrents");
         return CATALOG_ERR_PARSE;
     }
-
-    // Best-effort: an English title/description for every entry the
-    // pipensx-metadata index matches (see game_metadata.h). A failed fetch
-    // just means every entry falls back to the catalog's own scraped
-    // (Russian) fields below - never fatal to the torrent catalog itself.
-    if (meta_thread_started) pthread_join(meta_thread, NULL);
 
     size_t count = 0;
     for (size_t i = 0; i < total; i++) {
@@ -490,11 +479,27 @@ CatalogResult catalog_fetch_torrent_json(const char *url, AppEntry **out_entries
             copy_str_field(item, "description", e->long_description, sizeof(e->long_description));
         }
         copy_year_field(item, "year", e->version, sizeof(e->version));
-        // Nintendo eShop CDN cover when the metadata index matched -
-        // noticeably faster/more reliable to fetch than the catalog's own
-        // scraped cover (imageban.ru/fastpic.org).
-        if (meta_icon) snprintf(e->icon_url, sizeof(e->icon_url), "%s", meta_icon);
-        else copy_str_field(item, "cover", e->icon_url, sizeof(e->icon_url));
+        // The catalog's own scraped cover (imageban.ru/fastpic.org) is the
+        // primary source, not the Nintendo eShop CDN the metadata index
+        // would otherwise offer - that CDN turned out to be unreachable
+        // outright for a real user ("Couldn't connect to server" on every
+        // single attempt, all session, every entry - not a transient
+        // hiccup), which meant burning all ICON_MAX_ATTEMPTS retries on a
+        // dead host before ui_icons.c's fallback ever kicked in, on every
+        // single icon. Kept as the fallback (not dropped entirely) since
+        // it's still a legitimately faster/more reliable source than the
+        // scraped covers when it IS reachable.
+        copy_str_field(item, "cover", e->icon_url, sizeof(e->icon_url));
+        if (meta_icon) {
+            // Some catalog entries have no scrapeable cover at all (the
+            // RuTracker page just didn't have one) - the eShop URL is then
+            // the only source there is, so it belongs in icon_url itself,
+            // not stranded in icon_url_fallback where ui_icons_get would
+            // never even look (it requires icon_url non-empty just to
+            // start fetching in the first place).
+            if (e->icon_url[0]) snprintf(e->icon_url_fallback, sizeof(e->icon_url_fallback), "%s", meta_icon);
+            else snprintf(e->icon_url, sizeof(e->icon_url), "%s", meta_icon);
+        }
         snprintf(e->download_url, sizeof(e->download_url), "%s", magnet);
         snprintf(e->filename, sizeof(e->filename), "%s", e->id);
 

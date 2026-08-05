@@ -79,6 +79,20 @@ void registerTheme()
     // (kFontTitle/Heading/Body/Small/Caption), so views can ask for them by
     // name instead of repeating literals.
     brls::Style style = brls::getStyle();
+
+    // ---- Borealis layout metrics, overridden to pipensx's own ----
+    //
+    // These are pipensx's installSidebarStyle() values (src/ui/main_frame.hpp),
+    // not guesses. The sidebar width matters most: Borealis defaults to 410,
+    // which leaves only 870px of content area on a 1280px screen - not enough
+    // for the 5-column, 964px-wide catalog grid below, so the grid overflowed
+    // and the whole catalog screen looked broken. At 248 the content area is
+    // 1032px and the grid fits with ~34px of breathing room each side.
+    style.addMetric("brls/tab_frame/sidebar_width", 248.0f);
+    style.addMetric("brls/sidebar/padding_left", 22.0f);  // Borealis default: 80
+    style.addMetric("brls/sidebar/padding_right", 16.0f); // Borealis default: 40
+    style.addMetric("brls/sidebar/padding_top", 28.0f);
+
     style.addMetric("pipensx/radius_small", 6.0f);
     style.addMetric("pipensx/radius_medium", 8.0f);
     style.addMetric("pipensx/radius_large", 12.0f);

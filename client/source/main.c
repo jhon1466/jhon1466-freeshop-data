@@ -30,6 +30,7 @@
 #include "install/install_nsp_native.h"
 #include "install/install_xci_native.h"
 #include "install/install_torrent.h"
+#include "torrent/torrent_log.h"
 #include "install/install_port.h"
 #include "install/install_local.h"
 #include "install/install_dispatch.h"
@@ -341,6 +342,15 @@ typedef struct {
     // number instead of showing the raw dip when the source switches.
     long max_now;
     long max_total;
+    // Consecutive cancel-checks (see INSTALL_WORK_INTERVAL_NS/
+    // INSTALL_CANCEL_HOLD_CHECKS below) that have seen B held - reset to 0
+    // the instant it's not. Must be freshly reset per install, same as
+    // start_tick/started above.
+    int b_hold_checks;
+    // Tick B was first seen held (start of the current streak) - purely
+    // diagnostic, so a cancel can be logged with exactly how long B was
+    // actually down for, instead of just "it happened".
+    u64 b_hold_start_tick;
 } InstallProgressCtx;
 
 static void on_install_phase(InstallPhase phase, void *userdata) {
@@ -352,10 +362,23 @@ static void on_install_phase(InstallPhase phase, void *userdata) {
 // see the comment below on why.
 #define INSTALL_WORK_INTERVAL_NS 150000000ULL // ~6-7 times/sec
 
-// Returns false (cancel) once the user holds B - held rather than
-// edge-triggered because this only actually gets checked a handful of
-// times a second (see below), and a single-frame press could land between
-// two checks.
+// How many consecutive cancel-checks (~150ms apart, see
+// INSTALL_WORK_INTERVAL_NS) must all see B held before actually canceling -
+// ~450ms of continuous holding. A single check is NOT enough: a real install
+// (torrent_debug.log evidence) canceled itself with INSTALL_LOCAL_ERR_CANCELED
+// right after its download had reached 100% and the NCM writer took over -
+// nothing else was happening at that instant except this callback's own poll,
+// so one unlucky instantaneous B reading (a brief physical touch, a stray
+// controller blip) was enough to throw away a fully-downloaded install.
+// Requiring a short sustained hold keeps genuine "I want to cancel" presses
+// working (nobody holds B for under half a second by accident) while making
+// a single bad poll harmless.
+#define INSTALL_CANCEL_HOLD_CHECKS 3
+
+// Returns false (cancel) once the user holds B for INSTALL_CANCEL_HOLD_CHECKS
+// consecutive checks - held rather than edge-triggered because this only
+// actually gets checked a handful of times a second (see below), and a
+// single-frame press could land between two checks.
 static bool install_progress_cb(long total, long now, void *userdata) {
     InstallProgressCtx *ctx = (InstallProgressCtx *)userdata;
 
@@ -392,7 +415,28 @@ static bool install_progress_cb(long total, long now, void *userdata) {
     bool cancel = false;
     if (pad) {
         padUpdate(pad);
-        cancel = (padGetButtons(pad) & HidNpadButton_B) != 0;
+        bool b_held = (padGetButtons(pad) & HidNpadButton_B) != 0;
+        if (b_held) {
+            if (ctx->b_hold_checks == 0) ctx->b_hold_start_tick = now_tick;
+            ctx->b_hold_checks++;
+        } else {
+            ctx->b_hold_checks = 0;
+        }
+        cancel = ctx->b_hold_checks >= INSTALL_CANCEL_HOLD_CHECKS;
+        // Diagnostic: a user report of installs "canceling themselves" with
+        // no button press turned out (twice) to not be this path at all -
+        // ruled out via torrent_debug_log evidence (no piece rejection, no
+        // torrent-side fatal error). This logs the one remaining
+        // possibility directly instead of ruling it out by elimination
+        // again next time: exactly how long B measured as held before this
+        // fired, so it's either confirmed (a real multi-hundred-ms hold) or
+        // finally disproven (checks firing without real elapsed time
+        // between them, pointing at a pad-reading bug instead).
+        if (cancel) {
+            torrent_debug_log("[install] cancel: B held for %lldms (%d checks)",
+                              (long long)(armTicksToNs(now_tick - ctx->b_hold_start_tick) / 1000000ULL),
+                              ctx->b_hold_checks);
+        }
     }
 
     if (ctx && !ctx->started) {

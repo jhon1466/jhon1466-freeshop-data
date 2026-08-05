@@ -7,6 +7,7 @@
 #include "ncz.h"
 #include "es_ticket.h"
 #include "ns_record.h"
+#include "../torrent/torrent_log.h"
 
 #include <switch.h>
 #include <stdio.h>
@@ -70,7 +71,18 @@ static bool gate_ensure(const InstallLocalGate *gate, FILE **src, const char *pa
     bool ok = gate->ensure_range(gate->user, offset, len);
     if (src) {
         *src = fopen(path, "rb");
-        if (!*src) return false;
+        if (!*src) {
+            // Indistinguishable from a real cancel one level up (this
+            // function just returns false either way) - logged here since
+            // this is the only place that knows the reopen itself is what
+            // failed, not the data actually being unavailable (ok can be
+            // true here - see torrent_gate_ensure's fast-path doc comment
+            // on the write-handle race this used to hit before it started
+            // flushing there too).
+            torrent_debug_log("[install] gate_ensure: reopen for read failed (ok=%d) '%s' off=%llu len=%llu",
+                              ok, path, (unsigned long long)offset, (unsigned long long)len);
+            return false;
+        }
         set_unbuffered_if_gated(*src, gate);
     }
     return ok;

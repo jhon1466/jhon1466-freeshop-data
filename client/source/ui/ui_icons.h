@@ -1,6 +1,7 @@
 #pragma once
 #include "../catalog/app_entry.h"
 #include <SDL2/SDL.h>
+#include <stddef.h>
 
 // Call once per rendered frame (grid view only - the list view doesn't show
 // icons) before requesting textures for that frame's visible cells. Purely
@@ -35,3 +36,18 @@ SDL_Texture *ui_icons_load_local(const char *path);
 // reading a file - not cached/tracked by ui_icons_clear(), caller owns the
 // result. Returns NULL on any decode failure.
 SDL_Texture *ui_icons_decode_bytes(const unsigned char *data, size_t size);
+
+// Appends one line to sdmc:/switch/freeshop/icon_debug.log - exposed
+// (rather than kept file-static) so other UI code chasing a symptom that
+// might be icon-pipeline-related (e.g. a scroll stutter) can log into the
+// same file instead of starting a separate one, keeping everything relevant
+// to "what was the icon pipeline doing at that moment" in one place.
+// Best-effort: a failure to open the log is silently ignored.
+void ui_icons_debug_log(const char *fmt, ...);
+
+// Formats a short one-line snapshot of the icon pipeline's current load
+// (cache occupancy, in-flight network fetches, queued/in-progress decodes)
+// into `out` - meant to be embedded in a caller's own diagnostic log line so
+// a stall can be correlated with "was the icon pipeline busy at that
+// instant" without needing a second timestamped log to cross-reference.
+void ui_icons_debug_snapshot(char *out, size_t out_size);

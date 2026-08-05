@@ -46,6 +46,13 @@ typedef struct {
     char long_description[APP_ENTRY_LONGDESC_MAX];
     char version[APP_ENTRY_VERSION_MAX];
     char icon_url[APP_ENTRY_URL_MAX];
+    // Second cover source to try if icon_url's fetch keeps failing (see
+    // ui_icons.c) - empty if there isn't a distinct one. Only ever set for
+    // a torrent-catalog entry whose pipensx-metadata match put the eShop
+    // CDN in icon_url: the catalog's own scraped cover (imageban.ru/
+    // fastpic.org) goes here instead of being discarded, so an eShop CDN
+    // outage doesn't just blank the cover outright.
+    char icon_url_fallback[APP_ENTRY_URL_MAX];
     char download_url[APP_ENTRY_URL_MAX];
     long file_size;
     char sha256[APP_ENTRY_SHA256_LEN + 1];
