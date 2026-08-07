@@ -25,3 +25,12 @@ InstallOneResult install_one_entry(const AppEntry *entry,
 // True for the file types whose install-failure message suggests the DBI
 // fallback (NSP/XCI) - lets callers tailor their error message the same way.
 bool install_suggests_dbi_fallback(AppFileType type);
+
+// Same as install_torrent() (see install_torrent.h) wrapped to return
+// InstallOneResult - the single-item, "user picked specific files on the
+// torrent-selection screen" counterpart to install_one_entry(), which
+// always installs every file for entry->via_torrent instead.
+InstallOneResult install_one_entry_torrent_selected(const AppEntry *entry,
+                                                     const int *selected_file_indices, int selected_count,
+                                                     InstallProgressCallback cb, InstallPhaseCallback phase_cb,
+                                                     void *userdata, char *err_buf, size_t err_buf_size);

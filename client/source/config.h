@@ -53,9 +53,13 @@
 // "v<this value>" (a leading "v" is stripped before comparing, either form
 // works), and attach the built freeshop-client.nro as a release asset named
 // exactly "freeshop-client.nro".
-#define CLIENT_VERSION "1.6.3"
+#define CLIENT_VERSION "1.6.4"
 
-// GitHub Releases API endpoint checked for a new client version - see
-// update/self_update.c.
-#define CLIENT_RELEASES_API_URL "https://api.github.com/repos/jhon1466/jhon1466-freeshop-data/releases/latest"
+// Routed through the same Worker as CATALOG_BASE_URL (see its own comment
+// above), NOT straight at api.github.com - the Worker's /releases/latest
+// route (worker/src/index.ts) forwards this to GitHub's API with whatever
+// credentials it holds and rewrites the asset download URL to route back
+// through itself too (see /releases/assets/:id there), so this keeps
+// working unmodified whether jhon1466-freeshop-data is public or private.
+#define CLIENT_RELEASES_API_URL CATALOG_BASE_URL "/releases/latest"
 #define CLIENT_RELEASE_ASSET_NAME "freeshop-client.nro"

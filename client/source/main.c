@@ -25,6 +25,7 @@
 #include "ui/ui_prefs.h"
 #include "ui/ui_sound.h"
 #include "ui/ui_fx.h"
+#include "ui/ui_torrent_select.h"
 #include "install/install.h"
 #include "install/install_nsp.h"
 #include "install/install_nsp_native.h"
@@ -1014,8 +1015,54 @@ int main(int argc, char **argv) {
             continue;
         }
 
-        InstallOneResult ires = install_one_entry(install_target, install_progress_cb, on_install_phase,
-                                                  &progress_ctx, err_buf, sizeof(err_buf));
+        InstallOneResult ires;
+        if (install_target->via_torrent) {
+            // Peek at what's actually inside the torrent (base game, and
+            // any DLC bundled alongside it - see install_torrent.h) before
+            // committing to downloading all of it.
+            static TorrentFileEntry preview_files[TORRENT_PREVIEW_MAX_FILES];
+            int preview_count = 0;
+            TorrentPreviewResult pres = install_torrent_preview(install_target, preview_files,
+                                                                TORRENT_PREVIEW_MAX_FILES, &preview_count,
+                                                                install_progress_cb, &progress_ctx,
+                                                                err_buf, sizeof(err_buf));
+            if (pres == TORRENT_PREVIEW_ERR_CANCELED) {
+                ui_app_show_message("Descarga cancelada.");
+                continue;
+            }
+            if (pres != TORRENT_PREVIEW_OK) {
+                snprintf(msg, sizeof(msg), "Error de instalación: %s", err_buf);
+                ui_app_show_message(msg);
+                continue;
+            }
+
+            static int selected_indices[TORRENT_PREVIEW_MAX_FILES];
+            int selected_count;
+            if (preview_count > 1) {
+                // Only worth asking when there's an actual choice to make -
+                // a single-file release has nothing to opt out of.
+                UiTorrentSelectResult sres = ui_show_torrent_select(preview_files, preview_count,
+                                                                    selected_indices, &selected_count);
+                if (sres == UI_TORRENT_SELECT_CANCELED) continue;
+            } else {
+                selected_indices[0] = preview_files[0].file_index;
+                selected_count = 1;
+            }
+
+            // The resolve wait (or the selection screen's own input loop)
+            // may leave B (or anything else) physically held from the
+            // user's last press there - reprime the baseline the same way
+            // every other screen transition in this app does, so
+            // install_progress_cb's B-hold cancel check starts clean.
+            padUpdate(&install_pad);
+
+            ires = install_one_entry_torrent_selected(install_target, selected_indices, selected_count,
+                                                      install_progress_cb, on_install_phase, &progress_ctx,
+                                                      err_buf, sizeof(err_buf));
+        } else {
+            ires = install_one_entry(install_target, install_progress_cb, on_install_phase,
+                                     &progress_ctx, err_buf, sizeof(err_buf));
+        }
         if (ires == INSTALL_ONE_OK) {
             snprintf(msg, sizeof(msg), "\"%s\" instalado correctamente.\n\nVuelve al hbmenu para iniciarlo.",
                      install_target->title);

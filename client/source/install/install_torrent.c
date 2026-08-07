@@ -245,22 +245,34 @@ static bool torrent_gate_ensure(void *user, uint64_t offset, uint64_t len) {
     return ok;
 }
 
-static TorrentInstallResult install_torrent_impl(const AppEntry *entry,
-                                                  InstallProgressCallback cb, InstallPhaseCallback phase_cb,
-                                                  void *userdata, char *err_buf, size_t err_buf_size) {
-    if (phase_cb) phase_cb(INSTALL_PHASE_DOWNLOADING, userdata);
+// Shared by install_torrent_preview() and install_torrent_impl() below:
+// resolves entry->download_url's magnet down to a loaded metainfo_t, the
+// step both need before they diverge (one lists files and stops, the other
+// goes on to actually download/install). `torrent_path` is left on disk
+// pointing at the resolved .torrent on TORRENT_MAGNET_OK - the caller owns
+// cleaning it (and freeing `out_mi`) up from there; every other outcome
+// cleans up after itself.
+typedef enum {
+    TORRENT_MAGNET_OK,
+    TORRENT_MAGNET_CANCELED,
+    TORRENT_MAGNET_ERR,
+} TorrentMagnetResult;
 
+static TorrentMagnetResult resolve_magnet_and_load(const AppEntry *entry,
+                                                    InstallProgressCallback cb, void *userdata,
+                                                    char *torrent_path, size_t torrent_path_size,
+                                                    metainfo_t *out_mi,
+                                                    char *err_buf, size_t err_buf_size) {
     mkdir("sdmc:/switch", 0777);
     mkdir("sdmc:/switch/freeshop", 0777);
     mkdir(TORRENT_WORK_DIR, 0777);
 
-    char torrent_path[600];
-    snprintf(torrent_path, sizeof(torrent_path), "%s/%s.torrent", TORRENT_WORK_DIR, entry->id);
+    snprintf(torrent_path, torrent_path_size, "%s/%s.torrent", TORRENT_WORK_DIR, entry->id);
 
     magnet_resolve_t *resolve = magnet_resolve_start(entry->download_url, torrent_path);
     if (!resolve) {
         snprintf(err_buf, err_buf_size, "No se pudo iniciar la resolucion del magnet.");
-        return TORRENT_INSTALL_ERR;
+        return TORRENT_MAGNET_ERR;
     }
     while (!magnet_resolve_done(resolve)) {
         magnet_progress_t p;
@@ -274,7 +286,7 @@ static TorrentInstallResult install_torrent_impl(const AppEntry *entry,
             magnet_resolve_cancel(resolve);
             magnet_resolve_free(resolve);
             snprintf(err_buf, err_buf_size, "Cancelado.");
-            return TORRENT_INSTALL_ERR_CANCELED;
+            return TORRENT_MAGNET_CANCELED;
         }
         usleep(50000); // 50ms - this thread only polls, no work of its own to do
     }
@@ -285,19 +297,117 @@ static TorrentInstallResult install_torrent_impl(const AppEntry *entry,
     if (!resolve_ok) {
         remove(torrent_path);
         snprintf(err_buf, err_buf_size, "%s", resolve_err);
-        return TORRENT_INSTALL_ERR;
+        return TORRENT_MAGNET_ERR;
     }
 
-    metainfo_t mi;
-    memset(&mi, 0, sizeof(mi));
-    if (!metainfo_load(torrent_path, &mi)) {
+    memset(out_mi, 0, sizeof(*out_mi));
+    if (!metainfo_load(torrent_path, out_mi)) {
         remove(torrent_path);
         snprintf(err_buf, err_buf_size, "El .torrent resuelto no se pudo leer.");
-        return TORRENT_INSTALL_ERR;
+        return TORRENT_MAGNET_ERR;
     }
+    return TORRENT_MAGNET_OK;
+}
+
+static TorrentPreviewResult install_torrent_preview_impl(const AppEntry *entry,
+                                                          TorrentFileEntry *out_files, int max_files, int *out_count,
+                                                          InstallProgressCallback cb, void *userdata,
+                                                          char *err_buf, size_t err_buf_size) {
+    *out_count = 0;
+
+    char torrent_path[600];
+    metainfo_t mi;
+    TorrentMagnetResult mr = resolve_magnet_and_load(entry, cb, userdata, torrent_path, sizeof(torrent_path),
+                                                     &mi, err_buf, err_buf_size);
+    if (mr != TORRENT_MAGNET_OK)
+        return mr == TORRENT_MAGNET_CANCELED ? TORRENT_PREVIEW_ERR_CANCELED : TORRENT_PREVIEW_ERR;
 
     int indices[MAX_INSTALLABLE_FILES];
     int num_files = collect_installable_files(&mi, entry->file_type, indices, MAX_INSTALLABLE_FILES);
+    if (num_files <= 0) {
+        metainfo_free(&mi);
+        remove(torrent_path);
+        snprintf(err_buf, err_buf_size, "El torrent no contiene un archivo %s instalable.",
+                 entry->file_type == APP_FILE_TYPE_XCI ? "XCI" : "NSP/NSZ");
+        return TORRENT_PREVIEW_ERR;
+    }
+
+    int n = num_files < max_files ? num_files : max_files;
+    for (int k = 0; k < n; k++) {
+        int idx = indices[k];
+        const char *path = mi.files[idx].path;
+        // Filename only - the container path's directory part (release
+        // group folder names, "55 DLC/" subfolders) is noise on a screen
+        // this narrow; the file's own name is what actually distinguishes
+        // one row from the next.
+        const char *slash = strrchr(path, '/');
+        snprintf(out_files[k].name, sizeof(out_files[k].name), "%s", slash ? slash + 1 : path);
+        out_files[k].size = (int64_t)mi.files[idx].length;
+        out_files[k].file_index = idx;
+    }
+    *out_count = n;
+
+    metainfo_free(&mi);
+    remove(torrent_path); // just a preview - nothing downloaded yet to keep
+    return TORRENT_PREVIEW_OK;
+}
+
+TorrentPreviewResult install_torrent_preview(const AppEntry *entry,
+                                             TorrentFileEntry *out_files, int max_files, int *out_count,
+                                             InstallProgressCallback cb, void *userdata,
+                                             char *err_buf, size_t err_buf_size) {
+    // Same g_stats lifecycle as install_torrent() below, so
+    // install_torrent_last_stats() (what main.c's progress callback reads
+    // for the "Resolviendo magnet..." detail line) reports this call's own
+    // resolve progress instead of whatever a previous install left behind.
+    memset(&g_stats, 0, sizeof(g_stats));
+    g_stats.active = true;
+    g_stats.resolving = true;
+    TorrentPreviewResult r = install_torrent_preview_impl(entry, out_files, max_files, out_count,
+                                                           cb, userdata, err_buf, err_buf_size);
+    memset(&g_stats, 0, sizeof(g_stats));
+    return r;
+}
+
+static TorrentInstallResult install_torrent_impl(const AppEntry *entry,
+                                                  const int *selected_file_indices, int selected_count,
+                                                  InstallProgressCallback cb, InstallPhaseCallback phase_cb,
+                                                  void *userdata, char *err_buf, size_t err_buf_size) {
+    if (phase_cb) phase_cb(INSTALL_PHASE_DOWNLOADING, userdata);
+
+    char torrent_path[600];
+    metainfo_t mi;
+    TorrentMagnetResult mr = resolve_magnet_and_load(entry, cb, userdata, torrent_path, sizeof(torrent_path),
+                                                     &mi, err_buf, err_buf_size);
+    if (mr != TORRENT_MAGNET_OK)
+        return mr == TORRENT_MAGNET_CANCELED ? TORRENT_INSTALL_ERR_CANCELED : TORRENT_INSTALL_ERR;
+
+    int auto_indices[MAX_INSTALLABLE_FILES];
+    const int *indices;
+    int num_files;
+    if (selected_file_indices && selected_count > 0) {
+        // A user-made selection (see install_torrent_preview() /
+        // ui_torrent_select.h) - install exactly these files, nothing else
+        // in the torrent is ever touched. Indices come from a screen shown
+        // after a PREVIOUS, separate magnet resolution - re-validated
+        // against this resolution's actual file count rather than trusted
+        // outright, since it's user-selection state that outlived a screen
+        // transition (a stale/tampered index would otherwise index
+        // mi.files[]/configs[] out of bounds below).
+        for (int i = 0; i < selected_count; i++) {
+            if (selected_file_indices[i] < 0 || (uint32_t)selected_file_indices[i] >= mi.num_files) {
+                metainfo_free(&mi);
+                remove(torrent_path);
+                snprintf(err_buf, err_buf_size, "Seleccion de archivos invalida.");
+                return TORRENT_INSTALL_ERR;
+            }
+        }
+        indices = selected_file_indices;
+        num_files = selected_count;
+    } else {
+        num_files = collect_installable_files(&mi, entry->file_type, auto_indices, MAX_INSTALLABLE_FILES);
+        indices = auto_indices;
+    }
     if (num_files <= 0) {
         metainfo_free(&mi);
         remove(torrent_path);
@@ -475,12 +585,14 @@ static TorrentInstallResult install_torrent_impl(const AppEntry *entry,
 }
 
 TorrentInstallResult install_torrent(const AppEntry *entry,
+                                     const int *selected_file_indices, int selected_count,
                                      InstallProgressCallback cb, InstallPhaseCallback phase_cb,
                                      void *userdata, char *err_buf, size_t err_buf_size) {
     memset(&g_stats, 0, sizeof(g_stats));
     g_stats.active = true;
     g_stats.resolving = true;
-    TorrentInstallResult r = install_torrent_impl(entry, cb, phase_cb, userdata, err_buf, err_buf_size);
+    TorrentInstallResult r = install_torrent_impl(entry, selected_file_indices, selected_count,
+                                                  cb, phase_cb, userdata, err_buf, err_buf_size);
     memset(&g_stats, 0, sizeof(g_stats));
     return r;
 }

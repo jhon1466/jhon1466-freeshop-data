@@ -22,6 +22,43 @@ username/repo never appears in `sdmc:/switch/freeshop/sources.json`, in the
 compiled `.nro`'s strings, or in a packet capture of the console's traffic -
 only your Worker's URL does.
 
+It also proxies the client's self-update check the same way:
+`CLIENT_RELEASES_API_URL` in `client/source/config.h` points at this
+Worker's `/releases/latest` instead of straight at `api.github.com`, and
+that response's asset download URL is rewritten to this Worker's own
+`/releases/assets/:id` instead of GitHub's `browser_download_url`.
+
+## Private data repo
+
+Both proxied paths (`raw.githubusercontent.com` for catalog/icon/download
+reads, `api.github.com` for the release check/asset above) work exactly the
+same whether `jhon1466-freeshop-data` is public or private - the console
+never holds a token either way, only this Worker does, and only once you
+give it one:
+
+```
+cd worker
+npx wrangler secret put GITHUB_TOKEN
+```
+
+Paste a GitHub personal access token (fine-grained, read-only, scoped to
+just that repo's contents - it needs nothing else) when prompted. Wrangler
+stores it as an encrypted Worker secret, not in `wrangler.toml` (which is
+committed to this repo - never put a real token there). Unset it
+(`npx wrangler secret delete GITHUB_TOKEN`) any time to go back to serving a
+public repo with no credentials at all - every fetch in `src/index.ts` just
+omits the `Authorization` header when the secret isn't set.
+
+A plain `browser_download_url` (what GitHub's Releases API normally
+returns) only works unauthenticated for a *public* repo - for a private one
+it's a `github.com/.../releases/download/...` link meant for a signed-in
+browser session, which a bearer token can't satisfy directly. That's why
+`/releases/latest` rewrites it to `/releases/assets/:id` instead: that route
+calls the API's actual asset-download endpoint
+(`GET /repos/:owner/:repo/releases/assets/:id` with
+`Accept: application/octet-stream`), which a token *does* work against for
+a private repo.
+
 ## Deploy
 
 Already live at `https://freeshop-proxy.freeshopnx.workers.dev` (deployed

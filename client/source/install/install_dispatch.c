@@ -15,7 +15,10 @@ InstallOneResult install_one_entry(const AppEntry *entry,
     // entry->source_base_url is meaningless for them (there is no relative
     // URL to resolve against a base).
     if (entry->via_torrent) {
-        TorrentInstallResult r = install_torrent(entry, cb, phase_cb, userdata, err_buf, err_buf_size);
+        // NULL/0 selection = every installable file in the torrent - what
+        // an unattended queue install wants (see install_one_entry_torrent_selected
+        // for the single-item, user-picked-files path).
+        TorrentInstallResult r = install_torrent(entry, NULL, 0, cb, phase_cb, userdata, err_buf, err_buf_size);
         if (r == TORRENT_INSTALL_OK) return INSTALL_ONE_OK;
         if (r == TORRENT_INSTALL_ERR_CANCELED) return INSTALL_ONE_CANCELED;
         return INSTALL_ONE_ERROR;
@@ -55,4 +58,15 @@ InstallOneResult install_one_entry(const AppEntry *entry,
 
 bool install_suggests_dbi_fallback(AppFileType type) {
     return type == APP_FILE_TYPE_NSP || type == APP_FILE_TYPE_XCI || type == APP_FILE_TYPE_NSZ;
+}
+
+InstallOneResult install_one_entry_torrent_selected(const AppEntry *entry,
+                                                     const int *selected_file_indices, int selected_count,
+                                                     InstallProgressCallback cb, InstallPhaseCallback phase_cb,
+                                                     void *userdata, char *err_buf, size_t err_buf_size) {
+    TorrentInstallResult r = install_torrent(entry, selected_file_indices, selected_count,
+                                             cb, phase_cb, userdata, err_buf, err_buf_size);
+    if (r == TORRENT_INSTALL_OK) return INSTALL_ONE_OK;
+    if (r == TORRENT_INSTALL_ERR_CANCELED) return INSTALL_ONE_CANCELED;
+    return INSTALL_ONE_ERROR;
 }
