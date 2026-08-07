@@ -1,30 +1,65 @@
 # Third-Party Notices
 
-FreeShop's Switch client is licensed under the GNU General Public License
-v3.0 (see [`../LICENSE`](../LICENSE)). The third-party/adapted components
-below retain their original licenses or, where code was adapted rather than
-copied verbatim, are noted as such.
+This client is a fork of [pipensx](https://github.com/i3sey/pipensx),
+licensed under the GNU General Public License v3.0 (see [LICENSE](LICENSE)).
+Changes from upstream: the catalog source points at this project's own
+`jhon1466/switch-games` instead of `Langegen/switch-games`, and app
+branding (title/author) is FreeShop's instead of pipensx's - see this
+repo's own commit history for the exact diff. The third-party components
+bundled in `vendor/` and referenced below retain their original licenses
+and are unchanged from upstream pipensx.
 
-## pipensx (torrent download engine)
+## Borealis
 
-Source: <https://github.com/i3sey/pipensx>
+Source: <https://github.com/XITRIX/borealis>
 
-The torrent download code under `client/source/torrent/` is adapted from
-pipensx's `src/core/` (bencode parsing, torrent metainfo, peer wire protocol,
-piece management, tracker communication) and `src/platform/storage.c`
-(per-file output mapping, ported as `torrent_storage.c`). pipensx is
-licensed under the GNU General Public License v3.0 - see its `LICENSE`. This
-is why FreeShop's client is GPL-3.0 rather than a more permissive license:
-GPL-3.0 requires any work incorporating GPL-3.0 code to itself be licensed
-GPL-3.0, and a single compiled `.nro` combining this code with the rest of
-the client counts as one combined work under the license, not a separable
-one.
+Pinned in `vendor/borealis`. Licensed under the Apache License 2.0. See
+`vendor/borealis/LICENSE`.
+
+## GLM
+
+Source: <https://github.com/g-truc/glm>
+
+Pinned in `vendor/glm`. Available under the Happy Bunny License or MIT License.
+See `vendor/glm/copying.txt`.
 
 ## DHT
 
 Source: <https://github.com/jech/dht>
 
-Juliusz Chroboczek's BitTorrent DHT (Kademlia) implementation, embedded as
-`client/source/torrent/dht/` (vendored, not modified beyond what's needed to
-build under devkitPro). Licensed under the MIT license - see the file
-headers, which retain the original copyright notice.
+The embedded implementation in `vendor/dht` is copyright Juliusz Chroboczek
+and licensed under the MIT license. Its source files retain the full notice.
+
+## zstd
+
+Source: <https://github.com/facebook/zstd>
+
+Pinned in `vendor/zstd`. Copyright Meta Platforms, Inc. and affiliates.
+Licensed under the BSD 3-Clause license. See `vendor/zstd/LICENSE`.
+
+## libnx-ext
+
+Source: <https://github.com/XorTroll/libnx-ext>
+
+Pinned in `vendor/libnx-ext`. Copyright XorTroll.
+Licensed under the MIT license. See `vendor/libnx-ext/LICENSE`.
+
+## qrcodegen
+
+Source: <https://github.com/nayuki/QR-Code-generator>
+
+Pinned in `vendor/qrcodegen`. Copyright Project Nayuki.
+Licensed under the MIT license. See `vendor/qrcodegen/LICENSE`.
+
+## NSZ/NCZ format reference
+
+The streaming decoder implements the public NCZ container format documented by
+the NSZ project:
+
+<https://github.com/nicoboss/nsz>
+
+No NSZ source code is included. The reference project is licensed under the MIT
+license.
+
+Goldleaf was reviewed for Nintendo content-management behavior, but no Goldleaf
+source code is included or copied into pipensx.

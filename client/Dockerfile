@@ -1,21 +1,22 @@
-# Builds the FreeShop Switch client without installing devkitPro natively.
+# Builds the FreeShop Switch client - a fork of pipensx
+# (https://github.com/i3sey/pipensx, GPL-3.0 - see THIRD_PARTY_NOTICES.md).
 #
-# Usage (from the repo root, after cloning Borealis into
-# client/vendor/borealis/ - see client/CMakeLists.txt):
+# Usage (from the repo root, after fetching vendor/ - see BUILD.md):
 #   docker build -t freeshop-client-builder client/
-#   docker run --rm -v "${PWD}/client:/workspace" freeshop-client-builder \
-#     sh -c "cmake -S . -B build-cmake -DCMAKE_BUILD_TYPE=Release && cmake --build build-cmake -j4"
+#   docker run --rm -v "${PWD}/client:/workspace" -e DEVKITPRO=/opt/devkitpro \
+#     freeshop-client-builder ./scripts/build_switch.sh
 #
-# Produces client/build-cmake/freeshop-client.nro on the host.
+# Produces client/build-switch/pipensx.nro on the host.
 #
-# devkitpro/devkita64:latest already bundles switch-curl, switch-mbedtls and
-# switch-jansson (verify with `dkp-pacman -Q | grep -E 'curl|mbedtls|jansson'`
-# inside the image), so no extra package install is needed for those.
-# switch-libjpeg-turbo is NOT bundled and is installed below - the catalog
-# grid's cover art (client/source/views/async_cover.cpp) decodes JPEG icons
-# through it via Borealis's own Image::setImageFromMem.
+# devkitpro/devkita64:latest already bundles switch-curl, switch-mbedtls,
+# switch-zlib, switch-miniupnpc, switch-cmake, and deko3d/uam (verify with
+# `dkp-pacman -Q` inside the image) - everything BUILD.md's "Nintendo
+# Switch" section asks for except zstd, the one host-side (not
+# switch-cross-compiled) tool: CMakeLists.txt shells out to it to compress
+# the bundled catalog/metadata snapshots before they go into romfs.
 FROM devkitpro/devkita64:latest
 
-RUN dkp-pacman -Sy --noconfirm switch-libjpeg-turbo
+RUN apt-get update && apt-get install -y --no-install-recommends zstd \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace

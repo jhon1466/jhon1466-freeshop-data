@@ -1,0 +1,229 @@
+#pragma once
+
+#include <atomic>
+#include <memory>
+#include <string>
+#include <thread>
+#include <vector>
+
+#include <borealis.hpp>
+
+#include "app/installed_title_service.hpp"
+#include "app/save_data_service.hpp"
+#include "ui/common/ui_helpers.hpp"
+#include "ui/i18n.hpp"
+#include "ui/theme.hpp"
+
+namespace pipensx::ui {
+
+class SaveDetailActivity;
+
+class SaveBackupDataSource : public brls::RecyclerDataSource {
+public:
+    explicit SaveBackupDataSource(SaveDetailActivity* owner) : owner_(owner) {}
+    int numberOfRows(brls::RecyclerFrame*, int) override;
+    brls::RecyclerCell* cellForRow(brls::RecyclerFrame*,
+                                   brls::IndexPath) override;
+    void didSelectRowAt(brls::RecyclerFrame*, brls::IndexPath) override;
+
+private:
+    SaveDetailActivity* owner_;
+};
+
+class SaveBackupCell : public brls::RecyclerCell {
+public:
+    SaveBackupCell() {
+        setFocusable(true);
+        setAxis(brls::Axis::ROW);
+        setAlignItems(brls::AlignItems::CENTER);
+        setHeight(56);
+        setPadding(10, 24, 10, 24);
+        label_ = new brls::Label();
+        label_->setSingleLine(true);
+        label_->setFontSize(19);
+        label_->setGrow(1);
+        addView(label_);
+        size_ = new brls::Label();
+        size_->setSingleLine(true);
+        size_->setFontSize(15);
+        size_->setTextColor(theme::textTertiary());
+        addView(size_);
+    }
+
+    void setBackup(const SaveBackupInfo& backup) {
+        backup_ = backup;
+        label_->setText(backup.label);
+        size_->setText(formatBytes(backup.totalBytes));
+    }
+
+    const SaveBackupInfo& backup() const { return backup_; }
+
+private:
+    brls::Label* label_;
+    brls::Label* size_;
+    SaveBackupInfo backup_;
+};
+
+// One title's backups: make a new one, or restore/delete an existing one.
+// Pushed from SavesView, not a top-level tab.
+class SaveDetailActivity : public brls::Activity {
+public:
+    SaveDetailActivity(InstalledTitle title)
+        : title_(std::move(title)), alive_(std::make_shared<std::atomic<bool>>(true)) {
+        auto* content = new brls::Box(brls::Axis::COLUMN);
+        content->setPadding(24, 34, 8, 34);
+
+        statusLabel_ = new brls::Label();
+        statusLabel_->setFontSize(theme::kFontSmall);
+        statusLabel_->setTextColor(theme::textSecondary());
+        statusLabel_->setMarginBottom(12);
+        content->addView(statusLabel_);
+
+        recycler_ = new brls::RecyclerFrame();
+        recycler_->setGrow(1);
+        recycler_->setPadding(6, 0, 6, 0);
+        recycler_->estimatedRowHeight = 56;
+        recycler_->registerCell("SaveBackup", [] { return new SaveBackupCell(); });
+        recycler_->setDataSource(new SaveBackupDataSource(this));
+        content->addView(recyclerHost(recycler_));
+
+        frame_ = new brls::AppletFrame(content);
+        frame_->setTitle(title_.name);
+
+        reload();
+    }
+
+    ~SaveDetailActivity() override {
+        alive_->store(false);
+    }
+
+    brls::View* createContentView() override { return frame_; }
+
+    // registerAction needs the content view already attached - the frame
+    // built in the constructor isn't part of the tree yet at that point
+    // (see TorrentSelectionActivity for the same pattern).
+    void onContentAvailable() override {
+        registerAction(tr("pipensx/saves/backup_now"), brls::BUTTON_Y,
+                       [this](brls::View*) {
+            makeBackup();
+            return true;
+        });
+    }
+
+    const std::vector<SaveBackupInfo>& backups() const { return backups_; }
+
+    void select(size_t index) {
+        if (busy_ || index >= backups_.size())
+            return;
+        const SaveBackupInfo backup = backups_[index];
+        auto* dialog = new brls::Dialog(backup.label);
+        dialog->addButton(tr("pipensx/saves/restore"), [this, backup] {
+            confirmRestore(backup);
+        });
+        dialog->addButton(tr("pipensx/explorer/delete"), [this, backup] {
+            performDelete(backup);
+        });
+        dialog->addButton(tr("pipensx/common/cancel"), [] {});
+        dialog->open();
+    }
+
+private:
+    void reload() {
+        std::string error;
+        listSaveBackups(title_.titleId, backups_, error);
+        statusLabel_->setText(backups_.empty()
+                                  ? tr("pipensx/saves/no_backups")
+                                  : tr("pipensx/saves/backup_count",
+                                       backups_.size()));
+        recycler_->reloadData();
+    }
+
+    void setBusy(bool busy, const std::string& message) {
+        busy_ = busy;
+        recycler_->setFocusable(!busy);
+        if (busy)
+            statusLabel_->setText(message);
+    }
+
+    void makeBackup() {
+        if (busy_)
+            return;
+        setBusy(true, tr("pipensx/saves/backing_up"));
+        auto alive = alive_;
+        const uint64_t applicationId = title_.applicationId;
+        const std::string titleId = title_.titleId;
+        std::thread([this, alive, applicationId, titleId] {
+            std::string path;
+            std::string error;
+            const bool ok = backupSaveData(applicationId, titleId, path, error);
+            brls::sync([this, alive, ok, error] {
+                if (!alive->load())
+                    return;
+                setBusy(false, "");
+                if (!ok)
+                    brls::Application::notify(
+                        tr("pipensx/explorer/operation_failed", error));
+                else
+                    brls::Application::notify(tr("pipensx/saves/backed_up"));
+                reload();
+            });
+        }).detach();
+    }
+
+    void confirmRestore(const SaveBackupInfo& backup) {
+        auto* dialog =
+            new brls::Dialog(tr("pipensx/saves/restore_question", backup.label));
+        dialog->setCancelable(true);
+        dialog->addButton(tr("pipensx/saves/restore"), [this, backup] {
+            performRestore(backup);
+        });
+        dialog->addButton(tr("pipensx/common/cancel"), [] {});
+        dialog->open();
+    }
+
+    void performRestore(const SaveBackupInfo& backup) {
+        if (busy_)
+            return;
+        setBusy(true, tr("pipensx/saves/restoring"));
+        auto alive = alive_;
+        const uint64_t applicationId = title_.applicationId;
+        const std::string titleId = title_.titleId;
+        const std::string path = backup.path;
+        std::thread([this, alive, applicationId, titleId, path] {
+            std::string error;
+            const bool ok =
+                restoreSaveData(applicationId, titleId, path, error);
+            brls::sync([this, alive, ok, error] {
+                if (!alive->load())
+                    return;
+                setBusy(false, "");
+                brls::Application::notify(
+                    ok ? tr("pipensx/saves/restored")
+                       : tr("pipensx/explorer/operation_failed", error));
+                reload();
+            });
+        }).detach();
+    }
+
+    void performDelete(const SaveBackupInfo& backup) {
+        if (busy_)
+            return;
+        std::string error;
+        if (!deleteSaveBackup(backup.path, error))
+            brls::Application::notify(
+                tr("pipensx/explorer/operation_failed", error));
+        reload();
+    }
+
+    InstalledTitle title_;
+    std::vector<SaveBackupInfo> backups_;
+    bool busy_ = false;
+    brls::Label* statusLabel_ = nullptr;
+    brls::RecyclerFrame* recycler_ = nullptr;
+    brls::AppletFrame* frame_ = nullptr;
+    std::shared_ptr<std::atomic<bool>> alive_;
+
+    friend class SaveBackupDataSource;
+};
+
+}  // namespace pipensx::ui

@@ -1,0 +1,5 @@
+# Shell scripts need real LF shebangs to run at all - Windows checkouts
+# with core.autocrlf=true silently corrupt them into "bash\r": No such
+# file or directory otherwise (hit for real getting this fork building).
+*.sh text eol=lf
+Makefile* text eol=lf
