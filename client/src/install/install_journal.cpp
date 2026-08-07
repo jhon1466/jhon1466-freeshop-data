@@ -116,6 +116,8 @@ void serializeState(std::string& out, const PackageStreamState& state) {
     putBool(out, state.decoderHeaderReady);
     putKey(out, "decoderPresent");
     putBool(out, state.decoderPresent);
+    putKey(out, "decoderReplayOnly");
+    putBool(out, state.decoderReplayOnly);
     putKey(out, "entries");
     out += 'l';
     for (const auto& entry : state.entries) {
@@ -173,6 +175,7 @@ bool loadState(const be_node_t& dict, PackageStreamState& state) {
         !getU64(dict, "dataPosition", state.dataPosition) ||
         !getBool(dict, "decoderHeaderReady", state.decoderHeaderReady) ||
         !getBool(dict, "decoderPresent", state.decoderPresent) ||
+        !getBool(dict, "decoderReplayOnly", state.decoderReplayOnly) ||
         !getU32(dict, "entryIndex", state.entryIndex) ||
         !getBool(dict, "fileOpen", state.fileOpen) ||
         !getU64(dict, "headerSize", state.headerSize) ||

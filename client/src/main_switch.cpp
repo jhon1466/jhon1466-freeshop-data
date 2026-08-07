@@ -346,17 +346,14 @@ int main(int argc, char** argv) {
             throw std::runtime_error("Borealis Application::init failed");
         pipensx::ui::theme::registerColors();
         pipensx::ui::installSidebarStyle();
-        // Forced off regardless of the persisted setting: hardware testing
-        // traced a std::terminate crash to the main thread, at the exact
-        // point Application::handleAction() calls getAudioPlayer()->play()
-        // right after a registered action's listener runs (e.g. Y for
-        // "Backup now" in Guardados) - this is the same native-sound path
-        // enabled earlier this session. The toggle itself is left in place
-        // (and still writes to settings.json) so it can be flipped back on
-        // once switch_audio.cpp's play()/load() path is actually fixed;
-        // until then this line, not the toggle, is what's authoritative.
-        (void)settings.get().soundEffectsEnabled;
-        brls::AudioPlayer::enabled = false;
+        // Re-enabled: the std::terminate crash hardware testing traced to
+        // "right after an action fires" turned out to be a std::thread
+        // spawned from deep inside Application::handleAction()'s own call
+        // stack overflowing the main thread (fixed by moving Guardados/
+        // Explorador/Debrid to brls::async instead) - audio itself was
+        // never the cause, it just shared the timing. See save_detail_
+        // activity.hpp's makeBackup() for the actual fix.
+        brls::AudioPlayer::enabled = settings.get().soundEffectsEnabled;
 
         startupStage("Borealis createWindow");
         brls::Application::createWindow("pipensx");
@@ -421,6 +418,10 @@ int main(int argc, char** argv) {
 
         startupStage("DownloadManager construction");
         SwitchPerformanceController performance;
+        // Whole-session, not tied to hasActiveTransfer(): a paused or queued
+        // task can start moving bytes again at any moment, and the console
+        // sleeping mid-transfer is exactly the failure this exists to avoid.
+        performance.setKeepAwake(true);
         dht_engine_set_cache_path("sdmc:/switch/freeshop-client/dht.cache");
         DownloadManager manager("sdmc:/switch/freeshop-client");
         manager.setInstallTarget(
@@ -537,7 +538,7 @@ int main(int argc, char** argv) {
         bool firstFrame = true;
         while (true) {
             bool activeTransfer = manager.hasActiveTransfer();
-            performance.setActive(activeTransfer);
+            performance.setCpuBoostActive(activeTransfer);
             metadata.setImageNetwork(
                 activeTransfer ? GameMetadataService::ImageNetwork::Throttled
                                : GameMetadataService::ImageNetwork::Full);
@@ -570,7 +571,8 @@ int main(int argc, char** argv) {
         webServer.shutdown();
         updater.shutdown();
         manager.shutdown();
-        performance.setActive(false);
+        performance.setCpuBoostActive(false);
+        performance.setKeepAwake(false);
     } catch (const std::exception& error) {
         log_msg("[crash] exception at stage '%s': %s\n",
                 "see previous startup marker", error.what());

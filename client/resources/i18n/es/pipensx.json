@@ -438,7 +438,7 @@
   "about": {
     "version": "Versión {}",
     "built": "Compilado {} {}",
-    "description": "Tienda de homebrew y cliente BitTorrent para Nintendo Switch: descarga o instala paquetes NSP/NSZ en la SD.",
+    "description": "Catálogo de juegos, descargas por torrent, respaldo de partidas y explorador de archivos: todo en un solo lugar para tu Switch.",
     "donate_question": "¿Te sirvió FreeShop?",
     "donate_text": "Este proyecto lo mantengo en mi tiempo libre, sin nada a cambio - si te ha gustado y quieres ayudarme a seguir dedicándole horas (y café), cualquier aporte por PayPal se agradece muchísimo. No es obligatorio, pero sí que se siente. ¡Gracias por usar la app!",
     "donate_scan": "Escanea el QR o dona por PayPal a:"

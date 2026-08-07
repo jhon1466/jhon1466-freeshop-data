@@ -56,6 +56,12 @@ struct PackageStreamState {
     bool skipped = false;
     // NCZ decoder of the in-progress entry (when decoderPresent).
     bool decoderPresent = false;
+    // IMPROVEMENT_PLAN F-B/replay: the decoder was mid-solid-frame with no
+    // safe point to serialize (checkpointable() was false). outputPosition
+    // is still a valid discard mark — the entry replays from its own byte 0
+    // next run, dropping writer output below outputPosition instead of
+    // restoring zstd internals. The other decoder* fields below are unset.
+    bool decoderReplayOnly = false;
     bool decoderHeaderReady = false;
     bool blockMode = false;
     uint64_t outputSize = 0;

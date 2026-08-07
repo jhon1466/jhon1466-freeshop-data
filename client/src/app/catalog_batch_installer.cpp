@@ -118,7 +118,7 @@ BatchPreparation CatalogBatchInstaller::prepare(
     BatchPreparation result;
     if (!resolver_) {
         for (const CatalogEntry& entry : entries)
-            result.failures_.push_back({entry, "Torrent resolver is unavailable."});
+            result.failures_.push_back({entry, "El resolvedor de torrents no está disponible."});
         return result;
     }
 

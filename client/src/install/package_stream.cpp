@@ -195,9 +195,10 @@ public:
     using Writer = std::function<bool(const uint8_t*, size_t)>;
 
     NczDecoder(uint64_t inputSize, std::string telemetryTag,
-               Ready ready, Writer writer)
+               Ready ready, Writer writer, uint64_t discardUntil = 0)
         : inputSize_(inputSize), inputRemaining_(inputSize), ready_(std::move(ready)),
-          writer_(std::move(writer)), telemetryTag_(std::move(telemetryTag)) {
+          writer_(std::move(writer)), discardUntil_(discardUntil),
+          telemetryTag_(std::move(telemetryTag)) {
         telemetryStartMs_ = now_ms();
         resetTelemetry(telemetryStartMs_);
     }
@@ -642,7 +643,11 @@ private:
         }
 
         uint64_t readyStartedUs = telemetry_enabled() ? now_us() : 0;
-        bool ready = ready_(outputSize_);
+        // Replay resume: the backend already knows this content's size from
+        // the original setFileSize() call before the pause — resumePackage()
+        // restored that record, and calling setFileSize() again on the same
+        // (already-sized) content is rejected by the backend. Skip it.
+        bool ready = discardUntil_ ? true : ready_(outputSize_);
         if (readyStartedUs) {
             uint64_t elapsedUs = now_us() - readyStartedUs;
             telemetryReadyUs_ += elapsedUs;
@@ -653,7 +658,7 @@ private:
             return false;
         }
         uint64_t headerWriterStartedUs = telemetry_enabled() ? now_us() : 0;
-        bool headerWritten = writer_(pending_.data(), ncaHeaderSize);
+        bool headerWritten = deliverWriter(pending_.data(), ncaHeaderSize, 0);
         if (headerWriterStartedUs) {
             uint64_t elapsedUs = now_us() - headerWriterStartedUs;
             telemetryWriterUs_ += elapsedUs;
@@ -722,7 +727,7 @@ private:
                 return false;
             }
             uint64_t writerStartedUs = telemetry_enabled() ? now_us() : 0;
-            bool written = writer_(data + done, count);
+            bool written = deliverWriter(data + done, count, outputPosition_);
             if (writerStartedUs) {
                 uint64_t elapsedUs = now_us() - writerStartedUs;
                 telemetryWriterUs_ += elapsedUs;
@@ -927,10 +932,28 @@ private:
             resetTelemetry(now);
     }
 
+    // IMPROVEMENT_PLAN F-B/replay: writer_ wrapper for a decoder resuming a
+    // solid entry via replay instead of a full restore. The caller re-feeds
+    // this entry's raw bytes from position 0 (same as a first run — input
+    // parsing, decompression and section/AES bookkeeping all replay
+    // normally), but bytes already durably written to the backend before
+    // the pause must not be written again. Silently drops (without calling
+    // writer_) whatever falls below discardUntil_, then forwards the rest —
+    // splitting a call that straddles the boundary.
+    bool deliverWriter(const uint8_t* data, size_t size, uint64_t position) {
+        if (position + size <= discardUntil_)
+            return true;
+        if (position >= discardUntil_)
+            return writer_(data, size);
+        size_t skip = static_cast<size_t>(discardUntil_ - position);
+        return writer_(data + skip, size - skip);
+    }
+
     uint64_t inputSize_;
     uint64_t inputRemaining_;
     Ready ready_;
     Writer writer_;
+    uint64_t discardUntil_ = 0;
     std::string telemetryTag_;
     ByteQueue pending_;
     std::vector<NczSection> sections_;
@@ -1031,12 +1054,38 @@ public:
     bool checkpoint(PackageStreamState& out) const {
         if (failed_ || finished_ || !headerReady_)
             return false;
-        uint64_t decoderPending = 0;
-        if (currentDecoder_) {
-            if (!currentDecoder_->checkpointable())
+        // IMPROVEMENT_PLAN F-B/replay: a solid NCZ entry mid-frame has no
+        // safe point to serialize its zstd internals (checkpointable() is
+        // false). Roll the whole entry's fed input back to its own start —
+        // the decoder's OUTPUT position isn't decoder-internal state, so it
+        // survives as a discard mark: next run, a fresh decoder replays the
+        // entry from byte 0, silently dropping writer_ calls (and skipping
+        // the redundant setFileSize callback) until output reaches that
+        // mark. See NczDecoder::discardUntil_ and restore() below.
+        if (currentDecoder_ && !currentDecoder_->checkpointable()) {
+            const PfsEntry& entry = entries_[entryIndex_];
+            uint64_t decoderPending = entry.size - currentInputRemaining_;
+            if (decoderPending > dataPosition_)
                 return false;
-            decoderPending = currentDecoder_->pendingSize();
+            out = PackageStreamState {};
+            out.consumed = consumed_ - pending_.size() - decoderPending;
+            out.headerSize = headerSize_;
+            out.dataPosition = dataPosition_ - decoderPending;
+            out.currentInputRemaining = currentInputRemaining_ + decoderPending;
+            out.entryIndex = static_cast<uint32_t>(entryIndex_);
+            out.fileOpen = fileOpen_;
+            out.skipped = currentSkipped_;
+            out.entries.reserve(entries_.size());
+            for (const auto& e : entries_)
+                out.entries.push_back({e.offset, e.size, e.name});
+            currentDecoder_->exportState(out);
+            out.decoderPresent = true;
+            out.decoderReplayOnly = true;
+            return true;
         }
+        uint64_t decoderPending = 0;
+        if (currentDecoder_)
+            decoderPending = currentDecoder_->pendingSize();
         // Undigested bytes roll back: pending_ was never handed to a parser,
         // decoder pending was counted into the entry position but produced
         // no output yet.
@@ -1089,7 +1138,23 @@ public:
         headerReady_ = true;
         if (fileOpen_)
             currentName_ = entries_[entryIndex_].name;
-        if (state.decoderPresent) {
+        if (state.decoderPresent && state.decoderReplayOnly) {
+            // Solid NCZ mid-frame at checkpoint time: no decoder-internal
+            // state to restore. The entry replays from its own byte 0 (the
+            // caller re-feeds it via write() right after this call) with
+            // writer output discarded up to state.outputPosition.
+            currentDecoder_ = std::make_unique<NczDecoder>(
+                entries_[entryIndex_].size, telemetryTag_,
+                [this](uint64_t size) {
+                    return callbacks_.setFileSize &&
+                           callbacks_.setFileSize(size);
+                },
+                [this](const uint8_t* data, size_t size) {
+                    return callbacks_.writeFile &&
+                           callbacks_.writeFile(data, size);
+                },
+                state.outputPosition);
+        } else if (state.decoderPresent) {
             currentDecoder_ = std::make_unique<NczDecoder>(
                 entries_[entryIndex_].size, telemetryTag_,
                 [this](uint64_t size) {
@@ -1105,9 +1170,10 @@ public:
                 return fail();
         }
         telemetry_log("package", telemetryTag_.c_str(),
-            "event=restore consumed=%llu entry=%u open=%d decoder=%d",
+            "event=restore consumed=%llu entry=%u open=%d decoder=%d replay=%d",
             (unsigned long long)consumed_, state.entryIndex,
-            fileOpen_ ? 1 : 0, state.decoderPresent ? 1 : 0);
+            fileOpen_ ? 1 : 0, state.decoderPresent ? 1 : 0,
+            state.decoderReplayOnly ? 1 : 0);
         return true;
     }
 

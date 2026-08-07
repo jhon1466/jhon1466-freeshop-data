@@ -13,10 +13,10 @@
 
 namespace pipensx::ui {
 
-// UI_PLAN O8 — download details as eShop-style cards (Progress / Speed /
-// Network) with on-screen Pause/Verify/Remove buttons instead of blind X/Y
-// hotkeys. Big progress bar + ETA (S1), speed graph kept, network stats
-// grouped. All colors/fonts on O1 tokens.
+// Download details: a flat, section-divided layout (no boxed panels) built
+// around one big progress readout instead of stacked eShop-style cards -
+// percentage and bytes sit right against a tall bar, and peers/pieces/ETA
+// live as compact chips in one row rather than a vertical stats list.
 class DetailsActivity : public brls::Activity {
 public:
     DetailsActivity(std::string taskId, DownloadManager* manager)
@@ -27,12 +27,12 @@ public:
 
         status_ = new brls::Label();
         status_->setFontSize(theme::kFontHeading);
-        status_->setMarginBottom(16);
+        status_->setMarginBottom(18);
         content->addView(status_);
 
         // Action buttons replace the old X/Y hotkeys.
         auto* actions = new brls::Box(brls::Axis::ROW);
-        actions->setMarginBottom(20);
+        actions->setMarginBottom(28);
         pauseButton_ = addActionButton(actions, tr("pipensx/common/pause"),
                                        &brls::BUTTONSTYLE_PRIMARY);
         verifyButton_ = addActionButton(actions, tr("pipensx/common/verify"),
@@ -54,36 +54,44 @@ public:
             return true;
         });
 
-        auto* progressCard = addCard(content, tr("pipensx/downloads/card_progress"));
+        // Hero readout: tall bar, big percentage/byte line right under it -
+        // the one thing on this screen that should read at a glance.
         progressBar_ = new ProgressBar();
-        progressBar_->setHeight(14);
-        progressBar_->setMarginBottom(12);
-        progressCard->addView(progressBar_);
-        progress_ = addLine(progressCard, theme::kFontBody);
-        package_ = addLine(progressCard, theme::kFontSmall);
+        progressBar_->setHeight(18);
+        progressBar_->setMarginBottom(14);
+        content->addView(progressBar_);
+        progress_ = addLine(content, theme::kFontHeading);
+        progress_->setMarginBottom(4);
+        package_ = addLine(content, theme::kFontSmall);
         package_->setTextColor(theme::textSecondary());
-        currentPackage_ = addLine(progressCard, theme::kFontSmall);
+        currentPackage_ = addLine(content, theme::kFontSmall);
         currentPackage_->setSingleLine(true);
         currentPackage_->setAutoAnimate(false);
-        eta_ = addLine(progressCard, theme::kFontSmall);
-        eta_->setTextColor(theme::textSecondary());
+        currentPackage_->setMarginBottom(18);
 
-        auto* speedCard = addCard(content, tr("pipensx/downloads/card_speed"));
+        // Compact stats: peers/pieces/ETA as pills in one row, instead of a
+        // boxed "Network" card of stacked text lines.
+        auto* chips = new brls::Box(brls::Axis::ROW);
+        chips->setMarginBottom(26);
+        eta_ = addChip(chips, &etaChip_);
+        peers_ = addChip(chips);
+        pieces_ = addChip(chips);
+        content->addView(chips);
+
+        addDivider(content);
+        addSectionLabel(content, tr("pipensx/downloads/card_speed"));
         auto* speedLegend = new brls::Box(brls::Axis::ROW);
         speedLegend->setAlignItems(brls::AlignItems::CENTER);
-        speedLegend->setMarginBottom(8);
+        speedLegend->setMarginBottom(10);
         downloadSpeed_ = addSpeedLegend(speedLegend, theme::accent(), nullptr);
         installSpeed_ = addSpeedLegend(speedLegend, theme::success(),
                                        &installSpeedItem_);
-        speedCard->addView(speedLegend);
+        content->addView(speedLegend);
         speedGraph_ = new SpeedGraphView();
-        speedCard->addView(speedGraph_);
-
-        auto* networkCard = addCard(content, tr("pipensx/downloads/card_network"));
-        peers_ = addLine(networkCard, theme::kFontBody);
-        pieces_ = addLine(networkCard, theme::kFontBody);
+        content->addView(speedGraph_);
 
         error_ = addLine(content, theme::kFontSmall);
+        error_->setMarginTop(18);
         error_->setTextColor(theme::error());
 
         auto* scroll = new brls::ScrollingFrame();
@@ -117,38 +125,68 @@ private:
         return label;
     }
 
-    static brls::Box* addCard(brls::Box* parent, const std::string& title) {
-        auto* card = new brls::Box(brls::Axis::COLUMN);
-        card->setBackgroundColor(theme::surface());
-        card->setCornerRadius(theme::kRadiusMedium);
-        card->setPadding(16, 20, 16, 20);
-        card->setMarginBottom(16);
-        auto* heading = new brls::Label();
-        heading->setFontSize(theme::kFontCaption);
-        heading->setTextColor(theme::textSecondary());
-        heading->setMarginBottom(10);
-        heading->setText(title);
-        card->addView(heading);
-        parent->addView(card);
-        return card;
+    // Compact pill for a stat line (peers/pieces/ETA) - a row of these reads
+    // as a glance-able summary instead of the "Network" card's stacked text.
+    // itemOut, when given, captures the pill itself so a caller can hide it
+    // (an empty ETA before any rate is known should disappear, not sit
+    // there as an empty rounded rectangle).
+    static brls::Label* addChip(brls::Box* row, brls::Box** itemOut = nullptr) {
+        auto* pill = new brls::Box(brls::Axis::ROW);
+        pill->setBackgroundColor(theme::surface());
+        pill->setCornerRadius(999.0f);
+        pill->setPadding(9, 16, 9, 16);
+        pill->setMarginRight(10);
+        pill->setMarginBottom(10);
+        auto* label = new brls::Label();
+        label->setWidth(brls::View::AUTO);
+        label->setFontSize(theme::kFontCaption);
+        label->setTextColor(theme::textSecondary());
+        label->setSingleLine(true);
+        pill->addView(label);
+        row->addView(pill);
+        if (itemOut)
+            *itemOut = pill;
+        return label;
     }
 
+    // Thin rule instead of a boxed card - separates sections without
+    // re-introducing the panel-everywhere look this screen used to have.
+    static void addDivider(brls::Box* parent) {
+        auto* line = new brls::Box();
+        line->setHeight(1);
+        line->setBackgroundColor(theme::track());
+        line->setMarginBottom(18);
+        parent->addView(line);
+    }
+
+    static void addSectionLabel(brls::Box* parent, const std::string& text) {
+        auto* label = new brls::Label();
+        label->setFontSize(theme::kFontCaption);
+        label->setTextColor(theme::textSecondary());
+        label->setText(text);
+        label->setMarginBottom(12);
+        parent->addView(label);
+    }
+
+    // A big, series-colored number reads as a speedometer next to the
+    // graph - the old dot + body-size text sat flat beside a 150px chart.
     static brls::Label* addSpeedLegend(brls::Box* row, NVGcolor color,
                                        brls::Box** itemOut) {
         auto* item = new brls::Box(brls::Axis::ROW);
         item->setAlignItems(brls::AlignItems::CENTER);
-        item->setMarginRight(28);
+        item->setMarginRight(36);
 
         auto* dot = new brls::Box();
-        dot->setWidth(10);
-        dot->setHeight(10);
-        dot->setCornerRadius(5);
+        dot->setWidth(12);
+        dot->setHeight(12);
+        dot->setCornerRadius(6);
         dot->setBackgroundColor(color);
-        dot->setMarginRight(8);
+        dot->setMarginRight(10);
         item->addView(dot);
 
         auto* label = new brls::Label();
-        label->setFontSize(theme::kFontBody);
+        label->setFontSize(theme::kFontTitle);
+        label->setTextColor(color);
         label->setSingleLine(true);
         label->setAutoAnimate(false);
         item->addView(label);
@@ -227,9 +265,12 @@ private:
         std::string eta;
         if (auto seconds = taskEtaSeconds(*task, now))
             eta = formatEtaSeconds(*seconds);
-        setTextIfChanged(eta_, eta.empty()
-                                   ? std::string()
-                                   : tr("pipensx/downloads/eta_line", eta));
+        // No rate yet (e.g. install just started, 0 B/s) - hide the pill
+        // rather than show it empty.
+        etaChip_->setVisibility(eta.empty() ? brls::Visibility::GONE
+                                            : brls::Visibility::VISIBLE);
+        if (!eta.empty())
+            setTextIfChanged(eta_, tr("pipensx/downloads/eta_line", eta));
 
         if (task->mode == TransferMode::StreamInstall && task->packageCount) {
             const bool hasCurrent = !task->currentPackage.empty() &&
@@ -361,6 +402,7 @@ private:
     brls::Label* package_;
     brls::Label* currentPackage_;
     brls::Label* eta_;
+    brls::Box* etaChip_ = nullptr;
     brls::Label* downloadSpeed_;
     brls::Label* installSpeed_;
     brls::Box* installSpeedItem_;

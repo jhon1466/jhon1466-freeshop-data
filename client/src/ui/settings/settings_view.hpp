@@ -89,11 +89,10 @@ public:
                 AppSettingsData values = settings_->get();
                 bool previous = values.soundEffectsEnabled;
                 values.soundEffectsEnabled = enabled;
-                // The toggle keeps persisting the preference, but does not
-                // flip brls::AudioPlayer::enabled itself right now - see the
-                // comment above that line in main_switch.cpp for why.
                 if (!persist(values, "sound_effects"))
                     soundEffects_->setOn(previous, false);
+                else
+                    brls::AudioPlayer::enabled = enabled;
             });
         content->addView(soundEffects_);
 

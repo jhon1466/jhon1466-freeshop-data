@@ -438,7 +438,7 @@
   "about": {
     "version": "Version {}",
     "built": "Built {} {}",
-    "description": "Nintendo Switch storefront and BitTorrent client for downloading or streaming NSP/NSZ packages to SD.",
+    "description": "Game catalog, torrent downloads, save backups and a file explorer: all in one place for your Switch.",
     "donate_question": "Found FreeShop useful?",
     "donate_text": "I maintain this project in my spare time, for nothing in return - if you've enjoyed it and want to help me keep putting hours (and coffee) into it, any contribution via PayPal is deeply appreciated. It's never required, but it's always felt. Thanks for using the app!",
     "donate_scan": "Scan the QR code or donate via PayPal to:"

@@ -1424,6 +1424,11 @@ torrent_t *torrent_create_ex(const metainfo_t *mi,
             t->startup_verifying = 0;
             log_msg("[torrent] fast-resume: %u/%u pieces preset\n",
                     t->pm->num_done, t->pm->num_pieces);
+        } else if (options->have_bitfield) {
+            log_msg("[torrent] fast-resume skipped: bitfield len %u != "
+                    "expected %u\n",
+                    options->have_bitfield_len,
+                    (uint32_t)((mi->num_pieces + 7) / 8));
         }
     }
 
@@ -1952,11 +1957,29 @@ uint32_t torrent_copy_have_bitfield(torrent_t *t, uint8_t *out,
     /* Finish and apply in-flight background hashes so a verified piece is
        never dropped from the snapshot at pause/teardown. */
     piece_mgr_hash_flush(t->pm);
-    if (t->startup_verifying)
-        return 0;
+    if (t->startup_verifying) {
+        /* The budgeted per-tick scan (STARTUP_VERIFY_BUDGET_MS) rarely
+           catches up to num_pieces before a pause happens on anything but
+           a small torrent — bailing out here used to mean fast-resume
+           almost never armed, so every pause made the next resume redo the
+           whole disk verify scan from piece 0, which reads as the download
+           restarting. Finish the remaining pieces synchronously instead:
+           this only runs once at teardown, not per frame. */
+        while (t->startup_verify_index < t->pm->num_pieces) {
+            piece_mgr_check_existing(t->pm, t->startup_verify_index);
+            t->startup_verify_index++;
+        }
+        t->startup_verifying = 0;
+        t->startup_verified_all = t->pm->num_done == t->pm->num_pieces;
+        log_msg("[torrent] teardown verify completed: %u/%u pieces\n",
+                t->pm->num_done, t->pm->num_pieces);
+    }
     uint32_t need = (t->pm->num_pieces + 7) / 8;
-    if (!out)
+    if (!out) {
+        log_msg("[torrent] bitfield snapshot: %u/%u pieces have, %u bytes\n",
+                t->pm->num_done, t->pm->num_pieces, need);
         return need;
+    }
     if (out_len < need)
         return 0;
     memcpy(out, t->pm->have_bf, need);

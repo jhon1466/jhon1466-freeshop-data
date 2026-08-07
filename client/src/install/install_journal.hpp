@@ -14,7 +14,10 @@ namespace pipensx::install {
 // package), the PackageStream safe point and an opaque backend blob with
 // backend-specific placeholder bookkeeping.
 struct InstallJournal {
-    static constexpr int64_t kVersion = 1;
+    // v2 adds PackageStreamState.decoderReplayOnly (IMPROVEMENT_PLAN
+    // F-B/replay). A v1 journal on disk simply fails the version check and
+    // is discarded like any other stale journal — no migration needed.
+    static constexpr int64_t kVersion = 2;
 
     std::string packageId;     // stable identity (infohash/path/URL)
     uint64_t packageSize = 0;  // total package bytes, 0 when unknown

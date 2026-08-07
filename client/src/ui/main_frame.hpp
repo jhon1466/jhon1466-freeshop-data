@@ -87,7 +87,7 @@ public:
             case NavIconType::Explorer:    drawExplorer(vg, gx, gy, s); break;
             case NavIconType::Saves:       drawSaves(vg, gx, gy, s); break;
             case NavIconType::Settings:    drawSettings(vg, gx, gy, s); break;
-            case NavIconType::Help:        drawPulse(vg, gx, gy, s); break;
+            case NavIconType::Help:        drawHelp(vg, gx, gy, s); break;
             case NavIconType::About:       drawAbout(vg, gx, gy, s); break;
         }
     }
@@ -206,16 +206,25 @@ private:
         nvgStroke(vg);
     }
 
-    // ECG pulse: a flat trace with one sharp spike — diagnostics.
-    static void drawPulse(NVGcontext* vg, float gx, float gy, float s) {
+    // Question mark in a circle: the universal "help" glyph — a hook
+    // curling from the upper-left over the top and down to a stem, plus
+    // a dot for the base. Built from a circle, a bezier and a line, like
+    // every other glyph here (no font glyph involved).
+    static void drawHelp(NVGcontext* vg, float gx, float gy, float s) {
+        const float cx = gx + s / 2.0f;
+        const float cy = gy + s / 2.0f;
         nvgBeginPath(vg);
-        nvgMoveTo(vg, gx + 2.0f, gy + 15.0f);
-        nvgLineTo(vg, gx + 9.0f, gy + 15.0f);
-        nvgLineTo(vg, gx + 11.0f, gy + 7.0f);
-        nvgLineTo(vg, gx + 13.0f, gy + 19.0f);
-        nvgLineTo(vg, gx + 15.0f, gy + 15.0f);
-        nvgLineTo(vg, gx + s - 2.0f, gy + 15.0f);
+        nvgCircle(vg, cx, cy, s / 2.0f - 1.0f);
         nvgStroke(vg);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, cx - 4.0f, gy + 8.5f);
+        nvgBezierTo(vg, cx - 4.0f, gy + 4.5f, cx + 4.5f, gy + 4.5f,
+                   cx + 4.5f, gy + 8.5f);
+        nvgBezierTo(vg, cx + 4.5f, gy + 11.5f, cx, gy + 11.0f, cx, gy + 14.5f);
+        nvgStroke(vg);
+        nvgBeginPath(vg);
+        nvgCircle(vg, cx, gy + 18.5f, 1.4f);
+        nvgFill(vg);
     }
 
     NavIconType type_;

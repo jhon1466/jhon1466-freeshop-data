@@ -18,20 +18,31 @@ void logFailure(const char* operation, Result result) {
 } // namespace
 
 SwitchPerformanceController::~SwitchPerformanceController() {
-    deactivate();
+    revertCpuBoost();
+    revertKeepAwake();
 }
 
-void SwitchPerformanceController::setActive(bool active) {
-    if (active == active_)
+void SwitchPerformanceController::setCpuBoostActive(bool active) {
+    if (active == cpuBoostActive_)
         return;
-    active_ = active;
+    cpuBoostActive_ = active;
     if (active)
-        activate();
+        applyCpuBoost();
     else
-        deactivate();
+        revertCpuBoost();
 }
 
-void SwitchPerformanceController::activate() {
+void SwitchPerformanceController::setKeepAwake(bool enabled) {
+    if (enabled == keepAwakeEnabled_)
+        return;
+    keepAwakeEnabled_ = enabled;
+    if (enabled)
+        applyKeepAwake();
+    else
+        revertKeepAwake();
+}
+
+void SwitchPerformanceController::applyCpuBoost() {
     if (!cpuBoostApplied_ && hosversionAtLeast(7, 0, 0)) {
         Result result = appletSetCpuBoostMode(ApmCpuBoostMode_FastLoad);
         if (R_SUCCEEDED(result))
@@ -39,7 +50,19 @@ void SwitchPerformanceController::activate() {
         else
             logFailure("enable CPU boost", result);
     }
+}
 
+void SwitchPerformanceController::revertCpuBoost() {
+    if (cpuBoostApplied_) {
+        Result result = appletSetCpuBoostMode(ApmCpuBoostMode_Normal);
+        if (R_SUCCEEDED(result))
+            cpuBoostApplied_ = false;
+        else
+            logFailure("disable CPU boost", result);
+    }
+}
+
+void SwitchPerformanceController::applyKeepAwake() {
     if (!autoSleepChanged_ && hosversionAtLeast(5, 0, 0)) {
         bool previous = false;
         Result result = appletIsAutoSleepDisabled(&previous);
@@ -57,15 +80,7 @@ void SwitchPerformanceController::activate() {
     }
 }
 
-void SwitchPerformanceController::deactivate() {
-    if (cpuBoostApplied_) {
-        Result result = appletSetCpuBoostMode(ApmCpuBoostMode_Normal);
-        if (R_SUCCEEDED(result))
-            cpuBoostApplied_ = false;
-        else
-            logFailure("disable CPU boost", result);
-    }
-
+void SwitchPerformanceController::revertKeepAwake() {
     if (autoSleepChanged_) {
         Result result =
             appletSetAutoSleepDisabled(previousAutoSleepDisabled_);

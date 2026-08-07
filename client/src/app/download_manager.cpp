@@ -416,6 +416,19 @@ public:
     const std::vector<storage_file_config_t>& configs() const {
         return configs_;
     }
+    // F-B: called right before a non-removal teardown (pause/error/
+    // shutdown). maybeCheckpoint() only journals every kJournalIntervalBytes
+    // (32 MB), so a pause that lands short of the first interval left
+    // journalValid_ false and the destructor's ~PackageCoordinator rolled
+    // the whole partial install back — pausing early into any package made
+    // the next resume restart it from byte 0, which read as the download
+    // itself restarting. Force whatever safe point the stream has already
+    // reached into the journal now, regardless of the interval.
+    void checkpointBeforeTeardown() {
+        if (!stream_ || activeFileIndex_ == UINT32_MAX)
+            return;
+        checkpointNow();
+    }
     const std::vector<uint32_t>& pieceOrder() const { return pieceOrder_; }
     uint32_t packageCount() const { return packageCount_; }
     uint32_t initialLookahead() const { return lookaheadWindow_; }
@@ -844,6 +857,13 @@ private:
         uint64_t consumed = stream_->consumed();
         if (consumed < journalConsumed_ + kJournalIntervalBytes)
             return;
+        checkpointNow();
+    }
+
+    // Shared by maybeCheckpoint() (gated on kJournalIntervalBytes) and
+    // checkpointBeforeTeardown() (forced, no gate). stream_/activeFileIndex_
+    // are assumed valid — both callers check them first.
+    void checkpointNow() {
         install::InstallJournal journal;
         if (!stream_->checkpoint(journal.state) ||
             journal.state.consumed == 0)
@@ -860,7 +880,7 @@ private:
                     journalPath_.c_str());
             return;
         }
-        journalConsumed_ = consumed;
+        journalConsumed_ = journal.state.consumed;
         journalValid_ = true;
     }
 
@@ -2733,10 +2753,19 @@ void DownloadManager::runTask(RunnerSlot* slot, ClaimedTask claim) {
     torrent_destroy(torrent);
     log_msg("[manager] torrent destroyed %s\n", activeId.c_str());
     if (coordinator) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        const DownloadTask* task = findLocked(activeId);
-        if (!task || task->status == DownloadStatus::Removing)
+        bool removing;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            const DownloadTask* task = findLocked(activeId);
+            removing = !task || task->status == DownloadStatus::Removing;
+        }
+        if (removing)
             coordinator->abandonResume();
+        else
+            // Pause/error/shutdown: force whatever the stream has already
+            // reached into the journal now, instead of waiting for the next
+            // periodic 32 MB checkpoint — see checkpointBeforeTeardown().
+            coordinator->checkpointBeforeTeardown();
     }
     coordinator.reset();
     metainfo_free(&metainfo);

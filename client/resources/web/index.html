@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#101418">
+<meta name="theme-color" content="#ffffff">
 <title>FreeShop</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon-192.png">
@@ -11,39 +11,64 @@
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
+<div class="bg-glow" aria-hidden="true"></div>
+
 <header class="topbar">
-  <div class="brand"><span class="brand-dot"></span>FreeShop</div>
-  <div id="conn" class="conn" title="connection">●</div>
+  <div class="brand">
+    <span class="brand-mark">FS</span>
+    <span class="brand-name">FreeShop</span>
+  </div>
+  <div id="conn" class="conn" title="conexión con la consola">
+    <span class="conn-dot"></span><span class="conn-label">conectando…</span>
+  </div>
 </header>
 
-<nav class="tabs">
-  <a href="#downloads" data-tab="downloads" class="tab">Downloads</a>
-  <a href="#catalog" data-tab="catalog" class="tab">Catalog</a>
-  <a href="#add" data-tab="add" class="tab">Add</a>
-  <a href="#files" data-tab="files" class="tab">Files</a>
+<nav class="tabs" aria-label="Secciones">
+  <a href="#downloads" data-tab="downloads" class="tab">
+    <svg viewBox="0 0 24 24" class="tab-icon"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>Descargas</span>
+  </a>
+  <a href="#catalog" data-tab="catalog" class="tab">
+    <svg viewBox="0 0 24 24" class="tab-icon"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+    <span>Catálogo</span>
+  </a>
+  <a href="#add" data-tab="add" class="tab">
+    <svg viewBox="0 0 24 24" class="tab-icon"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <span>Agregar</span>
+  </a>
+  <a href="#files" data-tab="files" class="tab">
+    <svg viewBox="0 0 24 24" class="tab-icon"><path d="M3.5 7.5a1.5 1.5 0 0 1 1.5-1.5h4.5l2 2h7.5a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5v-10Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+    <span>Archivos</span>
+  </a>
+  <span class="tab-indicator" id="tab-indicator" aria-hidden="true"></span>
 </nav>
 
 <main>
   <section id="view-downloads" class="view">
     <div id="storage" class="storage" hidden>
+      <div class="storage-head">
+        <span>Espacio en la SD</span>
+        <span id="storage-text" class="storage-text"></span>
+      </div>
       <div class="storage-bar"><div id="storage-fill" class="storage-fill"></div></div>
-      <div id="storage-text" class="storage-text"></div>
     </div>
     <div id="notify-row" class="notify-row">
-      <button id="alerts-btn" class="btn btn-ghost">🔔 Alerts: on</button>
-      <button id="notify-btn" class="btn btn-ghost" hidden>Enable notifications</button>
+      <button id="alerts-btn" class="chip"></button>
+      <button id="notify-btn" class="chip chip-accent" hidden>Activar notificaciones</button>
     </div>
     <div id="jobs"></div>
     <div id="tasks"></div>
     <div id="tasks-empty" class="empty" hidden>
-      <div class="empty-icon">⤓</div>
-      <p>No downloads yet.<br>Add a magnet link or pick something from the catalog.</p>
+      <svg viewBox="0 0 24 24" class="empty-icon"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 20h14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <p class="empty-title">Sin descargas todavía</p>
+      <p class="empty-sub">Agrega un enlace magnet o elige algo del catálogo para empezar.</p>
     </div>
   </section>
 
   <section id="view-catalog" class="view" hidden>
     <div class="search-row">
-      <input id="search" type="search" placeholder="Search 4000+ games…" autocomplete="off">
+      <svg viewBox="0 0 24 24" class="search-icon"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input id="search" type="search" placeholder="Buscar entre miles de juegos…" autocomplete="off">
     </div>
     <div id="catalog-status" class="empty" hidden></div>
     <div id="catalog-grid" class="grid"></div>
@@ -52,34 +77,43 @@
 
   <section id="view-add" class="view" hidden>
     <div class="card form-card">
-      <h2>Magnet link</h2>
+      <h2><svg viewBox="0 0 24 24" class="card-icon"><path d="M9 15 15 9m-6 8.5L4.5 22 2 19.5 6.5 15m10-10L21 .5 23.5 3 19 7.5m-8.5-1L14 3m3.5 3.5L14 10m-7 1 3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Enlace magnet</h2>
       <textarea id="magnet-input" rows="3" placeholder="magnet:?xt=urn:btih:…"></textarea>
       <div class="mode-row" id="magnet-mode">
-        <label><input type="radio" name="magnet-mode" value="install" checked> Install</label>
-        <label><input type="radio" name="magnet-mode" value="download"> Download only</label>
+        <label><input type="radio" name="magnet-mode" value="install" checked><span>Instalar</span></label>
+        <label><input type="radio" name="magnet-mode" value="download"><span>Solo descargar</span></label>
       </div>
-      <button id="magnet-btn" class="btn btn-primary">Add magnet</button>
+      <button id="magnet-btn" class="btn btn-primary">Agregar magnet</button>
     </div>
     <div class="card form-card">
-      <h2>.torrent file</h2>
-      <input id="torrent-file" type="file" accept=".torrent,application/x-bittorrent">
+      <h2><svg viewBox="0 0 24 24" class="card-icon"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Archivo .torrent</h2>
+      <label class="file-drop" id="torrent-drop">
+        <input id="torrent-file" type="file" accept=".torrent,application/x-bittorrent" hidden>
+        <span id="torrent-file-label">Toca para elegir un archivo…</span>
+      </label>
       <div class="mode-row" id="torrent-mode">
-        <label><input type="radio" name="torrent-mode" value="install" checked> Install</label>
-        <label><input type="radio" name="torrent-mode" value="download"> Download only</label>
+        <label><input type="radio" name="torrent-mode" value="install" checked><span>Instalar</span></label>
+        <label><input type="radio" name="torrent-mode" value="download"><span>Solo descargar</span></label>
       </div>
-      <button id="torrent-btn" class="btn btn-primary">Upload torrent</button>
+      <button id="torrent-btn" class="btn btn-primary">Subir torrent</button>
     </div>
   </section>
 
   <section id="view-files" class="view" hidden>
-    <div class="card form-card">
+    <div class="card form-card upload-card">
       <input id="files-upload-input" type="file" hidden>
-      <button id="files-upload-btn" class="btn btn-primary">Upload a file here</button>
+      <button id="files-upload-btn" class="btn btn-primary btn-block">
+        <svg viewBox="0 0 24 24" class="btn-icon"><path d="M12 20V8m0 0-5 5m5-5 5 5M5 4h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Subir un archivo aquí
+      </button>
       <div id="files-upload-progress" class="storage-text" hidden></div>
     </div>
-    <div id="files-path" class="files-path"></div>
+    <div id="files-breadcrumb" class="files-breadcrumb"></div>
     <div id="files-list"></div>
-    <div id="files-empty" class="empty" hidden>Empty folder.</div>
+    <div id="files-empty" class="empty" hidden>
+      <svg viewBox="0 0 24 24" class="empty-icon"><path d="M3.5 7.5a1.5 1.5 0 0 1 1.5-1.5h4.5l2 2h7.5a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5v-10Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+      <p class="empty-title">Carpeta vacía</p>
+    </div>
   </section>
 </main>
 
