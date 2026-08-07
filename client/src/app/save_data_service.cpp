@@ -1,10 +1,15 @@
 #include "app/save_data_service.hpp"
 #include "app/file_explorer_service.hpp"
 
+extern "C" {
+#include "../core/util.h"
+}
+
 #include <sys/stat.h>
 
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -29,13 +34,22 @@ std::atomic<int> gMountSerial{0};
 // saveBackupsRoot() a segment at a time, so an existing parent (EEXIST) is
 // the expected case, not an error.
 bool ensureDirectory(const std::string& path) {
-    if (mkdir(path.c_str(), 0755) == 0)
+    log_msg("[saves] ensureDirectory: mkdir %s\n", path.c_str());
+    const int mkdirResult = mkdir(path.c_str(), 0755);
+    const int mkdirErrno = errno;
+    log_msg("[saves] ensureDirectory: mkdir(%s) = %d errno=%d\n",
+            path.c_str(), mkdirResult, mkdirErrno);
+    if (mkdirResult == 0)
         return true;
-    struct stat st {};
-    return stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+    // EEXIST is the expected case for every parent segment, and it already
+    // proves something is there — no stat() needed. If that something is a
+    // file rather than a directory the following mkdir/open fails anyway,
+    // with a clearer error than a stat probe would have produced.
+    return mkdirErrno == EEXIST;
 }
 
 bool ensurePath(const std::string& path) {
+    log_msg("[saves] ensurePath: %s\n", path.c_str());
     if (!ensureDirectory("sdmc:/switch"))
         return false;
     if (!ensureDirectory("sdmc:/switch/freeshop-client"))
@@ -44,6 +58,7 @@ bool ensurePath(const std::string& path) {
     // path is always "sdmc:/switch/freeshop-client/..." from
     // saveBackupsRoot()-derived callers - walk the remaining segments.
     std::string rest = path.substr(built.size());
+    log_msg("[saves] ensurePath: rest=%s\n", rest.c_str());
     size_t start = 0;
     while (start < rest.size()) {
         if (rest[start] == '/') {
@@ -54,10 +69,12 @@ bool ensurePath(const std::string& path) {
         if (slash == std::string::npos)
             slash = rest.size();
         built += "/" + rest.substr(start, slash - start);
+        log_msg("[saves] ensurePath: segment built=%s\n", built.c_str());
         if (!ensureDirectory(built))
             return false;
         start = slash;
     }
+    log_msg("[saves] ensurePath: done\n");
     return true;
 }
 
@@ -68,7 +85,7 @@ bool activeUser(AccountUid& uid, std::string& error) {
     rc = accountGetLastOpenedUser(&uid);
     if (R_SUCCEEDED(rc) && accountUidIsValid(&uid))
         return true;
-    error = "No account profile is available.";
+    error = "No hay ningún perfil de cuenta disponible.";
     return false;
 }
 
@@ -79,6 +96,35 @@ std::string timestampLabel() {
     char buffer[32];
     std::strftime(buffer, sizeof(buffer), "%Y-%m-%d_%H-%M-%S", &local);
     return buffer;
+}
+
+// Strips characters FAT32/exFAT (the SD card's filesystem) can't hold in a
+// path component, collapses whitespace runs, and caps the length - a title's
+// display name is free-form text (may carry ": ", "/", trademark glyphs,
+// trailing dots) with no such guarantee.
+std::string sanitizeForPathSegment(const std::string& name) {
+    std::string out;
+    out.reserve(name.size());
+    bool lastWasSpace = false;
+    for (unsigned char c : name) {
+        if (c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' ||
+            c == '"' || c == '<' || c == '>' || c == '|' || c < 0x20) {
+            c = ' ';
+        }
+        if (c == ' ') {
+            if (lastWasSpace)
+                continue;
+            lastWasSpace = true;
+        } else {
+            lastWasSpace = false;
+        }
+        out.push_back(static_cast<char>(c));
+        if (out.size() >= 48)
+            break;
+    }
+    while (!out.empty() && (out.back() == ' ' || out.back() == '.'))
+        out.pop_back();
+    return out;
 }
 
 uint64_t directorySize(const std::string& path) {
@@ -116,38 +162,62 @@ bool saveDataAccountAvailable() {
 }
 
 bool backupSaveData(uint64_t applicationId, const std::string& titleId,
-                    std::string& outPath, std::string& error) {
+                    const std::string& gameName, std::string& outPath,
+                    std::string& error) {
+    // Per-line flushing for the duration of the backup only: this function has
+    // several early returns, so scope it to an RAII guard rather than trying to
+    // clear the flag on each one.
+    struct VerboseLogScope {
+        VerboseLogScope() { log_set_verbose(1); }
+        ~VerboseLogScope() { log_set_verbose(0); }
+    } verboseLogScope;
+    log_msg("[saves] backup begin title=%s app=%016llx\n", titleId.c_str(),
+            (unsigned long long)applicationId);
     AccountUid uid;
-    if (!activeUser(uid, error))
+    if (!activeUser(uid, error)) {
+        log_msg("[saves] backup: no active account: %s\n", error.c_str());
         return false;
+    }
 
     const std::string titleRoot =
         explorerJoinPath(saveBackupsRoot(), titleId);
-    const std::string destDir =
-        explorerJoinPath(titleRoot, timestampLabel());
+    const std::string sanitizedName = sanitizeForPathSegment(gameName);
+    const std::string backupLabel = sanitizedName.empty()
+        ? timestampLabel()
+        : timestampLabel() + " - " + sanitizedName;
+    const std::string destDir = explorerJoinPath(titleRoot, backupLabel);
+    log_msg("[saves] backup destDir=%s\n", destDir.c_str());
     if (!ensurePath(destDir)) {
-        error = "Could not create the backup folder.";
+        error = "No se pudo crear la carpeta de respaldo.";
+        log_msg("[saves] backup: ensurePath failed\n");
         return false;
     }
 
     const std::string mountName =
         "savebk" + std::to_string(gMountSerial.fetch_add(1));
+    log_msg("[saves] backup mounting %s (read-only)\n", mountName.c_str());
     const Result rc =
         fsdevMountSaveDataReadOnly(mountName.c_str(), applicationId, uid);
     if (R_FAILED(rc)) {
-        error = "Could not open the save data for this title.";
+        error = "No se pudieron abrir los datos de guardado de este título.";
+        log_msg("[saves] backup: mount failed rc=0x%08x\n", rc);
         return false;
     }
+    log_msg("[saves] backup mounted, copying tree\n");
 
     const bool ok =
         copyTreeContents(mountName + ":/", destDir, error);
+    log_msg("[saves] backup copyTreeContents ok=%d error=%s\n", ok ? 1 : 0,
+            error.c_str());
     fsdevUnmountDevice(mountName.c_str());
+    log_msg("[saves] backup unmounted %s\n", mountName.c_str());
     if (!ok) {
         std::string cleanupError;
         deleteEntry(destDir, cleanupError);
         return false;
     }
     outPath = destDir;
+    log_msg("[saves] backup complete outPath=%s\n", outPath.c_str());
     return true;
 }
 
@@ -184,14 +254,16 @@ bool deleteSaveBackup(const std::string& backupPath, std::string& error) {
 }
 
 bool restoreSaveData(uint64_t applicationId, const std::string& titleId,
+                     const std::string& gameName,
                      const std::string& backupPath, std::string& error) {
     // A restore that cannot even protect the save it is about to overwrite
     // does not proceed - the live save is never touched in that case.
     std::string safetyPath;
     std::string safetyError;
-    if (!backupSaveData(applicationId, titleId, safetyPath, safetyError)) {
-        error = "Could not make a safety copy before restoring, so nothing "
-                "was changed: " + safetyError;
+    if (!backupSaveData(applicationId, titleId, gameName, safetyPath,
+                        safetyError)) {
+        error = "No se pudo hacer una copia de seguridad antes de restaurar, así que no "
+                "se cambió nada: " + safetyError;
         return false;
     }
 
@@ -203,7 +275,7 @@ bool restoreSaveData(uint64_t applicationId, const std::string& titleId,
         "saverw" + std::to_string(gMountSerial.fetch_add(1));
     const Result rc = fsdevMountSaveData(mountName.c_str(), applicationId, uid);
     if (R_FAILED(rc)) {
-        error = "Could not open the save data for this title.";
+        error = "No se pudieron abrir los datos de guardado de este título.";
         return false;
     }
 
@@ -233,8 +305,8 @@ bool restoreSaveData(uint64_t applicationId, const std::string& titleId,
         const Result commit = fsdevCommitDevice(mountName.c_str());
         if (R_FAILED(commit)) {
             ok = false;
-            error = "The restore did not commit; the save data service "
-                    "rejected it.";
+            error = "La restauración no se confirmó; el servicio de datos de guardado "
+                    "la rechazó.";
         }
     }
     fsdevUnmountDevice(mountName.c_str());
@@ -247,7 +319,7 @@ bool saveDataAccountAvailable() { return false; }
 
 bool backupSaveData(uint64_t, const std::string&, std::string&,
                     std::string& error) {
-    error = "Save data access is only available on console.";
+    error = "El acceso a los datos de guardado solo está disponible en la consola.";
     return false;
 }
 
@@ -257,13 +329,13 @@ bool listSaveBackups(const std::string&, std::vector<SaveBackupInfo>&,
 }
 
 bool deleteSaveBackup(const std::string&, std::string& error) {
-    error = "Save data access is only available on console.";
+    error = "El acceso a los datos de guardado solo está disponible en la consola.";
     return false;
 }
 
 bool restoreSaveData(uint64_t, const std::string&, const std::string&,
                      std::string& error) {
-    error = "Save data access is only available on console.";
+    error = "El acceso a los datos de guardado solo está disponible en la consola.";
     return false;
 }
 

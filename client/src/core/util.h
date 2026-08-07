@@ -17,6 +17,11 @@ void log_close(void);
 void log_flush(void);
 int log_clear(void);
 
+/* Flush every log line instead of batching once a second. Costs write
+ * throughput, so it is scoped to operations being actively diagnosed: without
+ * it a crash loses the final second of lines — exactly the ones that matter. */
+void log_set_verbose(int enabled);
+
 /* The one open handle on the log. Everything that wants to write to or read
  * from the log must go through it: the Switch's filesystem refuses to open a
  * file that this process already holds open, so a second fopen() of the log

@@ -1,9 +1,11 @@
 // Publishes a GitHub Release on the catalog data repo with the built client
-// .nro attached. The client's self-updater looks for exactly this shape -
-// tag "v<CLIENT_VERSION>" and an asset named "freeshop-client.nro" (see
-// client/source/config.h's CLIENT_VERSION/CLIENT_RELEASE_ASSET_NAME and
-// update/self_update.h), so the tag must match the CLIENT_VERSION the .nro
-// was actually built with or consoles will keep re-offering the update.
+// .nro and its sha256 checksum attached. The client's self-updater
+// (client/src/app/update_service.cpp) looks for exactly this shape - tag
+// "v<version>" and assets named "freeshop-client.nro" and
+// "freeshop-client.nro.sha256" - so the tag must match the version the .nro
+// was actually built with (client/VERSION) or consoles will keep
+// re-offering the update, and the checksum must be present or
+// UpdateService::install() refuses to stage the download.
 //
 // Usage:
 //   node scripts/publish-client-release.js v1.4.4 "release notes"
@@ -13,16 +15,14 @@
 // printed, including in error output.
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 
 const REPO = "jhon1466/jhon1466-freeshop-data";
 const ASSET_NAME = "freeshop-client.nro";
 
 const root = path.resolve(__dirname, "..");
-// client/, built by the devkitPro Makefile - NOT client/build-cmake/. The
-// client briefly moved to a CMake/Borealis build; that was reverted, back
-// onto the Makefile this originally used.
-const nroPath = path.join(root, "client", ASSET_NAME);
-const versionHeader = path.join(root, "client", "source", "config.h");
+const nroPath = path.join(root, "client", "build-switch", ASSET_NAME);
+const versionFile = path.join(root, "client", "VERSION");
 
 function readToken() {
   const envPath = path.join(root, "server", ".env");
@@ -39,14 +39,15 @@ function readToken() {
   throw new Error(`GITHUB_TOKEN not found in ${path.relative(root, envPath)}`);
 }
 
-// The version the .nro was compiled with, so a tag that doesn't match it is
-// caught here rather than by consoles looping on an update that never
-// appears to apply.
+// The version the .nro was compiled with (client/scripts/build_switch.sh
+// defaults PIPENSX_VERSION to this file's contents), so a tag that doesn't
+// match it is caught here rather than by consoles looping on an update that
+// never appears to apply.
 function readClientVersion() {
-  const text = fs.readFileSync(versionHeader, "utf8");
-  const match = text.match(/^\s*#define\s+CLIENT_VERSION\s+"([^"]+)"/m);
-  if (!match) throw new Error(`CLIENT_VERSION not found in ${path.relative(root, versionHeader)}`);
-  return match[1];
+  const text = fs.readFileSync(versionFile, "utf8");
+  const version = text.trim();
+  if (!version) throw new Error(`${path.relative(root, versionFile)} is empty`);
+  return version;
 }
 
 async function githubJson(url, options) {
@@ -58,6 +59,21 @@ async function githubJson(url, options) {
     throw new Error(`${options.method} ${url} -> HTTP ${res.status}\n${body}`);
   }
   return JSON.parse(body);
+}
+
+async function uploadAsset(uploadUrlBase, headers, name, bytes) {
+  const uploadUrl = `${uploadUrlBase}?name=${encodeURIComponent(name)}`;
+  const uploaded = await githubJson(uploadUrl, {
+    method: "POST",
+    headers: {
+      ...headers,
+      "Content-Type": "application/octet-stream",
+      "Content-Length": String(bytes.length),
+    },
+    body: bytes,
+  });
+  console.log(`Asset uploaded: ${uploaded.name} (${uploaded.size} bytes)`);
+  return uploaded;
 }
 
 async function main() {
@@ -78,7 +94,7 @@ async function main() {
   const clientVersion = readClientVersion();
   if (tag.replace(/^v/, "") !== clientVersion) {
     throw new Error(
-      `tag ${tag} doesn't match CLIENT_VERSION ${clientVersion} in client/source/config.h - ` +
+      `tag ${tag} doesn't match the version in client/VERSION (${clientVersion}) - ` +
         `bump it and rebuild, or pass the matching tag`
     );
   }
@@ -87,6 +103,7 @@ async function main() {
     throw new Error(`${path.relative(root, nroPath)} not found - build the client first`);
   }
   const asset = fs.readFileSync(nroPath);
+  const checksum = crypto.createHash("sha256").update(asset).digest("hex");
 
   const headers = {
     Authorization: `Bearer ${readToken()}`,
@@ -108,18 +125,10 @@ async function main() {
   });
   console.log(`Release created: ${release.html_url}`);
 
-  const uploadUrl = `${release.upload_url.replace(/\{.*\}$/, "")}?name=${encodeURIComponent(ASSET_NAME)}`;
-  const uploaded = await githubJson(uploadUrl, {
-    method: "POST",
-    headers: {
-      ...headers,
-      "Content-Type": "application/octet-stream",
-      "Content-Length": String(asset.length),
-    },
-    body: asset,
-  });
-  console.log(`Asset uploaded: ${uploaded.name} (${uploaded.size} bytes)`);
-  console.log(`Download URL: ${uploaded.browser_download_url}`);
+  const uploadUrlBase = release.upload_url.replace(/\{.*\}$/, "");
+  const uploadedNro = await uploadAsset(uploadUrlBase, headers, ASSET_NAME, asset);
+  await uploadAsset(uploadUrlBase, headers, `${ASSET_NAME}.sha256`, Buffer.from(checksum, "utf8"));
+  console.log(`Download URL: ${uploadedNro.browser_download_url}`);
 }
 
 main().catch((err) => {

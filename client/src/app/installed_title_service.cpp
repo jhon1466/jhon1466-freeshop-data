@@ -125,7 +125,7 @@ bool InstalledTitleService::refresh(std::string& error) {
         Result rc = nsListApplicationRecord(page.data(), PageSize, offset,
                                             &returned);
         if (R_FAILED(rc)) {
-            error = resultText("Unable to list installed applications", rc);
+            error = resultText("No se pudieron listar las aplicaciones instaladas", rc);
             diagnostic_error("installed", "list", "result=0x%08x", rc);
             return false;
         }

@@ -151,7 +151,7 @@ BatchPreparation CatalogBatchInstaller::prepare(
                 break;
             }
             result.failures_.push_back(
-                {entry, error.empty() ? "Unable to resolve torrent metadata."
+                {entry, error.empty() ? "No se pudieron resolver los metadatos del torrent."
                                       : error});
             continue;
         }
@@ -165,7 +165,7 @@ BatchPreparation CatalogBatchInstaller::prepare(
             lowerAscii(entry.infoHash) != lowerAscii(preview.infoHash)) {
             ::unlink(path.c_str());
             result.failures_.push_back(
-                {entry, "Resolved torrent does not match the catalog entry."});
+                {entry, "El torrent resuelto no coincide con la entrada del catálogo."});
             continue;
         }
 
@@ -177,7 +177,7 @@ BatchPreparation CatalogBatchInstaller::prepare(
             if (selection == StreamSelection::PackagesOnly) {
                 ::unlink(path.c_str());
                 result.failures_.push_back(
-                    {entry, "No package files match the current Settings selection."});
+                    {entry, "Ningún archivo de paquete coincide con la selección actual de Ajustes."});
                 continue;
             }
             mode = TransferMode::DownloadOnly;
@@ -186,8 +186,8 @@ BatchPreparation CatalogBatchInstaller::prepare(
         if (space.selectedFiles == 0 || space.overflow) {
             ::unlink(path.c_str());
             result.failures_.push_back(
-                {entry, space.overflow ? "Selected size is too large."
-                                       : "No files were selected."});
+                {entry, space.overflow ? "El tamaño seleccionado es demasiado grande."
+                                       : "No se seleccionó ningún archivo."});
             continue;
         }
 
@@ -260,7 +260,7 @@ BatchPreparation CatalogBatchInstaller::prepareViaDebrid(
         std::string err;
         if (!provider.createFromMagnet(entries[i].magnetUri, id, err)) {
             result.failures_.push_back(
-                {entries[i], err.empty() ? "Debrid service rejected the magnet." : err});
+                {entries[i], err.empty() ? "El servicio debrid rechazó el magnet." : err});
             continue;
         }
         Pending p; p.entry = entries[i]; p.id = id;
@@ -291,7 +291,7 @@ BatchPreparation CatalogBatchInstaller::prepareViaDebrid(
         if (allReady) break;
         if (progress)
             progress({readyCount, pending.size(),
-                      "Fetching file lists from debrid service", {}});
+                      "Obteniendo listas de archivos del servicio debrid", {}});
         if (nowMs() - start >= timing.resolveWindowMs) break;
         if (!sleepAbortable(cancelled, timing.pollIntervalMs)) {
             result.cancelled_ = true; removeAll(); return result;
@@ -310,8 +310,8 @@ BatchPreparation CatalogBatchInstaller::prepareViaDebrid(
                 if (selection == StreamSelection::PackagesOnly) {
                     std::string ignored; provider.remove(p.id, ignored);
                     result.failures_.push_back(
-                        {p.entry, "No package files match the current "
-                                  "Settings selection."});
+                        {p.entry, "Ningún archivo de paquete coincide con la selección "
+                                  "actual de Ajustes."});
                     continue;
                 }
                 mode = TransferMode::DownloadOnly;
@@ -320,8 +320,8 @@ BatchPreparation CatalogBatchInstaller::prepareViaDebrid(
             if (space.selectedFiles == 0 || space.overflow) {
                 std::string ignored; provider.remove(p.id, ignored);
                 result.failures_.push_back(
-                    {p.entry, space.overflow ? "Selected size is too large."
-                                             : "No files were selected."});
+                    {p.entry, space.overflow ? "El tamaño seleccionado es demasiado grande."
+                                             : "No se seleccionó ningún archivo."});
                 continue;
             }
             PreparedCatalogInstall item;

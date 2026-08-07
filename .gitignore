@@ -21,23 +21,36 @@ hosting-public/
 
 # Client build output
 client/build/
+client/build_switch/
+client/build-switch/
+client/build-golden/
+client/build-cmake/
 client/*.elf
 client/*.nro
 client/*.nacp
 client/*.pfs0
 client/*.nso
 client/*.map
+client/pipensx
+client/compile_commands.json
+client/.cache/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Borealis UI framework - vendored, not committed (126MB with submodules).
-# Fetch with:
-#   git clone --depth 1 --branch moonlight_wiliwili --recurse-submodules \
-#     --shallow-submodules https://github.com/XITRIX/borealis.git client/vendor/borealis
-# Same fork/branch pipensx pins in its own .gitmodules.
-client/vendor/borealis/
+# client/ is a fork of pipensx (https://github.com/i3sey/pipensx, GPL-3.0 -
+# see client/THIRD_PARTY_NOTICES.md) with our own catalog source + branding
+# on top. Its vendor/ tree (Borealis + glm + zstd + libnx-ext + jech/dht +
+# libutp + qrcodegen, ~190MB with submodules) is not committed - fetch it
+# with:
+#   cd client && git init -q && git submodule add https://github.com/XITRIX/borealis.git vendor/borealis && ...
+# Simplest in practice: clone pipensx fresh with --recurse-submodules and
+# copy its vendor/ directory in - see client/BUILD.md.
+client/vendor/
 
-# CMake build output
-client/build-cmake/
+# Bundled catalog snapshot for offline first launch (see
+# client/CMakeLists.txt's PIPENSX_CATALOG_SNAPSHOT) - large (~35MB) and
+# regenerated from the live sources at any time, not meant to churn git
+# history on every catalog refresh.
+client/resources/catalog/

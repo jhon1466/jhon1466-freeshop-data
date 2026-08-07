@@ -35,13 +35,32 @@ public:
         setPadding(10, 18, 10, 18);
         setHeight(92);
 
+        // Cover box doubles as the placeholder tile until art arrives (or
+        // stays put if the title has none — many repacked NSPs ship a NACP
+        // with no embedded icon, so this isn't always transient).
+        cover_ = new brls::Box();
+        cover_->setWidth(64);
+        cover_->setHeight(64);
+        cover_->setCornerRadius(8);
+        cover_->setMarginRight(16);
+        cover_->setBackgroundColor(theme::surface());
+        cover_->setAlignItems(brls::AlignItems::CENTER);
+        cover_->setJustifyContent(brls::JustifyContent::CENTER);
+        cover_->setClipsToBounds(true);
+        placeholder_ = new brls::Label();
+        placeholder_->setFontSize(theme::kFontBody);
+        placeholder_->setTextColor(theme::textSecondary());
+        cover_->addView(placeholder_);
         image_ = new AsyncRgbaImage();
         image_->setWidth(64);
         image_->setHeight(64);
+        image_->setPositionType(brls::PositionType::ABSOLUTE);
+        image_->setPositionTop(0);
+        image_->setPositionLeft(0);
         image_->setCornerRadius(8);
-        image_->setMarginRight(16);
         image_->setScalingType(brls::ImageScalingType::FILL);
-        addView(image_);
+        cover_->addView(image_);
+        addView(cover_);
 
         auto* labels = new brls::Box(brls::Axis::COLUMN);
         labels->setGrow(1);
@@ -85,6 +104,7 @@ public:
         publisher_ = title.publisher;
         version_ = title.version;
         updateSubtitle();
+        placeholder_->setText(placeholderLetter(title.name));
         setArtworkUrl(image_, metadata, title.iconPath, currentIconPath_,
                       imageState_);
     }
@@ -151,6 +171,8 @@ private:
         subtitle_->setText(subtitle);
     }
 
+    brls::Box* cover_ = nullptr;
+    brls::Label* placeholder_ = nullptr;
     AsyncRgbaImage* image_ = nullptr;
     brls::Label* title_ = nullptr;
     brls::Label* subtitle_ = nullptr;

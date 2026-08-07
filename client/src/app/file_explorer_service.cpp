@@ -1,5 +1,9 @@
 #include "app/file_explorer_service.hpp"
 
+extern "C" {
+#include "../core/util.h"
+}
+
 #include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -10,6 +14,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
+#include <vector>
 
 namespace pipensx {
 
@@ -117,21 +122,25 @@ bool copyFileContents(const std::string& srcPath, const std::string& dstPath,
         error = std::strerror(errno);
         return false;
     }
-    std::array<char, 128 * 1024> buffer;
+    // Heap, not a stack std::array: this runs on a background worker thread
+    // (borealis's pool, or the app's own detached workers), whose default
+    // stack is far smaller than the main thread's - a 128KB local array
+    // here was blowing it mid-copy on real save-data files.
+    std::vector<char> buffer(128 * 1024);
     while (input) {
         input.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
         const std::streamsize count = input.gcount();
         if (count > 0)
             output.write(buffer.data(), count);
         if (!output) {
-            error = "write failed";
+            error = "falló la escritura";
             unlink(dstPath.c_str());
             return false;
         }
     }
     output.flush();
     if (input.bad() || !output) {
-        error = "copy failed";
+        error = "falló la copia";
         unlink(dstPath.c_str());
         return false;
     }
@@ -146,7 +155,7 @@ bool copyEntry(const std::string& srcPath, const std::string& dstDir,
         explorerJoinPath(dstDir, explorerBaseName(srcPath));
     struct stat existing {};
     if (stat(dstPath.c_str(), &existing) == 0) {
-        error = "already exists at the destination";
+        error = "ya existe en el destino";
         return false;
     }
     struct stat st {};
@@ -154,8 +163,13 @@ bool copyEntry(const std::string& srcPath, const std::string& dstDir,
         error = std::strerror(errno);
         return false;
     }
-    if (!S_ISDIR(st.st_mode))
-        return copyFileContents(srcPath, dstPath, error);
+    if (!S_ISDIR(st.st_mode)) {
+        log_msg("[copy] file %s (%lld bytes) -> %s\n", srcPath.c_str(),
+                (long long)st.st_size, dstPath.c_str());
+        const bool ok = copyFileContents(srcPath, dstPath, error);
+        log_msg("[copy] file %s done ok=%d\n", srcPath.c_str(), ok ? 1 : 0);
+        return ok;
+    }
 
     if (mkdir(dstPath.c_str(), 0755) != 0) {
         error = std::strerror(errno);
@@ -164,6 +178,7 @@ bool copyEntry(const std::string& srcPath, const std::string& dstDir,
     std::vector<ExplorerEntry> children;
     if (!listDirectory(srcPath, children, error))
         return false;
+    log_msg("[copy] dir %s: %zu entries\n", srcPath.c_str(), children.size());
     for (const ExplorerEntry& child : children)
         if (!copyEntry(child.path, dstPath, error))
             return false;
@@ -176,7 +191,7 @@ bool moveEntry(const std::string& srcPath, const std::string& dstDir,
         explorerJoinPath(dstDir, explorerBaseName(srcPath));
     struct stat existing {};
     if (stat(dstPath.c_str(), &existing) == 0) {
-        error = "already exists at the destination";
+        error = "ya existe en el destino";
         return false;
     }
     if (rename(srcPath.c_str(), dstPath.c_str()) == 0)
@@ -203,7 +218,7 @@ bool renameEntry(const std::string& path, const std::string& newName,
         explorerJoinPath(explorerParentPath(path), newName);
     struct stat existing {};
     if (stat(dstPath.c_str(), &existing) == 0) {
-        error = "already exists";
+        error = "ya existe";
         return false;
     }
     if (rename(path.c_str(), dstPath.c_str()) != 0) {
@@ -218,7 +233,7 @@ bool createDirectory(const std::string& parentPath, const std::string& name,
     const std::string path = explorerJoinPath(parentPath, name);
     struct stat existing {};
     if (stat(path.c_str(), &existing) == 0) {
-        error = "already exists";
+        error = "ya existe";
         return false;
     }
     if (mkdir(path.c_str(), 0755) != 0) {

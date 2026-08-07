@@ -277,7 +277,7 @@ public:
         arbiter_ = &arbiter;
         bool useSelection = !fileSelection.empty();
         if (useSelection && fileSelection.size() != metainfo_.num_files) {
-            error_ = "Selected file actions do not match the torrent.";
+            error_ = "Las acciones de archivos seleccionados no coinciden con el torrent.";
             return;
         }
         configs_.resize(metainfo_.num_files);
@@ -289,7 +289,7 @@ public:
                                   : FileAction::Download;
             if (useSelection) {
                 if (!isValidFileAction(fileSelection[i])) {
-                    error_ = "Selected file action is invalid.";
+                    error_ = "La acción del archivo seleccionado no es válida.";
                     return;
                 }
                 action = static_cast<FileAction>(fileSelection[i]);
@@ -304,7 +304,7 @@ public:
             }
             if (!streamInstall_ ||
                 !isPackageName(metainfo_.files[i].path)) {
-                error_ = "Only NSP/NSZ package files can be installed.";
+                error_ = "Solo se pueden instalar archivos de paquete NSP/NSZ.";
                 return;
             }
             packageOrdinals_[i] = ordinal;
@@ -349,7 +349,7 @@ public:
                     static_cast<unsigned long long>(
                         budget.kernelHeadroomBytes),
                     budget.kernelHeadroomDetected ? 1 : 0);
-                error_ = "Not enough free memory for stream installation.";
+                error_ = "No hay suficiente memoria libre para la instalación en flujo.";
                 return;
             }
             maxQueuedBytes_ = budget.maxQueuedBytes;
@@ -577,18 +577,18 @@ private:
         auto ordinalIt = packageOrdinals_.find(fileIndex);
         if (fileIndex >= metainfo_.num_files ||
             ordinalIt == packageOrdinals_.end()) {
-            return setError("Invalid package stream routing.");
+            return setError("Enrutamiento de flujo de paquete no válido.");
         }
         if (ordinalIt->second < initialCompletedPackages_)
             return true;
         const mi_file_t& file = metainfo_.files[fileIndex];
         if (fileOffset < 0 || !data || size == 0)
-            return setError("Invalid package stream chunk.");
+            return setError("Fragmento de flujo de paquete no válido.");
 
         uint32_t ordinal = ordinalIt->second;
         uint64_t offset = static_cast<uint64_t>(fileOffset);
         if (offset >= static_cast<uint64_t>(file.length))
-            return setError("Invalid package stream offset.");
+            return setError("Desplazamiento de flujo de paquete no válido.");
 
         // The multi-MiB copy happens before taking queueMutex_: sink() runs
         // inside the torrent thread's piece callback, and the install worker
@@ -608,7 +608,7 @@ private:
 
         PendingKey key {ordinal, offset};
         if (pending_.find(key) != pending_.end())
-            return setErrorLocked("Duplicate package stream chunk.");
+            return setErrorLocked("Fragmento de flujo de paquete duplicado.");
         // Never wait for buffer space here (PERF_PLAN 5.3): this runs inside
         // the torrent thread's piece callback, so blocking would stall the
         // whole event loop. Chunks already in flight are always accepted —
@@ -875,7 +875,7 @@ private:
         const mi_file_t& file = metainfo_.files[chunk.fileIndex];
         if (!stream_) {
             if (chunk.fileOffset != 0)
-                return setError("Package stream did not start at offset zero.");
+                return setError("El flujo de paquete no comenzó en el desplazamiento cero.");
             if (!backend_->beginPackage(taskId_, file.path)) {
                 return setError(backend_->error());
             }
@@ -891,7 +891,7 @@ private:
         }
         if (activeFileIndex_ != chunk.fileIndex ||
             chunk.fileOffset != stream_->consumed())
-            return setError("Install worker received bytes out of order.");
+            return setError("El proceso de instalación recibió bytes fuera de orden.");
         {
             std::lock_guard<std::mutex> lock(queueMutex_);
             const uint32_t ordinal = packageOrdinals_.at(chunk.fileIndex);
@@ -963,7 +963,7 @@ private:
 
     bool setErrorLocked(const std::string& message) {
         if (error_.empty()) {
-            error_ = message.empty() ? "Installation pipeline failed." : message;
+            error_ = message.empty() ? "Falló el proceso de instalación." : message;
             log_msg("[install] pipeline error: %s\n", error_.c_str());
         }
         accepting_ = false;
@@ -1141,7 +1141,7 @@ private:
                 producerOffset_ = 0;
                 ++producerOrdinal_;
             } else if (producerOffset_ >= static_cast<uint64_t>(file.length)) {
-                setErrorLocked("Package stream missed final chunk.");
+                setErrorLocked("El flujo de paquete no recibió el fragmento final.");
                 break;
             }
         }
@@ -1471,7 +1471,7 @@ bool DownloadManager::previewTorrent(const std::string& path,
                                      std::string& error) {
     metainfo_t metainfo;
     if (!metainfo_load(path.c_str(), &metainfo)) {
-        error = "The selected file is not a valid or safe .torrent file.";
+        error = "El archivo seleccionado no es un archivo .torrent válido o seguro.";
         return false;
     }
     char hash[41];
@@ -1510,7 +1510,7 @@ bool DownloadManager::importTorrent(const std::string& path,
     if (!previewTorrent(path, preview, error))
         return false;
     if (!selectedFiles.empty() && selectedFiles.size() != preview.files.size()) {
-        error = "Selected file list does not match torrent contents.";
+        error = "La lista de archivos seleccionados no coincide con el contenido del torrent.";
         return false;
     }
     return importTorrentActions(path,
@@ -1529,11 +1529,11 @@ bool DownloadManager::importTorrentActions(
     if (!previewTorrent(path, preview, error))
         return false;
     if (!fileActions.empty() && fileActions.size() != preview.files.size()) {
-        error = "Selected file actions do not match torrent contents.";
+        error = "Las acciones de archivos seleccionados no coinciden con el contenido del torrent.";
         return false;
     }
     if (initialPeers.size() % 6 != 0) {
-        error = "Initial peer endpoint list is malformed.";
+        error = "La lista inicial de direcciones de pares está mal formada.";
         return false;
     }
 
@@ -1546,21 +1546,21 @@ bool DownloadManager::importTorrentActions(
             ? selection[i]
             : actionValue(FileAction::Download);
         if (!isValidFileAction(action)) {
-            error = "Selected file action is invalid.";
+            error = "La acción del archivo seleccionado no es válida.";
             return false;
         }
         if (action != actionValue(FileAction::Skip))
             hasSelectedFiles = true;
         if (action == actionValue(FileAction::Install)) {
             if (!preview.files[i].package) {
-                error = "Only NSP/NSZ package files can be installed.";
+                error = "Solo se pueden instalar archivos de paquete NSP/NSZ.";
                 return false;
             }
             ++installPackageCount;
         }
     }
     if (!hasSelectedFiles) {
-        error = "Select at least one file.";
+        error = "Selecciona al menos un archivo.";
         return false;
     }
     TransferMode mode = installPackageCount > 0
@@ -1569,7 +1569,7 @@ bool DownloadManager::importTorrentActions(
 
     std::lock_guard<std::mutex> lock(mutex_);
     if (findLocked(preview.infoHash)) {
-        error = "This torrent is already in the download manager.";
+        error = "Este torrent ya está en el administrador de descargas.";
         return false;
     }
 
@@ -1577,12 +1577,12 @@ bool DownloadManager::importTorrentActions(
     std::string dataPath = downloadRoot_ + "/" + safeComponent(preview.name) +
                            "-" + preview.infoHash.substr(0, 8);
     if (!copyFile(path, metainfoPath)) {
-        error = "Unable to copy the torrent file into application storage.";
+        error = "No se pudo copiar el archivo torrent al almacenamiento de la aplicación.";
         return false;
     }
     if (!makeDirectories(dataPath)) {
         unlink(metainfoPath.c_str());
-        error = "Unable to create the download directory.";
+        error = "No se pudo crear el directorio de descargas.";
         return false;
     }
 
@@ -1626,26 +1626,26 @@ bool DownloadManager::importTorrentActions(
 bool DownloadManager::importDebrid(const DebridImport& import,
                                     std::string& taskId, std::string& error) {
     if (import.infoHash.size() != 40) {
-        error = "Invalid torrent hash for the debrid task.";
+        error = "Hash de torrent no válido para la tarea de debrid.";
         return false;
     }
     if (!import.fileSelection.empty()) {
         bool hasSelectedFile = false;
         for (uint8_t action : import.fileSelection) {
             if (!isValidFileAction(action)) {
-                error = "Selected file action is invalid.";
+                error = "La acción del archivo seleccionado no es válida.";
                 return false;
             }
             hasSelectedFile |= action != actionValue(FileAction::Skip);
         }
         if (!hasSelectedFile) {
-            error = "Select at least one file.";
+            error = "Selecciona al menos un archivo.";
             return false;
         }
     }
     std::lock_guard<std::mutex> lock(mutex_);
     if (findLocked(import.infoHash)) {
-        error = "This torrent is already in the download manager.";
+        error = "Este torrent ya está en el administrador de descargas.";
         return false;
     }
 
@@ -1653,7 +1653,7 @@ bool DownloadManager::importDebrid(const DebridImport& import,
     if (!import.torrentPath.empty()) {
         metainfoPath = torrentRoot_ + "/" + import.infoHash + ".torrent";
         if (!copyFile(import.torrentPath, metainfoPath)) {
-            error = "Unable to copy the torrent file into application storage.";
+            error = "No se pudo copiar el archivo torrent al almacenamiento de la aplicación.";
             return false;
         }
     }
@@ -1662,7 +1662,7 @@ bool DownloadManager::importDebrid(const DebridImport& import,
     if (!makeDirectories(dataPath)) {
         if (!metainfoPath.empty())
             unlink(metainfoPath.c_str());
-        error = "Unable to create the download directory.";
+        error = "No se pudo crear el directorio de descargas.";
         return false;
     }
 
@@ -1813,11 +1813,11 @@ bool DownloadManager::moveToFront(const std::string& taskId,
         return task.id == taskId;
     });
     if (target == tasks_.end()) {
-        error = "Download task not found.";
+        error = "No se encontró la tarea de descarga.";
         return false;
     }
     if (target->status != DownloadStatus::Queued) {
-        error = "Only a queued download can be moved.";
+        error = "Solo se puede mover una descarga en cola.";
         return false;
     }
     auto firstQueued = std::find_if(tasks_.begin(), tasks_.end(),
@@ -1837,7 +1837,7 @@ bool DownloadManager::remove(const std::string& taskId, bool deleteData,
     std::lock_guard<std::mutex> lock(mutex_);
     DownloadTask* task = findLocked(taskId);
     if (!task) {
-        error = "Download task not found.";
+        error = "No se encontró la tarea de descarga.";
         return false;
     }
 
@@ -1942,13 +1942,13 @@ bool DownloadManager::saveLocked(std::string& error) const {
     {
         std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
         if (!output) {
-            error = "Unable to open queue state for writing.";
+            error = "No se pudo abrir el estado de la cola para escribir.";
             return false;
         }
         output << state.str();
         output.flush();
         if (!output.good()) {
-            error = "Unable to write queue state.";
+            error = "No se pudo escribir el estado de la cola.";
             return false;
         }
     }
@@ -1960,7 +1960,7 @@ bool DownloadManager::saveLocked(std::string& error) const {
         if (unlink(statePath_.c_str()) != 0 && errno != ENOENT) {
             int unlinkErrno = errno;
             unlink(temporary.c_str());
-            error = std::string("Unable to remove old queue state: ") +
+            error = std::string("No se pudo eliminar el estado anterior de la cola: ") +
                     std::strerror(unlinkErrno);
             return false;
         }
@@ -1968,7 +1968,7 @@ bool DownloadManager::saveLocked(std::string& error) const {
             return true;
         int replaceErrno = errno;
         unlink(temporary.c_str());
-        error = std::string("Unable to replace queue state: ") +
+        error = std::string("No se pudo reemplazar el estado de la cola: ") +
                 std::strerror(replaceErrno);
         return false;
     }
@@ -2072,11 +2072,11 @@ void DownloadManager::load() {
             (metainfoRequired &&
              !isManagedChild(torrentRoot_, task.metainfoPath))) {
             task.status = DownloadStatus::Error;
-            task.error = "The stored task contains an invalid path.";
+            task.error = "La tarea almacenada contiene una ruta no válida.";
         } else if (metainfoRequired &&
                    access(task.metainfoPath.c_str(), R_OK) != 0) {
             task.status = DownloadStatus::Error;
-            task.error = "The stored .torrent file is missing.";
+            task.error = "Falta el archivo .torrent almacenado.";
         }
         if (version.ival == 3 && task.status != DownloadStatus::Error)
             upgradeLegacySelection(task);
@@ -2106,7 +2106,7 @@ bool DownloadManager::removeLocked(const std::string& id, bool deleteData,
         if ((!it->metainfoPath.empty() &&
              !isManagedChild(torrentRoot_, it->metainfoPath)) ||
             !isManagedChild(downloadRoot_, it->dataPath)) {
-            error = "Refusing to remove a path outside application storage.";
+            error = "Se rechaza eliminar una ruta fuera del almacenamiento de la aplicación.";
             it->status = DownloadStatus::Error;
             it->error = error;
             std::string ignored;
@@ -2114,7 +2114,7 @@ bool DownloadManager::removeLocked(const std::string& id, bool deleteData,
             return false;
         }
         if (deleteData && !removeTree(it->dataPath)) {
-            error = "Unable to remove all downloaded data.";
+            error = "No se pudieron eliminar todos los datos descargados.";
             it->status = DownloadStatus::Error;
             it->error = error;
             std::string ignored;
@@ -2127,7 +2127,7 @@ bool DownloadManager::removeLocked(const std::string& id, bool deleteData,
         tasks_.erase(it);
         return saveLocked(error);
     }
-    error = "Download task not found.";
+    error = "No se encontró la tarea de descarga.";
     return false;
 }
 
@@ -2235,7 +2235,7 @@ void DownloadManager::schedulerMain() {
                     std::lock_guard<std::mutex> guard(mutex_);
                     if (DownloadTask* task = findLocked(id)) {
                         task->status = DownloadStatus::Error;
-                        task->error = std::string("Internal error: ") + e.what();
+                        task->error = std::string("Error interno: ") + e.what();
                         task->speedBytesPerSecond = 0;
                         std::string ignored;
                         saveLocked(ignored);
@@ -2246,7 +2246,7 @@ void DownloadManager::schedulerMain() {
                     std::lock_guard<std::mutex> guard(mutex_);
                     if (DownloadTask* task = findLocked(id)) {
                         task->status = DownloadStatus::Error;
-                        task->error = "Internal error during the transfer.";
+                        task->error = "Error interno durante la transferencia.";
                         task->speedBytesPerSecond = 0;
                         std::string ignored;
                         saveLocked(ignored);
@@ -2436,7 +2436,7 @@ void DownloadManager::runTask(RunnerSlot* slot, ClaimedTask claim) {
         if (DownloadTask* task = findLocked(claim.id)) {
             task->status = DownloadStatus::Error;
             task->error =
-                "Torrenting disabled — enable it in Settings to retry.";
+                "Los torrents están desactivados — actívalos en Ajustes para reintentar.";
             task->speedBytesPerSecond = 0;
             std::string ignored;
             saveLocked(ignored);
@@ -2469,7 +2469,7 @@ void DownloadManager::runTask(RunnerSlot* slot, ClaimedTask claim) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (DownloadTask* task = findLocked(activeId)) {
             task->status = DownloadStatus::Error;
-            task->error = "Unable to read the stored .torrent file.";
+            task->error = "No se pudo leer el archivo .torrent almacenado.";
             std::string ignored;
             saveLocked(ignored);
         }
@@ -2554,7 +2554,7 @@ void DownloadManager::runTask(RunnerSlot* slot, ClaimedTask claim) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (DownloadTask* task = findLocked(activeId)) {
             task->status = DownloadStatus::Error;
-            task->error = "Unable to initialize torrent storage or network.";
+            task->error = "No se pudo inicializar el almacenamiento o la red del torrent.";
             std::string ignored;
             saveLocked(ignored);
         }
@@ -2598,7 +2598,7 @@ void DownloadManager::runTask(RunnerSlot* slot, ClaimedTask claim) {
             if (!torrentingEnabled_.load()) {
                 task->status = DownloadStatus::Error;
                 task->error =
-                    "Torrenting disabled — enable it in Settings to retry.";
+                    "Los torrents están desactivados — actívalos en Ajustes para reintentar.";
                 task->speedBytesPerSecond = 0;
                 std::string ignored;
                 saveLocked(ignored);
@@ -2700,7 +2700,8 @@ void DownloadManager::runTask(RunnerSlot* slot, ClaimedTask claim) {
                            task->packagesInstalled != task->packageCount) {
                     task->status = DownloadStatus::Error;
                     task->error =
-                        "Torrent ended before all packages were installed.";
+                        "El torrent terminó antes de instalar todos los "
+                        "paquetes.";
                 } else {
                     task->status = mode == TransferMode::StreamInstall
                         ? DownloadStatus::Installed

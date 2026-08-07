@@ -7,6 +7,7 @@
 #include <stdatomic.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #ifdef __SWITCH__
 #  include <switch.h>
@@ -35,6 +36,7 @@ time_t now_sec(void) {
 
 static FILE *g_logfile = NULL;
 static uint64_t g_log_flush_ms = 0;
+static atomic_int g_log_verbose = 0;
 static atomic_int g_telemetry_enabled = 0;
 static atomic_uint g_telemetry_generation = 1;
 
@@ -124,6 +126,10 @@ int log_clear(void) {
     return ok;
 }
 
+void log_set_verbose(int enabled) {
+    atomic_store(&g_log_verbose, enabled ? 1 : 0);
+}
+
 void log_msg(const char *fmt, ...) {
     va_list ap, ap2;
     va_start(ap, fmt);
@@ -140,9 +146,17 @@ void log_msg(const char *fmt, ...) {
         struct timespec ts;
         clock_gettime(CLOCK_ID, &ts);
         uint64_t ms = (uint64_t)ts.tv_sec * 1000u + ts.tv_nsec / 1000000u;
-        fprintf(g_logfile, "[%7llu] ", (unsigned long long)ms % 10000000ULL);
+        /* Thread id in every line: a crash report names the thread that was
+           running when the process died, which is not necessarily the thread
+           that caused it — without this the log cannot tell them apart. */
+        fprintf(g_logfile, "[%7llu][t%04x] ",
+                (unsigned long long)ms % 10000000ULL,
+                (unsigned)((uintptr_t)pthread_self() & 0xffffu));
         vfprintf(g_logfile, fmt, ap2);
-        if (ms - g_log_flush_ms >= 1000) {
+        /* Flush every line while a save-data operation is in flight: the
+           1s batching loses exactly the lines that matter when the process
+           dies mid-operation. */
+        if (ms - g_log_flush_ms >= 1000 || atomic_load(&g_log_verbose)) {
             fflush(g_logfile);
             g_log_flush_ms = ms;
         }

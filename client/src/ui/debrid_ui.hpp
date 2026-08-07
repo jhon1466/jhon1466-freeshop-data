@@ -93,7 +93,7 @@ public:
                     return makeDebridProvider(provider, key)->validate(error);
                 },
                 provider == DebridProviderKind::TorrServer
-                    ? "Paste the address of your TorrServer, for example "
+                    ? "Pega la dirección de tu TorrServer, por ejemplo "
                       "http://192.168.1.10:8090."
                     : kTorboxPairingHint);
             std::string error;
@@ -245,9 +245,13 @@ private:
         summary_->setCheck(tr("pipensx/debrid/validating"), theme::accent());
         auto alive = alive_;
         const DebridProviderKind provider = provider_;
-        std::thread([this, alive, provider, key] {
+        brls::async([this, alive, provider, key] {
             std::string error;
-            const bool ok = makeDebridProvider(provider, key)->validate(error);
+            const bool ok = runGuarded(
+                [&](std::string& err) {
+                    return makeDebridProvider(provider, key)->validate(err);
+                },
+                error);
             brls::sync([this, alive, ok, key] {
                 if (!alive->load())
                     return;
@@ -259,7 +263,7 @@ private:
                                        theme::error());
                 }
             });
-        }).detach();
+        });
     }
 
     bool saveKey(const std::string& typed) {

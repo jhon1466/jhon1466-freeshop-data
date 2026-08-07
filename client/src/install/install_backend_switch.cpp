@@ -218,7 +218,7 @@ bool readPackagedMeta(const std::string& ncaPath, ParsedMeta& out,
     if (R_FAILED(rc)) {
         char text[96];
         std::snprintf(text, sizeof(text),
-                      "Unable to open CNMT NCA (0x%08x).", rc);
+                      "No se pudo abrir el NCA CNMT (0x%08x).", rc);
         error = text;
         return false;
     }
@@ -228,7 +228,7 @@ bool readPackagedMeta(const std::string& ncaPath, ParsedMeta& out,
                            FsDirOpenMode_ReadFiles, &dir);
     if (R_FAILED(rc)) {
         fsFsClose(&filesystem);
-        error = "Unable to list CNMT filesystem.";
+        error = "No se pudo listar el sistema de archivos CNMT.";
         return false;
     }
     FsDirectoryEntry entry {};
@@ -247,7 +247,7 @@ bool readPackagedMeta(const std::string& ncaPath, ParsedMeta& out,
     if (cnmtName.empty() || cnmtSize < sizeof(out.header) ||
         cnmtSize > 16 * 1024 * 1024) {
         fsFsClose(&filesystem);
-        error = "CNMT file is missing or invalid.";
+        error = "El archivo CNMT falta o no es válido.";
         return false;
     }
 
@@ -255,7 +255,7 @@ bool readPackagedMeta(const std::string& ncaPath, ParsedMeta& out,
     rc = fsFsOpenFile(&filesystem, cnmtName.c_str(), FsOpenMode_Read, &file);
     if (R_FAILED(rc)) {
         fsFsClose(&filesystem);
-        error = "Unable to open CNMT file.";
+        error = "No se pudo abrir el archivo CNMT.";
         return false;
     }
     std::vector<uint8_t> data(cnmtSize);
@@ -265,7 +265,7 @@ bool readPackagedMeta(const std::string& ncaPath, ParsedMeta& out,
     fsFileClose(&file);
     fsFsClose(&filesystem);
     if (R_FAILED(rc) || read != data.size()) {
-        error = "Unable to read CNMT file.";
+        error = "No se pudo leer el archivo CNMT.";
         return false;
     }
 
@@ -275,7 +275,7 @@ bool readPackagedMeta(const std::string& ncaPath, ParsedMeta& out,
     if (type != NcmContentMetaType_Application &&
         type != NcmContentMetaType_Patch &&
         type != NcmContentMetaType_AddOnContent) {
-        error = "Only games, updates and DLC are supported.";
+        error = "Solo se admiten juegos, actualizaciones y DLC.";
         return false;
     }
     uint64_t required = sizeof(out.header) +
@@ -285,7 +285,7 @@ bool readPackagedMeta(const std::string& ncaPath, ParsedMeta& out,
         static_cast<uint64_t>(out.header.content_meta_count) *
             sizeof(NcmContentMetaInfo);
     if (required > data.size()) {
-        error = "CNMT content table is truncated.";
+        error = "La tabla de contenido CNMT está truncada.";
         return false;
     }
     const uint8_t* cursor = data.data() + sizeof(out.header);
@@ -342,14 +342,14 @@ public:
         tempDirectory_ = std::string(TempRoot) + "/" + taskId;
         removeTree(tempDirectory_);
         if (!makeDirectories(tempDirectory_)) {
-            error_ = "Unable to create installation workspace.";
+            error_ = "No se pudo crear el espacio de trabajo de instalación.";
             return false;
         }
         Result rc = ncmOpenContentStorage(&storage_, storageId_);
         if (R_SUCCEEDED(rc))
             rc = ncmOpenContentMetaDatabase(&database_, storageId_);
         if (R_FAILED(rc)) {
-            errorResult("Unable to open content storage", rc);
+            errorResult("No se pudo abrir el almacenamiento de contenido", rc);
             closeServices();
             return false;
         }
@@ -363,7 +363,7 @@ public:
 
     bool beginFile(const std::string& name, uint64_t size) override {
         if (!active_ || current_) {
-            error_ = "Invalid installer file state.";
+            error_ = "Estado de archivo del instalador no válido.";
             return false;
         }
         currentName_ = name;
@@ -405,7 +405,7 @@ public:
 
     bool setFileSize(uint64_t size) override {
         if (!current_ || current_->size != 0 || size == 0) {
-            error_ = "Invalid NCA size.";
+            error_ = "Tamaño de NCA no válido.";
             return false;
         }
         uint64_t setupStartedUs = telemetry_enabled() ? now_us() : 0;
@@ -417,7 +417,7 @@ public:
         bool exists = false;
         Result rc = ncmContentStorageHas(&storage_, &exists, &current_->id);
         if (R_FAILED(rc)) {
-            errorResult("Unable to query installed content", rc);
+            errorResult("No se pudo consultar el contenido instalado", rc);
             return false;
         }
         current_->existing = exists;
@@ -425,7 +425,7 @@ public:
             s64 freeSpace = 0;
             rc = ncmContentStorageGetFreeSpaceSize(&storage_, &freeSpace);
             if (R_FAILED(rc)) {
-                errorResult("Unable to query free content space", rc);
+                errorResult("No se pudo consultar el espacio libre de contenido", rc);
                 return false;
             }
             if (freeSpace < 0 || static_cast<uint64_t>(freeSpace) < size) {
@@ -435,9 +435,9 @@ public:
                 fmt_bytes(available, sizeof(available),
                           freeSpace > 0 ? static_cast<uint64_t>(freeSpace) : 0);
                 const char* where = storageId_ == NcmStorageId_BuiltInUser
-                                        ? "system memory" : "SD card";
-                error_ = std::string("Not enough ") + where + " space for " +
-                         current_->name + ": need " + required + ", free " +
+                                        ? "la memoria del sistema" : "la tarjeta SD";
+                error_ = std::string("No hay suficiente espacio en ") + where + " para " +
+                         current_->name + ": se necesitan " + required + ", disponibles " +
                          available + ".";
                 log_msg("[install] insufficient space name='%s' need=%llu free=%lld\n",
                         current_->name.c_str(),
@@ -451,7 +451,7 @@ public:
                 rc = ncmContentStorageCreatePlaceHolder(
                     &storage_, &current_->id, &current_->placeholder, size);
             if (R_FAILED(rc)) {
-                errorResult("Unable to create content placeholder", rc);
+                errorResult("No se pudo crear el marcador de posición de contenido", rc);
                 return false;
             }
         }
@@ -473,7 +473,7 @@ public:
             return false;
         if (!auxiliaryKind_.empty()) {
             if (auxiliary_.size() + size > auxiliaryExpected_) {
-                error_ = "Auxiliary package file exceeds declared size.";
+                error_ = "El archivo auxiliar del paquete excede el tamaño declarado.";
                 return false;
             }
             auxiliary_.insert(auxiliary_.end(), data, data + size);
@@ -487,7 +487,7 @@ public:
             return true;
         }
         if (!current_ || current_->written + size > current_->size) {
-            error_ = "NCA data exceeds declared size.";
+            error_ = "Los datos NCA exceden el tamaño declarado.";
             return false;
         }
         prepareFileTelemetry();
@@ -501,7 +501,7 @@ public:
             if (ncmStartedUs)
                 ncmUs = now_us() - ncmStartedUs;
             if (R_FAILED(rc)) {
-                errorResult("Unable to write content placeholder", rc);
+                errorResult("No se pudo escribir el marcador de posición de contenido", rc);
                 return false;
             }
         }
@@ -543,7 +543,7 @@ public:
             return false;
         if (!auxiliaryKind_.empty()) {
             if (auxiliary_.size() != auxiliaryExpected_) {
-                error_ = "Auxiliary package file is truncated.";
+                error_ = "El archivo auxiliar del paquete está truncado.";
                 return false;
             }
             if (auxiliaryKind_ == ".tik")
@@ -557,7 +557,7 @@ public:
             return true;
         }
         if (ignoredRemaining_) {
-            error_ = "Ignored package file is truncated.";
+            error_ = "El archivo de paquete ignorado está truncado.";
             return false;
         }
         if (!current_) {
@@ -565,13 +565,13 @@ public:
             return true;
         }
         if (current_->written != current_->size) {
-            error_ = "NCA file is truncated.";
+            error_ = "El archivo NCA está truncado.";
             return false;
         }
         std::array<uint8_t, 32> digest {};
         uint64_t finishStartedUs = telemetry_enabled() ? now_us() : 0;
         if (!hashActive_) {
-            error_ = "Unable to finalize NCA hash.";
+            error_ = "No se pudo finalizar el hash del NCA.";
             return false;
         }
         sha256ContextGetHash(&sha_, digest.data());
@@ -626,7 +626,7 @@ public:
             if (content.meta)
                 metaContent = &content;
         if (!active_ || current_ || !metaContent) {
-            error_ = "Package does not contain a complete CNMT NCA.";
+            error_ = "El paquete no contiene un NCA CNMT completo.";
             return false;
         }
 
@@ -638,7 +638,7 @@ public:
             Result rc = ncmContentStorageRegister(
                 &storage_, &metaContent->id, &metaContent->placeholder);
             if (R_FAILED(rc)) {
-                errorResult("Unable to register CNMT NCA", rc);
+                errorResult("No se pudo registrar el NCA CNMT", rc);
                 return false;
             }
             metaContent->registered = true;
@@ -652,7 +652,7 @@ public:
                                                      sizeof(metaNcaPath),
                                                      &metaContent->id);
             if (R_FAILED(pathRc)) {
-                errorResult("Unable to resolve CNMT NCA path", pathRc);
+                errorResult("No se pudo resolver la ruta del NCA CNMT", pathRc);
                 return false;
             }
             if (!readPackagedMeta(metaNcaPath, meta, error_))
@@ -672,7 +672,7 @@ public:
         bool exists = false;
         Result rc = ncmContentMetaDatabaseHas(&database_, &exists, &key);
         if (R_FAILED(rc)) {
-            errorResult("Unable to query installed title metadata", rc);
+            errorResult("No se pudo consultar los metadatos del título instalado", rc);
             return false;
         }
         if (exists) {
@@ -699,7 +699,7 @@ public:
                 });
             if (installed == contents_.end() ||
                 installed->size != packagedSize) {
-                error_ = "CNMT references missing or mismatched NCA content.";
+                error_ = "El CNMT hace referencia a contenido NCA faltante o inconsistente.";
                 return false;
             }
         }
@@ -723,7 +723,7 @@ public:
             rc = ncmContentStorageRegister(&storage_, &content.id,
                                            &content.placeholder);
             if (R_FAILED(rc)) {
-                errorResult("Unable to register installed content", rc);
+                errorResult("No se pudo registrar el contenido instalado", rc);
                 return false;
             }
             content.registered = true;
@@ -787,7 +787,7 @@ public:
         if (R_SUCCEEDED(rc))
             rc = ncmContentMetaDatabaseCommit(&database_);
         if (R_FAILED(rc)) {
-            errorResult("Unable to commit title metadata", rc);
+            errorResult("No se pudieron confirmar los metadatos del título", rc);
             return false;
         }
         metaCommitted_ = true;
@@ -816,20 +816,20 @@ public:
             appId, NsExtApplicationEvent_Present,
             records.data(), records.size());
         if (R_FAILED(rc)) {
-            errorResult("Unable to update application record", rc);
+            errorResult("No se pudo actualizar el registro de la aplicación", rc);
             return false;
         }
         applicationRecordTouched_ = true;
 
         if (!ticket_.empty()) {
             if (certificate_.empty()) {
-                error_ = "Ticket certificate is missing.";
+                error_ = "Falta el certificado del ticket.";
                 return false;
             }
             rc = esImportTicket(ticket_.data(), ticket_.size(),
                                 certificate_.data(), certificate_.size());
             if (R_FAILED(rc)) {
-                errorResult("Unable to import title ticket", rc);
+                errorResult("No se pudo importar el ticket del título", rc);
                 return false;
             }
         }
@@ -1025,15 +1025,15 @@ public:
                 skipped.push_back(id);
         }
         if (!parsed || !in.done()) {
-            error_ = "Install journal backend state is malformed.";
+            error_ = "El estado del backend del diario de instalación está mal formado.";
             return false;
         }
         if (storageId != static_cast<uint64_t>(storageId_)) {
-            error_ = "Install journal targets a different storage.";
+            error_ = "El diario de instalación apunta a otro almacenamiento.";
             return false;
         }
         if (blobPackage != packageName) {
-            error_ = "Install journal does not match this package.";
+            error_ = "El diario de instalación no coincide con este paquete.";
             return false;
         }
 
@@ -1041,7 +1041,7 @@ public:
         if (R_SUCCEEDED(rc))
             rc = ncmOpenContentMetaDatabase(&database_, storageId_);
         if (R_FAILED(rc)) {
-            errorResult("Unable to open content storage", rc);
+            errorResult("No se pudo abrir el almacenamiento de contenido", rc);
             closeServices();
             return false;
         }
@@ -1073,7 +1073,7 @@ public:
                                                        &content.placeholder);
             }
             closeServices();
-            error_ = "Checkpointed install no longer matches this console.";
+            error_ = "La instalación con punto de control ya no coincide con esta consola.";
             return false;
         }
 
@@ -1083,7 +1083,7 @@ public:
         if (!makeDirectories(tempDirectory_)) {
             closeServices();
             resetState();
-            error_ = "Unable to create installation workspace.";
+            error_ = "No se pudo crear el espacio de trabajo de instalación.";
             return false;
         }
         contents_ = std::move(contents);

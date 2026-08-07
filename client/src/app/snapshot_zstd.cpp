@@ -16,7 +16,7 @@ bool decompressImpl(void* dst, size_t dstSize, const void* src, size_t srcSize,
                     std::string& error) {
     size_t written = ZSTD_decompress(dst, dstSize, src, srcSize);
     if (ZSTD_isError(written) || written != dstSize) {
-        error = "Snapshot zstd decompression failed.";
+        error = "Falló la descompresión zstd del snapshot.";
         return false;
     }
     return true;
@@ -27,11 +27,11 @@ bool frameContentSize(const void* src, size_t srcSize, size_t maxBytes,
     unsigned long long declared = ZSTD_getFrameContentSize(src, srcSize);
     if (declared == ZSTD_CONTENTSIZE_ERROR ||
         declared == ZSTD_CONTENTSIZE_UNKNOWN || declared == 0) {
-        error = "Snapshot has no valid zstd frame header.";
+        error = "El snapshot no tiene un encabezado de trama zstd válido.";
         return false;
     }
     if (declared > maxBytes) {
-        error = "Snapshot decompresses larger than allowed.";
+        error = "El snapshot se descomprime a un tamaño mayor del permitido.";
         return false;
     }
     content = static_cast<size_t>(declared);

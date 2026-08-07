@@ -179,7 +179,7 @@ bool writeTorrentAtomic(const std::string& path,
     {
         std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
         if (!output) {
-            error = "Unable to create the resolved torrent file.";
+            error = "No se pudo crear el archivo torrent resuelto.";
             return false;
         }
         output.write(reinterpret_cast<const char*>(torrent.data()),
@@ -187,13 +187,13 @@ bool writeTorrentAtomic(const std::string& path,
         output.flush();
         if (!output.good()) {
             unlink(temporary.c_str());
-            error = "Unable to write the resolved torrent file.";
+            error = "No se pudo escribir el archivo torrent resuelto.";
             return false;
         }
     }
     if (rename(temporary.c_str(), path.c_str()) != 0) {
         unlink(temporary.c_str());
-        error = "Unable to replace the resolved torrent file.";
+        error = "No se pudo reemplazar el archivo torrent resuelto.";
         return false;
     }
     return true;
@@ -749,7 +749,7 @@ bool MagnetResolver::parse(const std::string& uri, MagnetSpec& spec,
                            std::string& error) {
     spec = {};
     if (uri.rfind("magnet:?", 0) != 0) {
-        error = "Catalog entry has an invalid magnet URI.";
+        error = "La entrada del catálogo tiene un URI magnet no válido.";
         return false;
     }
     bool haveHash = false;
@@ -764,14 +764,14 @@ bool MagnetResolver::parse(const std::string& uri, MagnetSpec& spec,
         if (key == "xt" && value.rfind("urn:btih:", 0) == 0) {
             std::string hash = value.substr(9);
             if (hash.size() != 40 || haveHash) {
-                error = "Only one hexadecimal BitTorrent v1 hash is supported.";
+                error = "Solo se admite un hash hexadecimal de BitTorrent v1.";
                 return false;
             }
             for (size_t i = 0; i < 20; ++i) {
                 uint8_t hi = 0, lo = 0;
                 if (!hexNibble(hash[i * 2], hi) ||
                     !hexNibble(hash[i * 2 + 1], lo)) {
-                    error = "The magnet info hash is not hexadecimal.";
+                    error = "El hash del magnet no es hexadecimal.";
                     return false;
                 }
                 spec.infoHash[i] = static_cast<uint8_t>((hi << 4) | lo);
@@ -791,11 +791,11 @@ bool MagnetResolver::parse(const std::string& uri, MagnetSpec& spec,
         start = end + 1;
     }
     if (!haveHash) {
-        error = "The magnet does not contain a BitTorrent v1 info hash.";
+        error = "El magnet no contiene un hash de BitTorrent v1.";
         return false;
     }
     if (spec.trackerUrl.empty()) {
-        error = "The magnet does not contain a supported RuTracker tracker.";
+        error = "El magnet no contiene un tracker de RuTracker compatible.";
         return false;
     }
     return true;
@@ -806,7 +806,7 @@ bool MagnetResolver::buildTorrent(const MagnetSpec& spec,
                                   std::vector<uint8_t>& torrent,
                                   std::string& error) {
     if (info.empty() || info.size() > kMetadataLimit) {
-        error = "Peer metadata is empty or too large.";
+        error = "Los metadatos del par están vacíos o son demasiado grandes.";
         return false;
     }
     const char* cursor = reinterpret_cast<const char*>(info.data());
@@ -814,13 +814,13 @@ bool MagnetResolver::buildTorrent(const MagnetSpec& spec,
     be_node_t root;
     if (!be_decode(&cursor, end, &root) || root.type != BE_DICT ||
         cursor != end) {
-        error = "Peer metadata is not a valid info dictionary.";
+        error = "Los metadatos del par no son un diccionario de información válido.";
         return false;
     }
     uint8_t digest[20];
     sha1(info.data(), info.size(), digest);
     if (std::memcmp(digest, spec.infoHash, 20) != 0) {
-        error = "Peer metadata does not match the magnet info hash.";
+        error = "Los metadatos del par no coinciden con el hash del magnet.";
         return false;
     }
 
@@ -844,13 +844,13 @@ bool MagnetResolver::buildTorrent(const MagnetSpec& spec,
 
     metainfo_t parsed;
     if (!metainfo_parse(torrent.data(), torrent.size(), &parsed)) {
-        error = "Resolved metadata is not a supported safe torrent.";
+        error = "Los metadatos resueltos no son un torrent seguro compatible.";
         return false;
     }
     bool hashMatches = std::memcmp(parsed.info_hash, spec.infoHash, 20) == 0;
     metainfo_free(&parsed);
     if (!hashMatches) {
-        error = "Generated torrent failed info-hash validation.";
+        error = "El torrent generado falló la validación del hash.";
         return false;
     }
     return true;
@@ -980,12 +980,12 @@ bool MagnetResolver::resolveToFile(const std::string& uri,
     uint32_t peerCount = static_cast<uint32_t>(peers.size() / 6);
     if (!peerCount) {
         if (sawNotRegistered) {
-            error = "RuTracker says this torrent is not registered anymore. "
-                    "The catalog entry is stale.";
+            error = "RuTracker indica que este torrent ya no está registrado. "
+                    "La entrada del catálogo está desactualizada.";
         } else if (sawTrackerFailure && !firstFailure.empty()) {
-            error = "RuTracker rejected this torrent: " + firstFailure;
+            error = "RuTracker rechazó este torrent: " + firstFailure;
         } else {
-            error = "RuTracker trackers and the DHT returned no usable peers.";
+            error = "Los trackers de RuTracker y la DHT no devolvieron pares utilizables.";
         }
         return false;
     }
@@ -1141,7 +1141,7 @@ bool MagnetResolver::resolveToFile(const std::string& uri,
     if (cancelled) {
         std::lock_guard<std::mutex> lock(mutex);
         if (!resolved) {
-            error = "Metadata resolution was cancelled.";
+            error = "Se canceló la resolución de metadatos.";
             return false;
         }
     }
@@ -1151,13 +1151,13 @@ bool MagnetResolver::resolveToFile(const std::string& uri,
            apart is the difference between "try again later" (useless here)
            and "try another network" (the thing that actually works). */
         if (!reachedPeers.load())
-            error = "Found " + std::to_string(peerCount) +
-                    " peers but could not connect to any of them. This "
-                    "network appears to block BitTorrent — try another "
-                    "Wi-Fi or a phone hotspot.";
+            error = "Se encontraron " + std::to_string(peerCount) +
+                    " pares pero no se pudo conectar con ninguno. Esta "
+                    "red parece bloquear BitTorrent — prueba otro "
+                    "Wi-Fi o un punto de acceso móvil.";
         else
-            error = "Peers were found, but none returned torrent metadata. "
-                    "Try this catalog item again later.";
+            error = "Se encontraron pares, pero ninguno devolvió metadatos del torrent. "
+                    "Vuelve a intentarlo más tarde con este elemento del catálogo.";
         return false;
     }
     if (progress)

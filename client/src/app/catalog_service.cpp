@@ -115,20 +115,20 @@ bool readFile(const std::string& path, std::string& data,
               std::string& error) {
     std::ifstream input(path, std::ios::binary);
     if (!input) {
-        error = "Unable to open catalog file.";
+        error = "No se pudo abrir el archivo del catálogo.";
         return false;
     }
     input.seekg(0, std::ios::end);
     std::streamoff size = input.tellg();
     input.seekg(0, std::ios::beg);
     if (size <= 0 || size > static_cast<std::streamoff>(kMaxCatalogBytes)) {
-        error = "Catalog file is empty or too large.";
+        error = "El archivo del catálogo está vacío o es demasiado grande.";
         return false;
     }
     data.resize(static_cast<size_t>(size));
     input.read(data.data(), size);
     if (!input) {
-        error = "Unable to read catalog file.";
+        error = "No se pudo leer el archivo del catálogo.";
         return false;
     }
     if (isZstdPath(path))
@@ -140,7 +140,7 @@ bool httpGet(const std::string& url, std::string& body, std::string& error) {
     body.clear();
     CURL* curl = curl_easy_init();
     if (!curl) {
-        error = "Unable to initialize HTTP.";
+        error = "No se pudo inicializar HTTP.";
         return false;
     }
     HttpBuffer buffer;
@@ -170,12 +170,12 @@ bool httpGet(const std::string& url, std::string& body, std::string& error) {
     if (result != CURLE_OK || status < 200 || status >= 300 ||
         buffer.overflow) {
         if (buffer.overflow)
-            error = "Catalog download exceeded the size limit.";
+            error = "La descarga del catálogo superó el límite de tamaño.";
         else if (result != CURLE_OK)
-            error = std::string("Catalog network error: ") +
+            error = std::string("Error de red del catálogo: ") +
                     curl_easy_strerror(result);
         else
-            error = "Catalog server returned HTTP " + std::to_string(status) +
+            error = "El servidor del catálogo devolvió HTTP " + std::to_string(status) +
                     ".";
         return false;
     }
@@ -189,14 +189,14 @@ bool writeAtomic(const std::string& path, const std::string& data,
     {
         std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
         if (!output) {
-            error = "Unable to create catalog cache.";
+            error = "No se pudo crear la caché del catálogo.";
             return false;
         }
         output.write(data.data(), static_cast<std::streamsize>(data.size()));
         output.flush();
         if (!output.good()) {
             unlink(temporary.c_str());
-            error = "Unable to write catalog cache.";
+            error = "No se pudo escribir la caché del catálogo.";
             return false;
         }
     }
@@ -208,7 +208,7 @@ bool writeAtomic(const std::string& path, const std::string& data,
         rename(temporary.c_str(), path.c_str()) == 0)
         return true;
     unlink(temporary.c_str());
-    error = "Unable to replace catalog cache.";
+    error = "No se pudo reemplazar la caché del catálogo.";
     return false;
 }
 
@@ -357,11 +357,11 @@ bool CatalogService::parseJson(const std::string& json,
     entries.clear();
     nlohmann::json root = nlohmann::json::parse(json, nullptr, false);
     if (root.is_discarded() || !root.is_array()) {
-        error = "Catalog JSON is not a valid array.";
+        error = "El JSON del catálogo no es un arreglo válido.";
         return false;
     }
     if (root.empty() || root.size() > kMaxCatalogEntries) {
-        error = "Catalog contains an invalid number of entries.";
+        error = "El catálogo contiene una cantidad de entradas no válida.";
         return false;
     }
 
@@ -458,7 +458,7 @@ bool CatalogService::parseJson(const std::string& json,
         entries.push_back(std::move(entry));
     }
     if (entries.empty()) {
-        error = "Catalog does not contain usable RuTracker magnets.";
+        error = "El catálogo no contiene enlaces magnet de RuTracker utilizables.";
         return false;
     }
     std::stable_sort(entries.begin(), entries.end(),
@@ -527,7 +527,7 @@ bool CatalogService::fetchLatest(std::vector<CatalogEntry>& parsed,
     // the caller keeps showing it on error.
     parsed.clear();
     if (!isTrustedSource(kCatalogSourceUrl)) {
-        error = "Catalog URL is not on the trusted host list.";
+        error = "La URL del catálogo no está en la lista de hosts confiables.";
         return false;
     }
     std::string catalogBody;

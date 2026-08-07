@@ -34,7 +34,7 @@ bool curlTransport(const TsHttpRequest& request, TsHttpResponse& response,
             logPath(request.url).c_str());
     CURL* curl = curl_easy_init();
     if (!curl) {
-        error = "Unable to initialize HTTP.";
+        error = "No se pudo inicializar HTTP.";
         return false;
     }
     curl_slist* headers = nullptr;
@@ -69,7 +69,7 @@ bool curlTransport(const TsHttpRequest& request, TsHttpResponse& response,
     if (headers)
         curl_slist_free_all(headers);
     if (result != CURLE_OK)
-        error = std::string("TorrServer request failed: ") +
+        error = std::string("Falló la solicitud a TorrServer: ") +
                 curl_easy_strerror(result);
     curl_easy_cleanup(curl);
     return result == CURLE_OK;
@@ -77,11 +77,11 @@ bool curlTransport(const TsHttpRequest& request, TsHttpResponse& response,
 
 bool statusOk(const TsHttpResponse& response, std::string& error) {
     if (response.status == 401 || response.status == 403) {
-        error = "TorrServer rejected the credentials in the address.";
+        error = "TorrServer rechazó las credenciales incluidas en la dirección.";
         return false;
     }
     if (response.status < 200 || response.status >= 300) {
-        error = "TorrServer answered HTTP " +
+        error = "TorrServer respondió HTTP " +
                 std::to_string(response.status) + ".";
         return false;
     }
@@ -118,7 +118,7 @@ bool TorrserverProvider::torrents(const std::string& body,
     std::string transportError;
     if (!transport_(request, response, transportError)) {
         error = transportError.empty()
-            ? "Unable to reach TorrServer at " + base_ + "." : transportError;
+            ? "No se pudo contactar a TorrServer en " + base_ + "." : transportError;
         return false;
     }
     return statusOk(response, error);
@@ -126,7 +126,7 @@ bool TorrserverProvider::torrents(const std::string& body,
 
 bool TorrserverProvider::validate(std::string& error) {
     if (base_.empty()) {
-        error = "No TorrServer address set.";
+        error = "No hay ninguna dirección de TorrServer configurada.";
         return false;
     }
     TsHttpRequest request;
@@ -136,7 +136,7 @@ bool TorrserverProvider::validate(std::string& error) {
     std::string transportError;
     if (!transport_(request, response, transportError)) {
         error = transportError.empty()
-            ? "Unable to reach TorrServer at " + base_ + "." : transportError;
+            ? "No se pudo contactar a TorrServer en " + base_ + "." : transportError;
         return false;
     }
     if (!statusOk(response, error))
@@ -144,7 +144,7 @@ bool TorrserverProvider::validate(std::string& error) {
     // /echo answers with the build name ("MatriX.141"). An empty body means
     // something else is listening on that port.
     if (response.body.find_first_not_of(" \t\r\n") == std::string::npos) {
-        error = "That address answered, but it is not a TorrServer.";
+        error = "Esa dirección respondió, pero no es un TorrServer.";
         return false;
     }
     return true;
@@ -175,7 +175,7 @@ bool TorrserverProvider::createFromFile(const std::string& torrentPath,
     std::string transportError;
     if (!transport_(request, response, transportError)) {
         error = transportError.empty()
-            ? "Unable to reach TorrServer at " + base_ + "." : transportError;
+            ? "No se pudo contactar a TorrServer en " + base_ + "." : transportError;
         return false;
     }
     if (!statusOk(response, error))
@@ -207,7 +207,7 @@ bool TorrserverProvider::resolveDownloadUrl(const std::string& id,
                                             std::string& url,
                                             std::string& error) {
     if (id.empty() || file.id.empty()) {
-        error = "TorrServer file index missing.";
+        error = "Falta el índice de archivos de TorrServer.";
         return false;
     }
     url = base_ + "/play/" + id + "/" + file.id;
@@ -227,7 +227,7 @@ bool TorrserverProvider::parseStatus(const std::string& json, DebridInfo& info,
     Json root = Json::parse(json, nullptr, false);
     if (root.is_discarded() || !root.is_object() || !root.contains("hash") ||
         !root["hash"].is_string()) {
-        error = "TorrServer returned an unexpected response.";
+        error = "TorrServer devolvió una respuesta inesperada.";
         return false;
     }
     hash = root["hash"].get<std::string>();

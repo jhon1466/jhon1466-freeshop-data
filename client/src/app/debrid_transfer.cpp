@@ -282,7 +282,7 @@ RangeFetcher curlRangeFetcher() {
               std::string& error) -> bool {
         const bool plain = url.compare(0, 7, "http://") == 0;
         if (!plain && url.compare(0, 8, "https://") != 0) {
-            error = "Unsupported download URL scheme.";
+            error = "Esquema de URL de descarga no compatible.";
             return false;
         }
         // Whether plaintext is acceptable at all is the provider's call and
@@ -294,7 +294,7 @@ RangeFetcher curlRangeFetcher() {
                 plain ? "HTTP" : "HTTPS");
         CURL* curl = curl_easy_init();
         if (!curl) {
-            error = "Unable to initialize network transfer.";
+            error = "No se pudo inicializar la transferencia de red.";
             return false;
         }
         CurlSink state{&sink, &cancelled, false};
@@ -324,8 +324,8 @@ RangeFetcher curlRangeFetcher() {
             if (cancelled())
                 return false;
             error = state.sinkRefused
-                ? "The installer rejected the downloaded data."
-                : "The download stream was interrupted.";
+                ? "El instalador rechazó los datos descargados."
+                : "El flujo de descarga se interrumpió.";
             return false;
         }
         if (rc != CURLE_OK) {
@@ -334,12 +334,12 @@ RangeFetcher curlRangeFetcher() {
             // its own sends people to check their account; naming the host
             // and the fact that nothing arrived points at the network.
             if (state.received == 0 && httpStatus == 0)
-                error = "Could not reach " + host +
-                        " — the debrid service is up but its download server "
-                        "is not reachable from this console (" +
+                error = "No se pudo contactar a " + host +
+                        " — el servicio debrid está activo, pero su servidor de descarga "
+                        "no es accesible desde esta consola (" +
                         curl_easy_strerror(rc) + ").";
             else
-                error = std::string(curl_easy_strerror(rc)) + " from " + host +
+                error = std::string(curl_easy_strerror(rc)) + " desde " + host +
                         " (HTTP " + std::to_string(httpStatus) + ", " +
                         std::to_string(state.received) + " bytes)";
             return false;
@@ -446,7 +446,7 @@ Step pollUntilReady(RunContext& ctx) {
         std::string err;
         if (!ctx.provider.fetchInfo(ctx.debridId, info, err)) {
             if (++failures >= 3) {
-                ctx.error = err.empty() ? "Unable to reach debrid service."
+                ctx.error = err.empty() ? "No se pudo contactar al servicio debrid."
                                         : err;
                 return Step::Failed;
             }
@@ -466,7 +466,7 @@ Step pollUntilReady(RunContext& ctx) {
         ctx.emit(p);
 
         if (info.phase == DebridInfo::Phase::Failed) {
-            ctx.error = "Debrid transfer failed on the server ("
+            ctx.error = "La transferencia debrid falló en el servidor ("
                         + info.rawState + ").";
             return Step::Failed;
         }
@@ -515,7 +515,7 @@ Step fetchAppend(RunContext& ctx, const std::string& url,
                  uint64_t baseCompleted) {
     std::ofstream out(localPath, std::ios::binary | std::ios::app);
     if (!out) {
-        ctx.error = "Unable to open the download file for writing.";
+        ctx.error = "No se pudo abrir el archivo de descarga para escritura.";
         return Step::Failed;
     }
     Clock::time_point windowStart = Clock::now();
@@ -553,7 +553,7 @@ Step fetchAppend(RunContext& ctx, const std::string& url,
     if (!ok) {
         if (ctx.stop())
             return Step::Stopped;
-        ctx.error = err.empty() ? "Download failed." : err;
+        ctx.error = err.empty() ? "Falló la descarga." : err;
         return Step::Failed;
     }
     return Step::Ok;
@@ -564,13 +564,13 @@ Step downloadPlainFile(RunContext& ctx, size_t kthSelected,
     bool ok = true;
     std::string rel = sanitizeRelative(file.path, ctx.torrentName, ok);
     if (!ok) {
-        ctx.error = "Refusing to write outside the download folder.";
+        ctx.error = "Se rechaza escribir fuera de la carpeta de descargas.";
         return Step::Failed;
     }
     std::string localPath = ctx.spec.dataPath + "/" + rel;
     std::string parent = parentDir(localPath);
     if (!parent.empty() && !makeDirectories(parent)) {
-        ctx.error = "Unable to create the download directory.";
+        ctx.error = "No se pudo crear el directorio de descargas.";
         return Step::Failed;
     }
 
@@ -590,7 +590,7 @@ Step downloadPlainFile(RunContext& ctx, size_t kthSelected,
                                          file, url, ctx.error))
         return Step::Failed;
     if (!linkAllowed(ctx.provider, url)) {
-        ctx.error = "Debrid service returned a plaintext download link.";
+        ctx.error = "El servicio debrid devolvió un enlace de descarga sin cifrar.";
         return Step::Failed;
     }
 
@@ -609,7 +609,7 @@ Step downloadPlainFile(RunContext& ctx, size_t kthSelected,
                                                 ctx.error)) {
                 if (!linkAllowed(ctx.provider, fresh)) {
                     ctx.error =
-                        "Debrid service returned a plaintext download link.";
+                        "El servicio debrid devolvió un enlace de descarga sin cifrar.";
                     return Step::Failed;
                 }
                 url = fresh;
@@ -622,7 +622,7 @@ Step downloadPlainFile(RunContext& ctx, size_t kthSelected,
     uint64_t finalSize = 0;
     statSize(localPath, finalSize);
     if (finalSize != file.bytes) {
-        ctx.error = "Downloaded file size mismatch.";
+        ctx.error = "El tamaño del archivo descargado no coincide.";
         return Step::Failed;
     }
     return Step::Ok;
@@ -730,7 +730,7 @@ Step attemptStreamInstall(RunContext& ctx, const DebridFile& file,
             return Step::Stopped;
         if (ctx.error.empty())
             ctx.error = !stream.error().empty() ? stream.error()
-                        : (fetchError.empty() ? "Package download failed."
+                        : (fetchError.empty() ? "Falló la descarga del paquete."
                                               : fetchError);
         return Step::Failed;
     }
@@ -747,7 +747,7 @@ Step attemptStreamInstall(RunContext& ctx, const DebridFile& file,
     ctx.emit(committing);
 
     if (!stream.finish()) {
-        ctx.error = stream.error().empty() ? "Package finalize failed."
+        ctx.error = stream.error().empty() ? "Falló la finalización del paquete."
                                            : stream.error();
         backend->rollbackPackage();
         return Step::Failed;
@@ -780,7 +780,7 @@ Step streamInstallPackage(RunContext& ctx, size_t kthSelected,
                                              ctx.error))
             return Step::Failed;
         if (!linkAllowed(ctx.provider, url)) {
-            ctx.error = "Debrid service returned a plaintext download link.";
+            ctx.error = "El servicio debrid devolvió un enlace de descarga sin cifrar.";
             return Step::Failed;
         }
         Step s = attemptStreamInstall(ctx, file, url, file.path);
@@ -844,7 +844,7 @@ DebridRunResult DebridTransfer::run(
     }
 
     if (hadNonEmptySelection && selectedCount == 0) {
-        error = "No debrid files matched the selected files.";
+        error = "Ningún archivo debrid coincidió con los archivos seleccionados.";
         return DebridRunResult::Failed;
     }
 

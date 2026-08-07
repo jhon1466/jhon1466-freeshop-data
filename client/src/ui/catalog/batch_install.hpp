@@ -276,12 +276,16 @@ public:
                 if (!item.debridId.empty())
                     ids.push_back(item.debridId);
             auto provider = debridProvider_;
-            std::thread([provider, ids] {
+            brls::async([provider, ids] {
                 for (const std::string& id : ids) {
                     std::string ignored;
-                    provider->remove(id, ignored);
+                    runGuarded(
+                        [&](std::string& err) {
+                            return provider->remove(id, err);
+                        },
+                        ignored);
                 }
-            }).detach();
+            });
         }
     }
 

@@ -27,9 +27,11 @@ bool saveDataAccountAvailable();
 // Read-only mounts applicationId's save data and copies it into a fresh
 // timestamped folder under saveBackupsRoot()/titleId/. Never touches the
 // live save data - fsdevMountSaveDataReadOnly makes that a guarantee, not
-// just an intention.
+// just an intention. gameName is folded (sanitized) into the backup folder's
+// name so it reads as more than a bare timestamp; pass "" to skip that.
 bool backupSaveData(uint64_t applicationId, const std::string& titleId,
-                    std::string& outPath, std::string& error);
+                    const std::string& gameName, std::string& outPath,
+                    std::string& error);
 
 // Newest first.
 bool listSaveBackups(const std::string& titleId,
@@ -42,6 +44,7 @@ bool deleteSaveBackup(const std::string& backupPath, std::string& error);
 // without touching anything live if that fails, so a restore can never
 // leave the console with neither the old nor the new save.
 bool restoreSaveData(uint64_t applicationId, const std::string& titleId,
+                     const std::string& gameName,
                      const std::string& backupPath, std::string& error);
 
 }  // namespace pipensx

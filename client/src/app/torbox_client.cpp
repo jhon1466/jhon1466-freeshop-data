@@ -31,7 +31,7 @@ bool curlTransport(const TorboxHttpRequest& request,
     log_msg("[torbox] %s %s\n", request.method.c_str(), endpoint.c_str());
     CURL* curl = curl_easy_init();
     if (!curl) {
-        error = "Unable to initialize HTTP.";
+        error = "No se pudo inicializar HTTP.";
         return false;
     }
     curl_slist* headers = nullptr;
@@ -73,7 +73,7 @@ bool curlTransport(const TorboxHttpRequest& request,
         curl_mime_free(mime);
     curl_slist_free_all(headers);
     if (result != CURLE_OK)
-        error = std::string("TorBox request failed: ") +
+        error = std::string("Falló la solicitud a TorBox: ") +
                 curl_easy_strerror(result);
     curl_easy_cleanup(curl);
     return result == CURLE_OK;
@@ -82,7 +82,7 @@ bool curlTransport(const TorboxHttpRequest& request,
 bool rootObject(const std::string& text, Json& root, std::string& error) {
     root = Json::parse(text, nullptr, false);
     if (root.is_discarded() || !root.is_object()) {
-        error = "TorBox returned an invalid response.";
+        error = "TorBox devolvió una respuesta no válida.";
         return false;
     }
     return true;
@@ -96,14 +96,14 @@ bool checkSuccess(const Json& root, std::string& error) {
     if (root.contains("error") && root["error"].is_string())
         code = root["error"].get<std::string>();
     if (code == "BAD_TOKEN" || code == "AUTH_ERROR") {
-        error = "TorBox key rejected - relink in Settings.";
+        error = "La clave de TorBox fue rechazada; vuelve a vincularla en Ajustes.";
         return false;
     }
     if (root.contains("detail") && root["detail"].is_string() &&
         !root["detail"].get<std::string>().empty())
         error = root["detail"].get<std::string>();
     else
-        error = "TorBox request failed.";
+        error = "Falló la solicitud a TorBox.";
     return false;
 }
 
@@ -111,7 +111,7 @@ bool readInfoObject(const Json& item, TorboxTorrentInfo& info,
                     std::string& error) {
     if (!item.is_object() || !item.contains("id") ||
         !item["id"].is_number()) {
-        error = "TorBox returned an invalid torrent entry.";
+        error = "TorBox devolvió una entrada de torrent no válida.";
         return false;
     }
     info = TorboxTorrentInfo{};
@@ -164,8 +164,8 @@ bool readInfoObject(const Json& item, TorboxTorrentInfo& info,
 }
 
 bool finishParse(bool ok, long status, std::string& error) {
-    if (!ok && error == "TorBox request failed." && status != 0) {
-        error = "TorBox request failed (HTTP " + std::to_string(status) + ").";
+    if (!ok && error == "Falló la solicitud a TorBox." && status != 0) {
+        error = "Falló la solicitud a TorBox (HTTP " + std::to_string(status) + ").";
     }
     return ok;
 }
@@ -191,7 +191,7 @@ bool TorboxClient::parseCreate(const std::string& json, uint64_t& torboxId,
     if (!root.contains("data") || !root["data"].is_object() ||
         !root["data"].contains("torrent_id") ||
         !root["data"]["torrent_id"].is_number()) {
-        error = "TorBox did not return a torrent id.";
+        error = "TorBox no devolvió un id de torrent.";
         return false;
     }
     torboxId = root["data"]["torrent_id"].get<uint64_t>();
@@ -204,7 +204,7 @@ bool TorboxClient::parseInfo(const std::string& json, uint64_t torboxId,
     if (!rootObject(json, root, error) || !checkSuccess(root, error))
         return false;
     if (!root.contains("data")) {
-        error = "TorBox returned no torrent data.";
+        error = "TorBox no devolvió datos del torrent.";
         return false;
     }
     const Json& data = root["data"];
@@ -221,7 +221,7 @@ bool TorboxClient::parseInfo(const std::string& json, uint64_t torboxId,
             }
         }
     }
-    error = "TorBox torrent not found.";
+    error = "No se encontró el torrent en TorBox.";
     return false;
 }
 
@@ -231,7 +231,7 @@ bool TorboxClient::parseDownloadLink(const std::string& json,
     if (!rootObject(json, root, error) || !checkSuccess(root, error))
         return false;
     if (!root.contains("data") || !root["data"].is_string()) {
-        error = "TorBox did not return a download link.";
+        error = "TorBox no devolvió un enlace de descarga.";
         return false;
     }
     url = root["data"].get<std::string>();
@@ -247,7 +247,7 @@ bool TorboxClient::validateKey(std::string& error) {
     if (!transport_(request, response, error))
         return false;
     if (response.status == 401 || response.status == 403) {
-        error = "TorBox key rejected - relink in Settings.";
+        error = "La clave de TorBox fue rechazada; vuelve a vincularla en Ajustes.";
         return false;
     }
     return finishParse(parseSuccess(response.body, error),
@@ -265,7 +265,7 @@ bool TorboxClient::createFromMagnet(const std::string& magnet,
     if (!transport_(request, response, error))
         return false;
     if (response.status == 401 || response.status == 403) {
-        error = "TorBox key rejected - relink in Settings.";
+        error = "La clave de TorBox fue rechazada; vuelve a vincularla en Ajustes.";
         return false;
     }
     return finishParse(parseCreate(response.body, torboxId, error),
@@ -283,7 +283,7 @@ bool TorboxClient::createFromFile(const std::string& torrentPath,
     if (!transport_(request, response, error))
         return false;
     if (response.status == 401 || response.status == 403) {
-        error = "TorBox key rejected - relink in Settings.";
+        error = "La clave de TorBox fue rechazada; vuelve a vincularla en Ajustes.";
         return false;
     }
     return finishParse(parseCreate(response.body, torboxId, error),
@@ -301,7 +301,7 @@ bool TorboxClient::fetchInfo(uint64_t torboxId, TorboxTorrentInfo& info,
     if (!transport_(request, response, error))
         return false;
     if (response.status == 401 || response.status == 403) {
-        error = "TorBox key rejected - relink in Settings.";
+        error = "La clave de TorBox fue rechazada; vuelve a vincularla en Ajustes.";
         return false;
     }
     return finishParse(parseInfo(response.body, torboxId, info, error),
@@ -323,7 +323,7 @@ bool TorboxClient::requestDownloadLink(uint64_t torboxId, uint64_t fileId,
     if (!transport_(request, response, error))
         return false;
     if (response.status == 401 || response.status == 403) {
-        error = "TorBox key rejected - relink in Settings.";
+        error = "La clave de TorBox fue rechazada; vuelve a vincularla en Ajustes.";
         return false;
     }
     return finishParse(parseDownloadLink(response.body, url, error),
@@ -341,7 +341,7 @@ bool TorboxClient::remove(uint64_t torboxId, std::string& error) {
     if (!transport_(request, response, error))
         return false;
     if (response.status == 401 || response.status == 403) {
-        error = "TorBox key rejected - relink in Settings.";
+        error = "La clave de TorBox fue rechazada; vuelve a vincularla en Ajustes.";
         return false;
     }
     return finishParse(parseSuccess(response.body, error),

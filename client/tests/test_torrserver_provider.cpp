@@ -59,7 +59,7 @@ void testValidate() {
     // Something answered on that port, but it is not a TorrServer.
     assert(!provider.validate(error) && !error.empty());
     assert(!provider.validate(error) &&
-           error.find("credentials") != std::string::npos);
+           error.find("credenciales") != std::string::npos);
     // An address nobody typed cannot be reached, and says so without a call.
     Recorder empty;
     TorrserverProvider unset("", scripted(&empty));

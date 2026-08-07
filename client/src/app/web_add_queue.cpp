@@ -82,14 +82,14 @@ std::string WebAddQueue::enqueue(std::string title, std::string magnetUri,
                                  std::string& error) {
     std::string hash = lowerAscii(std::move(infoHashHex));
     if (!hash.empty() && manager_.hasTask(hash)) {
-        error = "This torrent is already in the download manager.";
+        error = "Este torrent ya está en el administrador de descargas.";
         return "";
     }
     std::lock_guard<std::mutex> lock(mutex_);
     if (!hash.empty()) {
         for (const Job& job : jobs_) {
             if (!isTerminal(job.data.state) && job.data.infoHashHex == hash) {
-                error = "This torrent is already being added.";
+                error = "Este torrent ya se está agregando.";
                 return "";
             }
         }
@@ -212,8 +212,8 @@ void WebAddQueue::runJob(const std::string& jobId) {
     // put the console on the torrent network while the user has torrenting
     // switched off. The companion has no debrid path of its own yet.
     if (!manager_.torrentingEnabled()) {
-        fail("Torrenting is disabled. Enable it in Settings, or add this "
-             "release from the console in debrid mode.",
+        fail("El torrenting está desactivado. Actívalo en Ajustes, o agrega este "
+             "lanzamiento desde la consola en modo debrid.",
              WebAddJobState::Error);
         return;
     }
@@ -224,7 +224,7 @@ void WebAddQueue::runJob(const std::string& jobId) {
         ::unlink(path.c_str());
         fail(cancelled->load()
                  ? ""
-                 : (error.empty() ? "Unable to resolve torrent metadata."
+                 : (error.empty() ? "No se pudieron resolver los metadatos del torrent."
                                   : error),
              cancelled->load() ? WebAddJobState::Cancelled
                                : WebAddJobState::Error);
@@ -245,7 +245,7 @@ void WebAddQueue::runJob(const std::string& jobId) {
     if (!data.infoHashHex.empty() &&
         data.infoHashHex != lowerAscii(preview.infoHash)) {
         ::unlink(path.c_str());
-        fail("Resolved torrent does not match the requested hash.",
+        fail("El torrent resuelto no coincide con el hash solicitado.",
              WebAddJobState::Error);
         return;
     }
@@ -276,7 +276,7 @@ void WebAddQueue::runJob(const std::string& jobId) {
                                      initialPeers);
     ::unlink(path.c_str());
     if (!ok) {
-        fail(error.empty() ? "Import failed." : error, WebAddJobState::Error);
+        fail(error.empty() ? "Falló la importación." : error, WebAddJobState::Error);
         return;
     }
     {

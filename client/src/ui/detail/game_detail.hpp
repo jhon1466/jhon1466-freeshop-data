@@ -807,7 +807,7 @@ private:
                     !cancelled->load()) {
                     ok = false;
                     if (error.empty())
-                        error = "Unable to resolve torrent metadata.";
+                        error = "No se pudieron resolver los metadatos del torrent.";
                 }
             }
             brls::sync([this, alive, cancelled, ok, error, debridId, info,

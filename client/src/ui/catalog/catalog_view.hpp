@@ -1535,19 +1535,28 @@ private:
             std::thread modsFetch;
             if (fetchMetadata) {
                 metadataFetch = std::thread([&] {
-                    batch.metadataOk = metadata->fetchLatest(
-                        batch.metadata, batch.metadataError);
+                    batch.metadataOk = runGuarded(
+                        [&](std::string& err) {
+                            return metadata->fetchLatest(batch.metadata, err);
+                        },
+                        batch.metadataError);
                 });
             }
             if (fetchMods) {
                 modsFetch = std::thread([&] {
-                    batch.modsOk = mods->fetchLatest(batch.mods,
-                                                     batch.modsError);
+                    batch.modsOk = runGuarded(
+                        [&](std::string& err) {
+                            return mods->fetchLatest(batch.mods, err);
+                        },
+                        batch.modsError);
                 });
             }
             if (fetchCatalog) {
-                batch.catalogOk = catalog->fetchLatest(
-                    batch.catalogEntries, batch.catalogError);
+                batch.catalogOk = runGuarded(
+                    [&](std::string& err) {
+                        return catalog->fetchLatest(batch.catalogEntries, err);
+                    },
+                    batch.catalogError);
             }
             if (metadataFetch.joinable())
                 metadataFetch.join();

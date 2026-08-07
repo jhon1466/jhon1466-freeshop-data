@@ -353,7 +353,7 @@ static void testImportDebridRejectsEmptySelection() {
 
     std::string taskId, error;
     assert(!manager.importDebrid(import, taskId, error));
-    assert(error == "Select at least one file.");
+    assert(error == "Selecciona al menos un archivo.");
     assert(manager.snapshot().empty());
 
     removeAll(root);
@@ -532,7 +532,7 @@ int main() {
         std::string ignoredTaskId;
         assert(!manager.importTorrentActions(
             readmeSource, actions, ignoredTaskId, error));
-        assert(error == "Only NSP/NSZ package files can be installed.");
+        assert(error == "Solo se pueden instalar archivos de paquete NSP/NSZ.");
         assert(manager.snapshot().empty());
     }
 
@@ -989,7 +989,7 @@ int main() {
         for (int i = 0; i < 100 && !sawError; ++i) {
             for (const DownloadTask& t : manager.snapshot())
                 if (t.id == id && t.status == DownloadStatus::Error &&
-                    t.error.find("Torrenting disabled") != std::string::npos)
+                    t.error.find("torrents están desactivados") != std::string::npos)
                     sawError = true;
             if (!sawError)
                 std::this_thread::sleep_for(std::chrono::milliseconds(20));

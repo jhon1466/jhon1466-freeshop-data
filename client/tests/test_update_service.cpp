@@ -172,7 +172,7 @@ void testTransientNetworkFailuresAreRetried() {
                          std::string& error) {
             ++checkAttempts;
             if (checkAttempts < 3) {
-                error = "Update network error: Timeout was reached";
+                error = "Error de red de actualización: Timeout was reached";
                 return false;
             }
             body = releaseJson("v9.9.9");
@@ -197,7 +197,7 @@ void testTransientNetworkFailuresAreRetried() {
                                       std::string& error) {
             ++checksumAttempts;
             if (checksumAttempts < 3) {
-                error = "Update network error: Timeout was reached";
+                error = "Error de red de actualización: Timeout was reached";
                 return false;
             }
             body = checksum + "  freeshop-client.nro\n";
@@ -208,7 +208,7 @@ void testTransientNetworkFailuresAreRetried() {
                                      std::string& error) {
             ++downloadAttempts;
             if (downloadAttempts < 3) {
-                error = "Update download failed: Timeout was reached";
+                error = "Falló la descarga de actualización: Timeout was reached";
                 return false;
             }
             write(path, payload);
@@ -270,7 +270,7 @@ void testShutdownInterruptsRetryWait() {
         [&attempts](const std::string&, size_t, std::string&,
                     std::string& error) {
             ++attempts;
-            error = "Update network error: Timeout was reached";
+            error = "Error de red de actualización: Timeout was reached";
             return false;
         });
     service.checkAsync([](pipensx::UpdateCheckResult) {});
@@ -309,7 +309,8 @@ void testHelperPublishFailurePreservesPreviousHelper() {
     const bool installed = service.install(release, error);
     failHelperPublish = false;
     assert(!installed);
-    assert(error.find("Unable to publish update helper") != std::string::npos);
+    assert(error.find("No se pudo publicar el ayudante de actualización") !=
+          std::string::npos);
     std::ifstream helper(service.helperPath(), std::ios::binary);
     std::string bytes((std::istreambuf_iterator<char>(helper)), {});
     assert(bytes == "previous helper");

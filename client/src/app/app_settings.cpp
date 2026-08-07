@@ -36,7 +36,7 @@ bool readString(const Json& root, const char* key, std::string& value,
     if (!root.contains(key))
         return true;
     if (!root[key].is_string()) {
-        error = std::string("Setting '") + key + "' must be a string.";
+        error = std::string("El ajuste '") + key + "' debe ser una cadena de texto.";
         return false;
     }
     value = root[key].get<std::string>();
@@ -48,7 +48,7 @@ bool readBool(const Json& root, const char* key, bool& value,
     if (!root.contains(key))
         return true;
     if (!root[key].is_boolean()) {
-        error = std::string("Setting '") + key + "' must be true or false.";
+        error = std::string("El ajuste '") + key + "' debe ser verdadero o falso.";
         return false;
     }
     value = root[key].get<bool>();
@@ -60,8 +60,8 @@ bool readUnsigned(const Json& root, const char* key, uint64_t& value,
     if (!root.contains(key))
         return true;
     if (!root[key].is_number_unsigned()) {
-        error = std::string("Setting '") + key +
-                "' must be an unsigned number.";
+        error = std::string("El ajuste '") + key +
+                "' debe ser un número entero no negativo.";
         return false;
     }
     value = root[key].get<uint64_t>();
@@ -77,7 +77,7 @@ bool parseSettings(const std::string& text, AppSettingsData& values,
                    std::string& error) {
     Json root = Json::parse(text, nullptr, false);
     if (root.is_discarded() || !root.is_object()) {
-        error = "Settings file is not valid JSON.";
+        error = "El archivo de ajustes no es un JSON válido.";
         return false;
     }
     // No version key at all predates versioning, so it is a v1 file.
@@ -85,7 +85,7 @@ bool parseSettings(const std::string& text, AppSettingsData& values,
     if (root.contains("version")) {
         if (!root["version"].is_number_integer() || root["version"] < 1 ||
             root["version"] > kSettingsVersion) {
-            error = "Settings file has an unsupported version.";
+            error = "El archivo de ajustes tiene una versión no compatible.";
             return false;
         }
         fileVersion = root["version"].get<int>();
@@ -171,7 +171,7 @@ bool parseSettings(const std::string& text, AppSettingsData& values,
         values.torrentingEnabled = true;
 
     if (!isSupportedLanguage(values.language)) {
-        error = "Setting 'language' has an unknown value.";
+        error = "El ajuste 'language' tiene un valor desconocido.";
         return false;
     }
     if (catalog == "all")
@@ -179,7 +179,7 @@ bool parseSettings(const std::string& text, AppSettingsData& values,
     else if (catalog == "games")
         values.catalogFilter = CatalogFilter::Games;
     else {
-        error = "Setting 'catalog_filter' has an unknown value.";
+        error = "El ajuste 'catalog_filter' tiene un valor desconocido.";
         return false;
     }
     if (selection == "all_files")
@@ -187,7 +187,7 @@ bool parseSettings(const std::string& text, AppSettingsData& values,
     else if (selection == "packages_only")
         values.streamSelection = StreamSelection::PackagesOnly;
     else {
-        error = "Setting 'stream_selection' has an unknown value.";
+        error = "El ajuste 'stream_selection' tiene un valor desconocido.";
         return false;
     }
     if (install == "sd_card")
@@ -195,7 +195,7 @@ bool parseSettings(const std::string& text, AppSettingsData& values,
     else if (install == "system_memory")
         values.installLocation = InstallLocation::SystemMemory;
     else {
-        error = "Setting 'install_location' has an unknown value.";
+        error = "El ajuste 'install_location' tiene un valor desconocido.";
         return false;
     }
     return true;
@@ -343,7 +343,7 @@ bool AppSettings::load(std::string& error) {
     std::ifstream input(path_, std::ios::binary);
     if (!input) {
         if (errno != ENOENT) {
-            error = std::string("Unable to open settings: ") +
+            error = std::string("No se pudo abrir los ajustes: ") +
                     std::strerror(errno);
             return false;
         }
@@ -363,7 +363,7 @@ bool AppSettings::load(std::string& error) {
     std::ostringstream buffer;
     buffer << input.rdbuf();
     if (!input.good() && !input.eof()) {
-        error = "Unable to read settings file.";
+        error = "No se pudo leer el archivo de ajustes.";
         return false;
     }
     AppSettingsData parsed;
@@ -380,14 +380,14 @@ bool AppSettings::write(const AppSettingsData& values,
     {
         std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
         if (!output) {
-            error = "Unable to create settings file.";
+            error = "No se pudo crear el archivo de ajustes.";
             return false;
         }
         output << serializeSettings(values);
         output.flush();
         if (!output.good()) {
             unlink(temporary.c_str());
-            error = "Unable to write settings file.";
+            error = "No se pudo escribir el archivo de ajustes.";
             return false;
         }
     }
@@ -401,7 +401,7 @@ bool AppSettings::write(const AppSettingsData& values,
     }
     int finalError = errno;
     unlink(temporary.c_str());
-    error = std::string("Unable to replace settings file: ") +
+    error = std::string("No se pudo reemplazar el archivo de ajustes: ") +
             std::strerror(finalError ? finalError : renameError);
     return false;
 }

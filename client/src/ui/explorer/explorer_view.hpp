@@ -258,11 +258,19 @@ private:
                                          : "pipensx/explorer/copying",
                         job.name));
         auto alive = alive_;
-        std::thread([this, alive, job, destination] {
+        // brls::async(), not a raw std::thread: spawning an OS thread from
+        // deep inside a button-press call stack (Application::mainLoop ->
+        // input handling -> action dispatch -> this lambda) risks blowing
+        // the main thread's own stack. Borealis's pool avoids that.
+        brls::async([this, alive, job, destination] {
             std::string error;
-            const bool ok = job.mode == ClipboardMode::Move
-                ? moveEntry(job.path, destination, error)
-                : copyEntry(job.path, destination, error);
+            const bool ok = runGuarded(
+                [&](std::string& err) {
+                    return job.mode == ClipboardMode::Move
+                        ? moveEntry(job.path, destination, err)
+                        : copyEntry(job.path, destination, err);
+                },
+                error);
             brls::sync([this, alive, ok, error] {
                 if (!alive->load())
                     return;
@@ -272,7 +280,7 @@ private:
                         tr("pipensx/explorer/operation_failed", error));
                 reload();
             });
-        }).detach();
+        });
     }
 
     void confirmDelete(const ExplorerEntry& entry) {
@@ -292,9 +300,11 @@ private:
         setBusy(true, tr("pipensx/explorer/deleting", entry.name));
         auto alive = alive_;
         const std::string path = entry.path;
-        std::thread([this, alive, path] {
+        brls::async([this, alive, path] {
             std::string error;
-            const bool ok = deleteEntry(path, error);
+            const bool ok = runGuarded(
+                [&](std::string& err) { return deleteEntry(path, err); },
+                error);
             brls::sync([this, alive, ok, error] {
                 if (!alive->load())
                     return;
@@ -304,7 +314,7 @@ private:
                         tr("pipensx/explorer/operation_failed", error));
                 reload();
             });
-        }).detach();
+        });
     }
 
     void promptRename(const ExplorerEntry& entry) {

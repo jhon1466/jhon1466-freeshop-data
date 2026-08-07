@@ -67,20 +67,20 @@ bool makeDirectories(const std::string& path) {
 bool readFile(const std::string& path, std::string& data, std::string& error) {
     std::ifstream input(path, std::ios::binary);
     if (!input) {
-        error = "Unable to open mod index file.";
+        error = "No se pudo abrir el archivo del índice de mods.";
         return false;
     }
     input.seekg(0, std::ios::end);
     std::streamoff size = input.tellg();
     input.seekg(0, std::ios::beg);
     if (size <= 0 || size > static_cast<std::streamoff>(kMaxTableBytes)) {
-        error = "Mod index file is empty or too large.";
+        error = "El archivo del índice de mods está vacío o es demasiado grande.";
         return false;
     }
     data.resize(static_cast<size_t>(size));
     input.read(data.data(), size);
     if (!input) {
-        error = "Unable to read mod index file.";
+        error = "No se pudo leer el archivo del índice de mods.";
         return false;
     }
     return true;
@@ -92,14 +92,14 @@ bool writeAtomic(const std::string& path, const std::string& data,
     {
         std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
         if (!output) {
-            error = "Unable to create mod index cache.";
+            error = "No se pudo crear la caché del índice de mods.";
             return false;
         }
         output.write(data.data(), static_cast<std::streamsize>(data.size()));
         output.flush();
         if (!output.good()) {
             unlink(temporary.c_str());
-            error = "Unable to write mod index cache.";
+            error = "No se pudo escribir la caché del índice de mods.";
             return false;
         }
     }
@@ -111,7 +111,7 @@ bool writeAtomic(const std::string& path, const std::string& data,
         rename(temporary.c_str(), path.c_str()) == 0)
         return true;
     unlink(temporary.c_str());
-    error = "Unable to replace mod index cache.";
+    error = "No se pudo reemplazar la caché del índice de mods.";
     return false;
 }
 
@@ -119,7 +119,7 @@ bool httpGet(const std::string& url, std::string& body, std::string& error) {
     body.clear();
     CURL* curl = curl_easy_init();
     if (!curl) {
-        error = "Unable to initialize HTTP.";
+        error = "No se pudo inicializar HTTP.";
         return false;
     }
     HttpBuffer buffer;
@@ -144,12 +144,12 @@ bool httpGet(const std::string& url, std::string& body, std::string& error) {
     if (result != CURLE_OK || status < 200 || status >= 300 ||
         buffer.overflow) {
         if (buffer.overflow)
-            error = "Mod index download exceeded the size limit.";
+            error = "La descarga del índice de mods superó el límite de tamaño.";
         else if (result != CURLE_OK)
-            error = std::string("Mod index network error: ") +
+            error = std::string("Error de red del índice de mods: ") +
                     curl_easy_strerror(result);
         else
-            error = "Mod index server returned HTTP " +
+            error = "El servidor del índice de mods devolvió HTTP " +
                     std::to_string(status) + ".";
         return false;
     }
@@ -227,7 +227,7 @@ bool ModIndexService::parseTable(const std::string& markdown,
                                  std::string& error) {
     entries.clear();
     if (markdown.empty() || markdown.size() > kMaxTableBytes) {
-        error = "Mod index table is empty or too large.";
+        error = "La tabla del índice de mods está vacía o es demasiado grande.";
         return false;
     }
     size_t line = 0;
@@ -266,7 +266,7 @@ bool ModIndexService::parseTable(const std::string& markdown,
         entries.push_back(std::move(entry));
     }
     if (entries.empty()) {
-        error = "Mod index table contains no title ids.";
+        error = "La tabla del índice de mods no contiene ningún title id.";
         return false;
     }
     return true;
@@ -299,7 +299,7 @@ bool ModIndexService::load(std::string& error) {
     // No cache yet: the catalogue view fetches the table in the background.
     // An empty index simply means no chips, never a failed startup.
     byBaseId_.clear();
-    error = "Mod index is not cached yet.";
+    error = "El índice de mods aún no está en caché.";
     return false;
 }
 
@@ -310,7 +310,7 @@ bool ModIndexService::fetchLatest(ModIndexSnapshot& snapshot,
     snapshot.items.clear();
     snapshot.rawTable.clear();
     if (!isTrustedSource(kModIndexSourceUrl)) {
-        error = "Mod index URL is not on the trusted host list.";
+        error = "La URL del índice de mods no está en la lista de hosts confiables.";
         return false;
     }
     std::string body;

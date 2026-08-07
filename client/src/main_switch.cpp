@@ -131,8 +131,8 @@ public:
             return new ExplorerView();
         });
         tabs->addNavTab(tr("pipensx/nav/saves"), NavIconType::Saves,
-                        [installed] {
-            return new SavesView(installed);
+                        [installed, metadata] {
+            return new SavesView(installed, metadata);
         });
         tabs->addNavTab(tr("pipensx/nav/settings"), NavIconType::Settings,
                         [settings, manager, catalog, metadata,
@@ -147,22 +147,37 @@ public:
         tabs->addNavTab(tr("pipensx/nav/about"), NavIconType::About, [] {
             return new AboutView();
         });
-        tabs->attachStorageFooter(manager, webServer);
         frame_ = new brls::AppletFrame(tabs);
         frame_->setTitle(tr("pipensx/app/title"));
 
-        // Battery/wireless/clock in the header's own right-side slot (top of
-        // the screen, matching the console's own status row) instead of
-        // borealis's stock bottom-right BottomBar. hint_box is the header's
-        // second child (see vendor/borealis's appletFrameXML) — reached the
-        // same way addNavTab reaches sidebar internals, through the public
-        // Box::getChildren() surface rather than a vendor patch.
-        frame_->setFooterVisibility(brls::Visibility::GONE);
+        // Free space + web-companion address + battery/wireless/clock in the
+        // header's own right-side slot (top of the screen, matching the
+        // console's own status row) instead of borealis's stock bottom-right
+        // BottomBar. hint_box is the header's second child (see vendor/
+        // borealis's appletFrameXML) — reached the same way addNavTab reaches
+        // sidebar internals, through the public Box::getChildren() surface
+        // rather than a vendor patch.
+        //
+        // The footer itself must stay VISIBLE: it also carries the button
+        // action hints (A/B/Y/etc, brls::Hints), not just the battery/
+        // wireless/clock trio — hiding the whole footer silently dropped
+        // every hint along with it. Only the now-duplicated battery/
+        // wireless/clock sub-views are hidden, by their borealis-internal
+        // ids (see vendor/borealis's bottomBarXML).
+        if (brls::Box* footer = frame_->getFooter()) {
+            if (brls::View* battery = footer->getView("brls/battery"))
+                battery->setVisibility(brls::Visibility::GONE);
+            if (brls::View* wireless = footer->getView("brls/wireless"))
+                wireless->setVisibility(brls::Visibility::GONE);
+            if (brls::View* clock = footer->getView("brls/hints/time"))
+                clock->setVisibility(brls::Visibility::GONE);
+        }
         if (brls::Box* header = frame_->getHeader()) {
             std::vector<brls::View*>& headerKids = header->getChildren();
             if (headerKids.size() >= 2) {
                 if (auto* hintBox = dynamic_cast<brls::Box*>(headerKids[1]))
-                    hintBox->addView(new pipensx::ui::TopStatusRow());
+                    hintBox->addView(
+                        new pipensx::ui::TopStatusRow(manager, webServer));
             }
         }
     }
@@ -331,7 +346,17 @@ int main(int argc, char** argv) {
             throw std::runtime_error("Borealis Application::init failed");
         pipensx::ui::theme::registerColors();
         pipensx::ui::installSidebarStyle();
-        brls::AudioPlayer::enabled = settings.get().soundEffectsEnabled;
+        // Forced off regardless of the persisted setting: hardware testing
+        // traced a std::terminate crash to the main thread, at the exact
+        // point Application::handleAction() calls getAudioPlayer()->play()
+        // right after a registered action's listener runs (e.g. Y for
+        // "Backup now" in Guardados) - this is the same native-sound path
+        // enabled earlier this session. The toggle itself is left in place
+        // (and still writes to settings.json) so it can be flipped back on
+        // once switch_audio.cpp's play()/load() path is actually fixed;
+        // until then this line, not the toggle, is what's authoritative.
+        (void)settings.get().soundEffectsEnabled;
+        brls::AudioPlayer::enabled = false;
 
         startupStage("Borealis createWindow");
         brls::Application::createWindow("pipensx");
@@ -354,7 +379,9 @@ int main(int argc, char** argv) {
         bool metadataOk = true;
         ThreadJoiner metadataLoader{
             std::thread([&metadata, &metadataError, &metadataOk] {
-                metadataOk = metadata.load(metadataError);
+                metadataOk = runGuarded(
+                    [&](std::string& err) { return metadata.load(err); },
+                    metadataError);
             })};
 
         std::string catalogError;
@@ -385,7 +412,9 @@ int main(int argc, char** argv) {
         InstalledTitleService installed("sdmc:/switch/freeshop-client");
         ThreadJoiner installedScanner{std::thread([&installed] {
             std::string installedError;
-            if (!installed.refresh(installedError))
+            if (!runGuarded(
+                    [&](std::string& err) { return installed.refresh(err); },
+                    installedError))
                 diagnostic_error("installed", "startup", "error=%s",
                                  installedError.c_str());
         })};

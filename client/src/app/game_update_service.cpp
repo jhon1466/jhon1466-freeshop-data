@@ -125,7 +125,7 @@ GameUpdateResult GameUpdateService::compute(
     }
     if (!anyParseable) {
         result.state = GameUpdateState::CheckError;
-        result.error = "Update source version is not numeric: " +
+        result.error = "La versión de la fuente de actualización no es numérica: " +
                        firstNonEmpty + ".";
         return result;
     }
@@ -133,13 +133,13 @@ GameUpdateResult GameUpdateService::compute(
 
     if (currentVersion.empty()) {
         result.state = GameUpdateState::CheckError;
-        result.error = "Installed title reports no version.";
+        result.error = "El título instalado no reporta ninguna versión.";
         return result;
     }
     uint64_t currentValue = 0;
     if (!parseDecimal(currentVersion, currentValue)) {
         result.state = GameUpdateState::CheckError;
-        result.error = "Installed title version is not numeric: " +
+        result.error = "La versión del título instalado no es numérica: " +
                        currentVersion + ".";
         return result;
     }
@@ -214,7 +214,7 @@ bool GameUpdateService::load(std::string& error) {
     std::ifstream input(statePath_, std::ios::binary);
     if (!input) {
         if (errno != ENOENT) {
-            error = std::string("Unable to open game-update state: ") +
+            error = std::string("No se pudo abrir el estado de actualización de juegos: ") +
                     std::strerror(errno);
             return false;
         }
@@ -225,7 +225,7 @@ bool GameUpdateService::load(std::string& error) {
     nlohmann::json root = nlohmann::json::parse(data, nullptr, false);
     if (root.is_discarded() || !root.is_object() ||
         root.value("version", 0) != kStateVersion) {
-        error = "Game-update state file is not valid.";
+        error = "El archivo de estado de actualización de juegos no es válido.";
         return false;
     }
     installedGeneration_ = root.value("installed_generation", uint64_t{0});
@@ -275,14 +275,14 @@ bool GameUpdateService::save(std::string& error) const {
     {
         std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
         if (!output) {
-            error = "Unable to create game-update state file.";
+            error = "No se pudo crear el archivo de estado de actualización de juegos.";
             return false;
         }
         output << root.dump(2) << "\n";
         output.flush();
         if (!output.good()) {
             unlink(temporary.c_str());
-            error = "Unable to write game-update state file.";
+            error = "No se pudo escribir el archivo de estado de actualización de juegos.";
             return false;
         }
     }
@@ -298,7 +298,7 @@ bool GameUpdateService::save(std::string& error) const {
     }
     int finalError = errno;
     unlink(temporary.c_str());
-    error = std::string("Unable to replace game-update state file: ") +
+    error = std::string("No se pudo reemplazar el archivo de estado de actualización de juegos: ") +
             std::strerror(finalError ? finalError : renameError);
     return false;
 }

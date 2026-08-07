@@ -152,11 +152,27 @@ private:
         auto alive = alive_;
         const uint64_t applicationId = title_.applicationId;
         const std::string titleId = title_.titleId;
-        std::thread([this, alive, applicationId, titleId] {
+        const std::string gameName = title_.name;
+        log_msg("[saves] makeBackup: scheduling async work\n");
+        // brls::async(), not a raw std::thread: this runs on borealis's own
+        // pre-started thread pool instead of spawning a new OS thread from
+        // deep inside the button-press call stack (Application::mainLoop ->
+        // input handling -> action dispatch -> this lambda) - the same
+        // pattern every other background job in this app already uses.
+        brls::async([this, alive, applicationId, titleId, gameName] {
             std::string path;
             std::string error;
-            const bool ok = backupSaveData(applicationId, titleId, path, error);
+            const bool ok = runGuarded(
+                [&](std::string& err) {
+                    return backupSaveData(applicationId, titleId, gameName,
+                                          path, err);
+                },
+                error);
+            log_msg("[saves] makeBackup: worker done ok=%d, scheduling sync\n",
+                    ok ? 1 : 0);
             brls::sync([this, alive, ok, error] {
+                log_msg("[saves] makeBackup: sync callback entered alive=%d\n",
+                        alive->load() ? 1 : 0);
                 if (!alive->load())
                     return;
                 setBusy(false, "");
@@ -165,9 +181,11 @@ private:
                         tr("pipensx/explorer/operation_failed", error));
                 else
                     brls::Application::notify(tr("pipensx/saves/backed_up"));
+                log_msg("[saves] makeBackup: calling reload()\n");
                 reload();
+                log_msg("[saves] makeBackup: reload() returned\n");
             });
-        }).detach();
+        });
     }
 
     void confirmRestore(const SaveBackupInfo& backup) {
@@ -188,11 +206,16 @@ private:
         auto alive = alive_;
         const uint64_t applicationId = title_.applicationId;
         const std::string titleId = title_.titleId;
+        const std::string gameName = title_.name;
         const std::string path = backup.path;
-        std::thread([this, alive, applicationId, titleId, path] {
+        brls::async([this, alive, applicationId, titleId, gameName, path] {
             std::string error;
-            const bool ok =
-                restoreSaveData(applicationId, titleId, path, error);
+            const bool ok = runGuarded(
+                [&](std::string& err) {
+                    return restoreSaveData(applicationId, titleId, gameName,
+                                           path, err);
+                },
+                error);
             brls::sync([this, alive, ok, error] {
                 if (!alive->load())
                     return;
@@ -202,7 +225,7 @@ private:
                        : tr("pipensx/explorer/operation_failed", error));
                 reload();
             });
-        }).detach();
+        });
     }
 
     void performDelete(const SaveBackupInfo& backup) {

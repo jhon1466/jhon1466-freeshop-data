@@ -10,7 +10,7 @@ brls::RecyclerCell* SavesDataSource::cellForRow(
     brls::RecyclerFrame* recycler, brls::IndexPath index) {
     auto* cell = static_cast<SaveTitleCell*>(
         recycler->dequeueReusableCell("SaveTitle"));
-    cell->setTitle(owner_->titles()[index.row]);
+    cell->setTitle(owner_->titles()[index.row], owner_->metadata());
     return cell;
 }
 

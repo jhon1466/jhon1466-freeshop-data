@@ -148,8 +148,8 @@ bool TorboxPairingServer::start(std::string& error) {
             return response;
         }, error))
         return true;
-    error = "Unable to start the pairing server (port " +
-            std::to_string(port_) + " busy?).";
+    error = "No se pudo iniciar el servidor de emparejamiento (¿puerto " +
+            std::to_string(port_) + " ocupado?).";
     return false;
 }
 

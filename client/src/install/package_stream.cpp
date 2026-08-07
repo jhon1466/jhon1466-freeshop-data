@@ -210,7 +210,7 @@ public:
 
     bool write(const uint8_t* data, size_t size, std::string& error) {
         if (size > inputRemaining_) {
-            error = "NCZ input exceeds its PFS0 entry.";
+            error = "La entrada NCZ excede su entrada PFS0.";
             return false;
         }
         inputRemaining_ -= size;
@@ -271,7 +271,7 @@ public:
     bool restore(const PackageStreamState& in, uint64_t inputRemaining,
                  std::string& error) {
         if (inputRemaining > inputSize_) {
-            error = "NCZ restore input position is invalid.";
+            error = "La posición de entrada para restaurar el NCZ no es válida.";
             return false;
         }
         inputRemaining_ = inputRemaining;
@@ -279,7 +279,7 @@ public:
             // Header never digested: everything was rolled back, the decoder
             // restarts fresh and re-parses the NCZ header from re-fed input.
             if (inputRemaining_ != inputSize_) {
-                error = "NCZ restore expects a fresh decoder.";
+                error = "Restaurar el NCZ requiere un decodificador nuevo.";
                 return false;
             }
             return true;
@@ -288,7 +288,7 @@ public:
         if (in.sections.empty() ||
             in.outputPosition < ncaHeaderSize ||
             in.outputPosition > in.outputSize) {
-            error = "NCZ restore section state is invalid.";
+            error = "El estado de sección para restaurar el NCZ no es válido.";
             return false;
         }
         uint64_t expect = ncaHeaderSize;
@@ -298,7 +298,7 @@ public:
             if (stored.offset != expect || stored.size == 0 ||
                 stored.size > std::numeric_limits<uint64_t>::max() -
                                   stored.offset) {
-                error = "NCZ restore sections are not contiguous.";
+                error = "Las secciones para restaurar el NCZ no son contiguas.";
                 return false;
             }
             NczSection section;
@@ -311,7 +311,7 @@ public:
             expect = stored.offset + stored.size;
         }
         if (expect != in.outputSize) {
-            error = "NCZ restore output size mismatch.";
+            error = "El tamaño de salida al restaurar el NCZ no coincide.";
             return false;
         }
         outputSize_ = in.outputSize;
@@ -327,7 +327,7 @@ public:
             if (!sizeValid || in.blockSizes.empty() ||
                 in.blockSizes.size() > (1u << 24) ||
                 in.nextBlock > in.blockSizes.size()) {
-                error = "NCZ restore block state is invalid.";
+                error = "El estado de bloque para restaurar el NCZ no es válido.";
                 return false;
             }
             uint64_t expectedPosition = in.nextBlock == in.blockSizes.size()
@@ -335,7 +335,7 @@ public:
                 : ncaHeaderSize +
                       static_cast<uint64_t>(in.nextBlock) * in.blockSize;
             if (outputPosition_ != expectedPosition) {
-                error = "NCZ restore is not at a block boundary.";
+                error = "La restauración del NCZ no está en un límite de bloque.";
                 return false;
             }
             blockSize_ = in.blockSize;
@@ -346,12 +346,12 @@ public:
             // the raw NCA header has been emitted yet.
             if (in.nextBlock != 0 || !in.blockSizes.empty() ||
                 outputPosition_ != ncaHeaderSize) {
-                error = "NCZ restore solid state is invalid.";
+                error = "El estado sólido para restaurar el NCZ no es válido.";
                 return false;
             }
             stream_ = ZSTD_createDStream();
             if (!stream_ || ZSTD_isError(ZSTD_initDStream(stream_))) {
-                error = "Unable to initialize Zstandard decoder.";
+                error = "No se pudo inicializar el decodificador Zstandard.";
                 return false;
             }
         }
@@ -360,32 +360,32 @@ public:
 
     bool finish(std::string& error) {
         if (inputRemaining_ != 0) {
-            error = "NCZ stream ended before its declared size.";
+            error = "El flujo NCZ terminó antes de alcanzar su tamaño declarado.";
             return false;
         }
         if (!headerReady_ && !parseHeader(error))
             return false;
         if (!headerReady_) {
-            error = "Incomplete NCZ header.";
+            error = "Encabezado NCZ incompleto.";
             return false;
         }
         if (blockMode_) {
             if (!processBlocks(error))
                 return false;
             if (nextBlock_ != blockSizes_.size() || !pending_.empty()) {
-                error = "Incomplete NCZ block stream.";
+                error = "Flujo de bloques NCZ incompleto.";
                 return false;
             }
         } else {
             if (!processSolid(error))
                 return false;
             if (!solidEnded_) {
-                error = "Incomplete NCZ Zstandard stream.";
+                error = "Flujo Zstandard NCZ incompleto.";
                 return false;
             }
         }
         if (outputPosition_ != outputSize_) {
-            error = "NCZ decompressed size mismatch.";
+            error = "El tamaño descomprimido del NCZ no coincide.";
             return false;
         }
         return true;
@@ -566,7 +566,7 @@ private:
         if (!parsed) {
             if (waitingForMore)
                 return true;
-            error = "Invalid NCZ section header at 0x4000: " +
+            error = "Encabezado de sección NCZ no válido en 0x4000: " +
                     hexPreview(pending_.data() + ncaHeaderSize,
                                std::min<size_t>(
                                    32, pending_.size() - ncaHeaderSize));
@@ -614,7 +614,7 @@ private:
             uint64_t decompressed = read64(pending_.data() + headerSize + 16);
             if (exponent < 14 || exponent > 30 || countBlocks == 0 ||
                 countBlocks > (1u << 24)) {
-                error = "Invalid NCZBLOCK header.";
+                error = "Encabezado NCZBLOCK no válido.";
                 return false;
             }
             uint64_t fullHeader = static_cast<uint64_t>(headerSize) + 24 +
@@ -625,7 +625,7 @@ private:
                 return true;
             blockSize_ = uint64_t{1} << exponent;
             if (decompressed != outputSize_ - ncaHeaderSize) {
-                error = "NCZBLOCK decompressed size mismatch.";
+                error = "El tamaño descomprimido del NCZBLOCK no coincide.";
                 return false;
             }
             const uint8_t* sizes = pending_.data() + headerSize + 24;
@@ -636,7 +636,7 @@ private:
         } else {
             stream_ = ZSTD_createDStream();
             if (!stream_ || ZSTD_isError(ZSTD_initDStream(stream_))) {
-                error = "Unable to initialize Zstandard decoder.";
+                error = "No se pudo inicializar el decodificador Zstandard.";
                 return false;
             }
         }
@@ -649,7 +649,7 @@ private:
             telemetryTotalReadyUs_ += elapsedUs;
         }
         if (!ready) {
-            error = "Installer rejected the NCZ output size.";
+            error = "El instalador rechazó el tamaño de salida del NCZ.";
             return false;
         }
         uint64_t headerWriterStartedUs = telemetry_enabled() ? now_us() : 0;
@@ -666,7 +666,7 @@ private:
                 telemetryTotalWriterMaxUs_, elapsedUs);
         }
         if (!headerWritten) {
-            error = "Installer rejected the NCZ NCA header.";
+            error = "El instalador rechazó el encabezado NCA del NCZ.";
             return false;
         }
         outputPosition_ = ncaHeaderSize;
@@ -701,7 +701,7 @@ private:
             }
             if (currentSection_ >= sections_.size() ||
                 outputPosition_ < sections_[currentSection_].offset) {
-                error = "NCZ output does not map to a section.";
+                error = "La salida del NCZ no corresponde a ninguna sección.";
                 return false;
             }
             const NczSection* section = &sections_[currentSection_];
@@ -718,7 +718,7 @@ private:
                 telemetryTotalAesUs_ += elapsedUs;
             }
             if (!transformed) {
-                error = "Unable to restore NCZ AES-CTR section.";
+                error = "No se pudo restaurar la sección AES-CTR del NCZ.";
                 return false;
             }
             uint64_t writerStartedUs = telemetry_enabled() ? now_us() : 0;
@@ -735,7 +735,7 @@ private:
                     telemetryTotalWriterMaxUs_, elapsedUs);
             }
             if (!written) {
-                error = "Installer rejected decompressed NCZ data.";
+                error = "El instalador rechazó los datos NCZ descomprimidos.";
                 return false;
             }
             outputPosition_ += count;
@@ -842,7 +842,7 @@ private:
                     telemetryTotalZstdUs_ += elapsedUs;
                 }
                 if (ZSTD_isError(result) || result != expected) {
-                    error = "Invalid compressed NCZ block.";
+                    error = "Bloque NCZ comprimido no válido.";
                     return false;
                 }
             }
@@ -988,7 +988,7 @@ public:
     bool write(const uint8_t* data, size_t size) {
         if (failed_ || finished_ || (!data && size)) {
             if (error_.empty())
-                error_ = "Invalid package stream state.";
+                error_ = "Estado de flujo de paquete no válido.";
             return false;
         }
         consumed_ += size;
@@ -1005,7 +1005,7 @@ public:
             return false;
         if (!headerReady_ && !parseHeader()) {
             if (error_.empty())
-                error_ = "Incomplete PFS0 header.";
+                error_ = "Encabezado PFS0 incompleto.";
             return false;
         }
         if (!process())
@@ -1018,7 +1018,7 @@ public:
         if (fileOpen_ && !endCurrentFile())
             return false;
         if (entryIndex_ != entries_.size() || !pending_.empty()) {
-            error_ = "PFS0 stream ended before all files were processed.";
+            error_ = "El flujo PFS0 terminó antes de procesar todos los archivos.";
             return fail();
         }
         finished_ = true;
@@ -1062,12 +1062,12 @@ public:
 
     bool restore(const PackageStreamState& state) {
         if (failed_ || finished_ || consumed_ != 0 || headerReady_) {
-            error_ = "Package stream restore requires a fresh stream.";
+            error_ = "Restaurar el flujo de paquete requiere un flujo nuevo.";
             return fail();
         }
         if (!validateRestore(state)) {
             if (error_.empty())
-                error_ = "Package stream checkpoint is inconsistent.";
+                error_ = "El punto de control del flujo de paquete es inconsistente.";
             return fail();
         }
         entries_.clear();
@@ -1165,19 +1165,19 @@ private:
             return true;
         uint64_t parseStartedUs = telemetry_enabled() ? now_us() : 0;
         if (std::memcmp(pending_.data(), "PFS0", 4) != 0) {
-            error_ = "Package is not a PFS0 NSP/NSZ.";
+            error_ = "El paquete no es un NSP/NSZ PFS0.";
             return fail();
         }
         uint32_t count = read32(pending_.data() + 4);
         uint32_t stringsSize = read32(pending_.data() + 8);
         if (count == 0 || count > 4096 || stringsSize > 16 * 1024 * 1024) {
-            error_ = "Invalid PFS0 header values.";
+            error_ = "Valores de encabezado PFS0 no válidos.";
             return fail();
         }
         uint64_t header64 = 16 + static_cast<uint64_t>(count) * 24 +
                             stringsSize;
         if (header64 > std::numeric_limits<size_t>::max()) {
-            error_ = "PFS0 header is too large.";
+            error_ = "El encabezado PFS0 es demasiado grande.";
             return fail();
         }
         size_t header = static_cast<size_t>(header64);
@@ -1188,14 +1188,14 @@ private:
             const uint8_t* entry = pending_.data() + 16 + i * 24;
             uint32_t nameOffset = read32(entry + 16);
             if (nameOffset >= stringsSize) {
-                error_ = "Invalid PFS0 string-table offset.";
+                error_ = "Desplazamiento de tabla de cadenas PFS0 no válido.";
                 return fail();
             }
             const char* name = reinterpret_cast<const char*>(table + nameOffset);
             size_t available = stringsSize - nameOffset;
             const void* end = std::memchr(name, '\0', available);
             if (!end) {
-                error_ = "Unterminated PFS0 filename.";
+                error_ = "Nombre de archivo PFS0 sin terminar.";
                 return fail();
             }
             PfsEntry parsed;
@@ -1255,7 +1255,7 @@ private:
         }
         if (!callbacks_.beginFile ||
             !callbacks_.beginFile(announcedName, announcedSize)) {
-            error_ = "Installer rejected PFS0 file " + entry.name;
+            error_ = "El instalador rechazó el archivo PFS0 " + entry.name;
             return fail();
         }
         fileOpen_ = true;
@@ -1283,7 +1283,7 @@ private:
         if (currentSkipped_) {
             currentSkipped_ = false;
         } else if (!callbacks_.endFile || !callbacks_.endFile()) {
-            error_ = "Installer failed to finalize PFS0 file " + currentName_;
+            error_ = "El instalador no pudo finalizar el archivo PFS0 " + currentName_;
             return fail();
         }
         fileOpen_ = false;
@@ -1324,7 +1324,7 @@ private:
                      callbacks_.writeFile(pending_.data(), count);
             if (!ok) {
                 if (error_.empty())
-                    error_ = "Installer failed while consuming " + currentName_;
+                    error_ = "El instalador falló mientras consumía " + currentName_;
                 return fail();
             }
             pending_.consume(count);

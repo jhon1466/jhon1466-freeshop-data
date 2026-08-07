@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <vector>
 #include <cctype>
 #include <cerrno>
 #include <chrono>
@@ -121,7 +122,7 @@ int reportTransferProgress(void* opaque, curl_off_t downloadTotal,
 bool configureCurl(CURL* curl, const std::string& url, TransferKind kind,
                    std::string& error) {
     if (!curl) {
-        error = "Unable to initialize updater HTTP client.";
+        error = "No se pudo inicializar el cliente HTTP del actualizador.";
         return false;
     }
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
@@ -171,11 +172,11 @@ bool fetchText(const std::string& url, size_t limit, std::string& body,
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
     if (buffer.overflow)
-        error = "Update response exceeded its size limit.";
+        error = "La respuesta de actualización superó su límite de tamaño.";
     else if (result != CURLE_OK)
-        error = std::string("Update network error: ") + curl_easy_strerror(result);
+        error = std::string("Error de red de actualización: ") + curl_easy_strerror(result);
     else if (status < 200 || status >= 300)
-        error = "Update server returned HTTP " + std::to_string(status) + ".";
+        error = "El servidor de actualización devolvió HTTP " + std::to_string(status) + ".";
     else {
         body = std::move(buffer.data);
         return true;
@@ -191,7 +192,7 @@ bool fetchFile(const std::string& url, const std::string& path, size_t limit,
     writer.output.open(path, std::ios::binary | std::ios::trunc);
     writer.limit = limit;
     if (!writer.output) {
-        error = "Unable to create update download.";
+        error = "No se pudo crear la descarga de actualización.";
         return false;
     }
     CURL* curl = curl_easy_init();
@@ -211,11 +212,11 @@ bool fetchFile(const std::string& url, const std::string& path, size_t limit,
     curl_easy_cleanup(curl);
     writer.output.close();
     if (writer.overflow)
-        error = "Update download exceeded its size limit.";
+        error = "La descarga de actualización superó su límite de tamaño.";
     else if (result != CURLE_OK)
-        error = std::string("Update download failed: ") + curl_easy_strerror(result);
+        error = std::string("Falló la descarga de actualización: ") + curl_easy_strerror(result);
     else if (status < 200 || status >= 300)
-        error = "Update download returned HTTP " + std::to_string(status) + ".";
+        error = "La descarga de actualización devolvió HTTP " + std::to_string(status) + ".";
     else
         return true;
     unlink(path.c_str());
@@ -239,8 +240,8 @@ bool retryableHttpError(const std::string& error) {
 }
 
 bool retryableFetchError(const std::string& error) {
-    return startsWith(error, "Update network error:") ||
-           startsWith(error, "Update download failed:") ||
+    return startsWith(error, "Error de red de actualización:") ||
+           startsWith(error, "Falló la descarga de actualización:") ||
            retryableHttpError(error);
 }
 
@@ -251,7 +252,7 @@ bool fetchWithRetry(Fetch fetch, std::string& error,
                     std::condition_variable& stopReady) {
     for (int attempt = 1; attempt <= kFetchAttempts; ++attempt) {
         if (stopping.load(std::memory_order_relaxed)) {
-            error = "Update cancelled.";
+            error = "Actualización cancelada.";
             return false;
         }
         error.clear();
@@ -260,7 +261,7 @@ bool fetchWithRetry(Fetch fetch, std::string& error,
         const bool retryable = retryableFetchError(error);
         if (!retryable || attempt == kFetchAttempts) {
             if (retryable)
-                error += " (after " + std::to_string(attempt) + " attempts).";
+                error += " (tras " + std::to_string(attempt) + " intentos).";
             return false;
         }
         std::unique_lock<std::mutex> lock(stopMutex);
@@ -268,7 +269,7 @@ bool fetchWithRetry(Fetch fetch, std::string& error,
                                [&stopping] {
                                    return stopping.load(std::memory_order_relaxed);
                                })) {
-            error = "Update cancelled.";
+            error = "Actualización cancelada.";
             return false;
         }
     }
@@ -320,19 +321,19 @@ bool checksumFile(const std::string& path, std::string& checksum,
                   std::string& error) {
     std::ifstream input(path, std::ios::binary | std::ios::ate);
     if (!input) {
-        error = "Unable to read downloaded update.";
+        error = "No se pudo leer la actualización descargada.";
         return false;
     }
     const std::streamoff size = input.tellg();
     if (size <= 0 || size > static_cast<std::streamoff>(kNroLimit)) {
-        error = "Downloaded update is empty or too large.";
+        error = "La actualización descargada está vacía o es demasiado grande.";
         return false;
     }
     input.seekg(0);
     std::vector<unsigned char> data(static_cast<size_t>(size));
     input.read(reinterpret_cast<char*>(data.data()), size);
     if (!input) {
-        error = "Unable to read downloaded update.";
+        error = "No se pudo leer la actualización descargada.";
         return false;
     }
     unsigned char digest[32];
@@ -360,7 +361,10 @@ bool copyFileContents(const std::string& source, const std::string& destination,
         error = std::strerror(errno);
         return false;
     }
-    std::array<char, 64 * 1024> buffer;
+    // Heap, not a stack std::array - see file_explorer_service.cpp's
+    // copyFileContents for why: this runs on a background worker thread,
+    // whose default stack is far smaller than the main thread's.
+    std::vector<char> buffer(64 * 1024);
     while (input) {
         input.read(buffer.data(), buffer.size());
         const std::streamsize count = input.gcount();
@@ -436,20 +440,20 @@ bool UpdateService::parseRelease(const std::string& json, ReleaseInfo& release,
     release = {};
     nlohmann::json root = nlohmann::json::parse(json, nullptr, false);
     if (root.is_discarded() || !root.is_object()) {
-        error = "GitHub returned an invalid release.";
+        error = "GitHub devolvió un lanzamiento no válido.";
         return false;
     }
     if (root.value("draft", true) || root.value("prerelease", true)) {
-        error = "GitHub latest release is not published and stable.";
+        error = "El último lanzamiento en GitHub no está publicado ni es estable.";
         return false;
     }
     release.version = root.value("tag_name", "");
     if (!isNewerVersion(release.version, "0.0.0")) {
-        error = "GitHub release has an invalid version tag.";
+        error = "El lanzamiento de GitHub tiene una etiqueta de versión no válida.";
         return false;
     }
     if (!root.contains("assets") || !root["assets"].is_array()) {
-        error = "GitHub release has no assets.";
+        error = "El lanzamiento de GitHub no tiene archivos adjuntos.";
         return false;
     }
     for (const auto& asset : root["assets"]) {
@@ -465,7 +469,7 @@ bool UpdateService::parseRelease(const std::string& json, ReleaseInfo& release,
             release.checksumUrl = url;
     }
     if (release.nroUrl.empty() || release.checksumUrl.empty()) {
-        error = "GitHub release must include freeshop-client.nro and freeshop-client.nro.sha256.";
+        error = "El lanzamiento de GitHub debe incluir freeshop-client.nro y freeshop-client.nro.sha256.";
         return false;
     }
     return true;
@@ -490,7 +494,7 @@ UpdateCheckResult UpdateService::check() const {
 bool UpdateService::install(const ReleaseInfo& release, std::string& error) const {
     if (!trustedAssetUrl(release.nroUrl) ||
         !trustedAssetUrl(release.checksumUrl)) {
-        error = "Update asset URL is not trusted.";
+        error = "La URL del archivo de actualización no es confiable.";
         return false;
     }
     std::string checksumText;
@@ -501,7 +505,7 @@ bool UpdateService::install(const ReleaseInfo& release, std::string& error) cons
         return false;
     std::string expectedChecksum;
     if (!parseChecksum(checksumText, expectedChecksum)) {
-        error = "Update checksum is invalid.";
+        error = "La suma de verificación de la actualización no es válida.";
         return false;
     }
     const std::string temporary = stagedPath();
@@ -522,7 +526,7 @@ bool UpdateService::install(const ReleaseInfo& release, std::string& error) cons
     }
     if (actualChecksum != expectedChecksum) {
         unlink(temporary.c_str());
-        error = "Update checksum does not match GitHub release.";
+        error = "La suma de verificación de la actualización no coincide con el lanzamiento de GitHub.";
         return false;
     }
     std::ofstream markerFile(marker, std::ios::binary | std::ios::trunc);
@@ -531,7 +535,7 @@ bool UpdateService::install(const ReleaseInfo& release, std::string& error) cons
     if (!markerFile) {
         unlink(marker.c_str());
         unlink(temporary.c_str());
-        error = "Unable to save staged update checksum.";
+        error = "No se pudo guardar la suma de verificación de la actualización preparada.";
         return false;
     }
     markerFile.close();
@@ -540,7 +544,7 @@ bool UpdateService::install(const ReleaseInfo& release, std::string& error) cons
         unlink(helperTemporary.c_str());
         unlink(marker.c_str());
         unlink(temporary.c_str());
-        error = "Unable to create update helper: " + helperError;
+        error = "No se pudo crear el ayudante de actualización: " + helperError;
         return false;
     }
     std::string sourceHelperChecksum;
@@ -549,11 +553,11 @@ bool UpdateService::install(const ReleaseInfo& release, std::string& error) cons
         !checksumFile(helperTemporary, copiedHelperChecksum, helperError) ||
         sourceHelperChecksum != copiedHelperChecksum) {
         if (helperError.empty())
-            helperError = "copied helper checksum does not match";
+            helperError = "la suma de verificación del ayudante copiado no coincide";
         unlink(helperTemporary.c_str());
         unlink(marker.c_str());
         unlink(temporary.c_str());
-        error = "Unable to verify update helper: " + helperError;
+        error = "No se pudo verificar el ayudante de actualización: " + helperError;
         return false;
     }
     if (rename(helperTemporary.c_str(), helper.c_str()) != 0) {
@@ -561,13 +565,13 @@ bool UpdateService::install(const ReleaseInfo& release, std::string& error) cons
         unlink(helperTemporary.c_str());
         unlink(marker.c_str());
         unlink(temporary.c_str());
-        error = "Unable to publish update helper: " + helperError;
+        error = "No se pudo publicar el ayudante de actualización: " + helperError;
         return false;
     }
 #ifdef __SWITCH__
     const Result commit = fsdevCommitDevice("sdmc");
     if (R_FAILED(commit)) {
-        error = "Unable to commit staged update files.";
+        error = "No se pudieron confirmar los archivos de actualización preparados.";
         discardStaged();
         return false;
     }
@@ -610,7 +614,7 @@ bool UpdateService::confirmInstalled(std::string& error) const {
 #ifdef __SWITCH__
     const Result commit = fsdevCommitDevice("sdmc");
     if (R_FAILED(commit)) {
-        error = "Unable to commit update cleanup.";
+        error = "No se pudo confirmar la limpieza de la actualización.";
         return false;
     }
 #endif

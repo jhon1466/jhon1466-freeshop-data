@@ -43,19 +43,19 @@ bool parse(const std::string& text, std::vector<FavoriteEntry>& items,
            std::string& error) {
     Json root = Json::parse(text, nullptr, false);
     if (root.is_discarded() || !root.is_object()) {
-        error = "Favourites file is not valid JSON.";
+        error = "El archivo de la lista de deseos no es un JSON válido.";
         return false;
     }
     if (!root.contains("favorites"))
         return true;
     if (!root["favorites"].is_array()) {
-        error = "Favourites file is malformed: 'favorites' must be a list.";
+        error = "El archivo de la lista de deseos está mal formado: 'favorites' debe ser una lista.";
         return false;
     }
     for (const Json& entry : root["favorites"]) {
         if (!entry.is_object() || !entry.contains("info_hash") ||
             !entry["info_hash"].is_string()) {
-            error = "Favourites file is malformed: bad entry.";
+            error = "El archivo de la lista de deseos está mal formado: entrada inválida.";
             return false;
         }
         FavoriteEntry parsed;
@@ -81,7 +81,7 @@ bool FavoritesService::load(std::string& error) {
     std::ifstream input(path_, std::ios::binary);
     if (!input) {
         if (errno != ENOENT) {
-            error = std::string("Unable to open favourites: ") +
+            error = std::string("No se pudo abrir la lista de deseos: ") +
                     std::strerror(errno);
             return false;
         }
@@ -91,7 +91,7 @@ bool FavoritesService::load(std::string& error) {
     std::ostringstream buffer;
     buffer << input.rdbuf();
     if (!input.good() && !input.eof()) {
-        error = "Unable to read favourites file.";
+        error = "No se pudo leer el archivo de la lista de deseos.";
         return false;
     }
     std::vector<FavoriteEntry> parsed;
@@ -114,7 +114,7 @@ bool FavoritesService::toggle(const std::string& infoHash,
     error.clear();
     const std::string key = lowerAscii(infoHash);
     if (key.empty()) {
-        error = "Missing info hash.";
+        error = "Falta el hash de información.";
         return false;
     }
 
@@ -126,7 +126,7 @@ bool FavoritesService::toggle(const std::string& infoHash,
     const bool adding = found == next.end();
     if (adding) {
         if (next.size() >= kMaxFavorites) {
-            error = "Favourites list is full.";
+            error = "La lista de deseos está llena.";
             return false;
         }
         next.push_back(FavoriteEntry{key, title});
@@ -146,14 +146,14 @@ bool FavoritesService::write(const std::vector<FavoriteEntry>& items,
     {
         std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
         if (!output) {
-            error = "Unable to create favourites file.";
+            error = "No se pudo crear el archivo de la lista de deseos.";
             return false;
         }
         output << serialize(items);
         output.flush();
         if (!output.good()) {
             unlink(temporary.c_str());
-            error = "Unable to write favourites file.";
+            error = "No se pudo escribir el archivo de la lista de deseos.";
             return false;
         }
     }
@@ -169,7 +169,7 @@ bool FavoritesService::write(const std::vector<FavoriteEntry>& items,
     }
     int finalError = errno;
     unlink(temporary.c_str());
-    error = std::string("Unable to replace favourites file: ") +
+    error = std::string("No se pudo reemplazar el archivo de la lista de deseos: ") +
             std::strerror(finalError ? finalError : renameError);
     return false;
 }

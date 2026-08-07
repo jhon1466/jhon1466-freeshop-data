@@ -29,7 +29,6 @@
 #include "app/download_manager.hpp"
 #include "app/install_space.hpp"
 #include "app/web_server.hpp"
-#include "ui/common/storage_meter.hpp"
 #include "ui/common/ui_helpers.hpp"
 #include "ui/common/web_qr.hpp"
 #include "ui/i18n.hpp"
@@ -52,17 +51,6 @@ inline void installSidebarStyle() {
     style.addMetric("brls/sidebar/padding_right", 16.0f);     // was 40
     style.addMetric("brls/sidebar/padding_top", 28.0f);
 }
-
-// Box that reports no hit at all, so touches fall through to whatever sits
-// under it. setFocusable(false) is not enough: Box::hitTest claims any point
-// inside its frame regardless, and unlike a focus request a touch does not
-// walk on to the next sibling once a view has answered.
-class TouchThroughBox : public brls::Box {
-public:
-    using brls::Box::Box;
-
-    brls::View* hitTest(brls::Point) override { return nullptr; }
-};
 
 // Decorative glyph shown to the left of a sidebar label. Non-focusable; its
 // colour tracks the owning item's active state so it lights up with the accent
@@ -383,9 +371,23 @@ private:
 // so it reads identically, just relocated.
 class TopStatusRow : public brls::Box {
 public:
-    TopStatusRow() : brls::Box(brls::Axis::ROW) {
+    // manager/webServer are optional: the golden-runner/test builds construct
+    // this with neither, and it just skips the async refresh cycle.
+    TopStatusRow(DownloadManager* manager = nullptr,
+                pipensx::WebServer* webServer = nullptr)
+        : brls::Box(brls::Axis::ROW), manager_(manager),
+          webServer_(webServer) {
         setFocusable(false);
         setAlignItems(brls::AlignItems::CENTER);
+
+        storage_ = new TopStorageIndicator();
+        storage_->setMarginRight(18);
+        addView(storage_);
+        webRow_ = new WebStatusRow();
+        webRow_->setMarginBottom(0);
+        webRow_->setMarginRight(18);
+        addView(webRow_);
+
         brls::Platform* platform = brls::Application::getPlatform();
         battery_ = new brls::BatteryWidget();
         battery_->setMarginRight(14);
@@ -403,6 +405,21 @@ public:
         clock_->setFontSize(19);
         clock_->setTextColor(theme::textSecondary());
         addView(clock_);
+
+        if (manager_) {
+            refreshStorage();
+            refreshWebStatus();
+            // Same reasoning as MainFrame's old footer timer: nsGetStorageSize
+            // and nifmGetCurrentIpAddress are synchronous service IPC, so this
+            // runs off a timer + brls::async rather than from draw().
+            queryTimer_.setCallback([this] { scheduleRefresh(); });
+            queryTimer_.start(2000);
+        }
+    }
+
+    ~TopStatusRow() override {
+        queryTimer_.stop();
+        alive_->store(false);
     }
 
     void draw(NVGcontext* vg, float x, float y, float width, float height,
@@ -426,10 +443,60 @@ private:
         }
     }
 
+    void scheduleRefresh() {
+        if (!manager_ || queryInFlight_)
+            return;
+        queryInFlight_ = true;
+        auto alive = alive_;
+        std::string root = manager_->rootPath();
+        pipensx::WebServer* server = webServer_;
+        brls::async([this, alive, root, server] {
+            const pipensx::StorageSpaceSnapshot storage =
+                pipensx::queryStorageSpace(root);
+            const bool running = server ? server->running() : true;
+            std::string url = running ? webCompanionUrl(server, true) : "";
+            brls::sync([this, alive, storage, running, url = std::move(url)] {
+                if (!alive->load())
+                    return;
+                queryInFlight_ = false;
+                if (storage.available)
+                    storage_->setStorage(storage.totalBytes, storage.freeBytes);
+                else
+                    storage_->setUnavailable();
+                webRow_->setState(running, url);
+            });
+        });
+    }
+
+    void refreshStorage() {
+        const pipensx::StorageSpaceSnapshot storage =
+            pipensx::queryStorageSpace(manager_->rootPath());
+        if (storage.available)
+            storage_->setStorage(storage.totalBytes, storage.freeBytes);
+        else
+            storage_->setUnavailable();
+    }
+
+    void refreshWebStatus() {
+        // A null server (golden runner) reads as "serving on the fixed fake
+        // address" so the baseline row looks like the real thing.
+        const bool running = webServer_ ? webServer_->running() : true;
+        webRow_->setState(running,
+                          running ? webCompanionUrl(webServer_, true) : "");
+    }
+
+    TopStorageIndicator* storage_ = nullptr;
+    WebStatusRow* webRow_ = nullptr;
     brls::BatteryWidget* battery_ = nullptr;
     brls::WirelessWidget* wireless_ = nullptr;
     brls::Label* clock_ = nullptr;
     std::string lastText_;
+    DownloadManager* manager_ = nullptr;
+    pipensx::WebServer* webServer_ = nullptr;
+    brls::RepeatingTimer queryTimer_;
+    bool queryInFlight_ = false;
+    std::shared_ptr<std::atomic<bool>> alive_ =
+        std::make_shared<std::atomic<bool>>(true);
 };
 
 // TabFrame that carries icons and folds to an icon rail while a tab is focused.
@@ -472,64 +539,6 @@ public:
         for (brls::View* label : labels_)
             label->setVisibility(collapsed ? brls::Visibility::GONE
                                            : brls::Visibility::VISIBLE);
-        if (dock_) {
-            dock_->setWidth(collapsed ? kCollapsedWidth : expandedWidth_);
-            footer_->setCompact(collapsed);
-            // The rail is 88px — no room for an address line.
-            if (webRow_)
-                webRow_->setVisibility(collapsed ? brls::Visibility::GONE
-                                                 : brls::Visibility::VISIBLE);
-        }
-    }
-
-    // Free-space readout pinned to the bottom-left of the frame, over the
-    // sidebar area. Absolute + non-focusable so it never disturbs the sidebar's
-    // scroll or the focus-driven fold logic.
-    //
-    // The meter itself is *not* the absolute node: an absolute box with only
-    // left/bottom set forces Yoga to solve its top edge from a height that
-    // comes out of a Label measure func, which put the widget below the content
-    // area with nothing to clip it. The dock pins top+bottom instead, so its
-    // height is definite, justifyContent flex-end parks the meter on the floor
-    // whatever it measures, and clipsToBounds is the backstop.
-    void attachStorageFooter(DownloadManager* manager,
-                             pipensx::WebServer* webServer = nullptr) {
-        manager_ = manager;
-        webServer_ = webServer;
-        // Pinned over the full height of the sidebar column, so it has to be
-        // touch-transparent or it eats every tap aimed at the tab items.
-        dock_ = new TouchThroughBox(brls::Axis::COLUMN);
-        dock_->setFocusable(false);
-        dock_->setPositionType(brls::PositionType::ABSOLUTE);
-        dock_->setPositionTop(0);
-        dock_->setPositionBottom(0);
-        dock_->setPositionLeft(0);
-        dock_->setWidth(collapsed_ ? kCollapsedWidth : expandedWidth_);
-        dock_->setJustifyContent(brls::JustifyContent::FLEX_END);
-        dock_->setPadding(0, kFooterPad, kFooterPad, kFooterPad);
-        dock_->setClipsToBounds(true);
-
-        webRow_ = new WebStatusRow();
-        webRow_->setVisibility(collapsed_ ? brls::Visibility::GONE
-                                          : brls::Visibility::VISIBLE);
-        dock_->addView(webRow_);
-        footer_ = new StorageMeter();
-        footer_->setCompact(collapsed_);
-        dock_->addView(footer_);
-        addView(dock_);
-        refreshStorage();
-        refreshWebStatus();
-        // The periodic refresh runs off a timer + brls::async, NOT from
-        // draw(): nsGetStorageSize and nifmGetCurrentIpAddress are
-        // synchronous service IPC and used to stall the frame being
-        // recorded every 2 seconds.
-        queryTimer_.setCallback([this] { scheduleRefresh(); });
-        queryTimer_.start(2000);
-    }
-
-    ~MainFrame() override {
-        queryTimer_.stop();
-        alive_->store(false);
     }
 
 protected:
@@ -543,69 +552,12 @@ protected:
     }
 
 private:
-    void scheduleRefresh() {
-        if (!footer_ || !manager_ || queryInFlight_)
-            return;
-        queryInFlight_ = true;
-        auto alive = alive_;
-        std::string root = manager_->rootPath();
-        pipensx::WebServer* server = webServer_;
-        brls::async([this, alive, root, server] {
-            const pipensx::StorageSpaceSnapshot storage =
-                pipensx::queryStorageSpace(root);
-            const bool running = server ? server->running() : true;
-            std::string url = running ? webCompanionUrl(server, true) : "";
-            brls::sync([this, alive, storage, running, url = std::move(url)] {
-                if (!alive->load())
-                    return;
-                queryInFlight_ = false;
-                if (storage.available)
-                    footer_->setStorage(storage.totalBytes, storage.freeBytes);
-                else
-                    footer_->setUnavailable();
-                if (webRow_)
-                    webRow_->setState(running, url);
-            });
-        });
-    }
-
-    void refreshStorage() {
-        if (!footer_ || !manager_)
-            return;
-        const pipensx::StorageSpaceSnapshot storage =
-            pipensx::queryStorageSpace(manager_->rootPath());
-        if (storage.available)
-            footer_->setStorage(storage.totalBytes, storage.freeBytes);
-        else
-            footer_->setUnavailable();
-    }
-
-    void refreshWebStatus() {
-        if (!webRow_)
-            return;
-        // A null server (golden runner) reads as "serving on the fixed fake
-        // address" so the baseline row looks like the real thing.
-        const bool running = webServer_ ? webServer_->running() : true;
-        webRow_->setState(running,
-                          running ? webCompanionUrl(webServer_, true) : "");
-    }
-
     // Wide enough for padding + the active-accent bar + the 28px icon.
     static constexpr float kCollapsedWidth = 88.0f;
-    static constexpr float kFooterPad = 16.0f;
 
     bool collapsed_ = false;
     float expandedWidth_ = 248.0f;
     std::vector<brls::View*> labels_;
-    brls::Box* dock_ = nullptr;
-    StorageMeter* footer_ = nullptr;
-    WebStatusRow* webRow_ = nullptr;
-    DownloadManager* manager_ = nullptr;
-    pipensx::WebServer* webServer_ = nullptr;
-    brls::RepeatingTimer queryTimer_;
-    bool queryInFlight_ = false;
-    std::shared_ptr<std::atomic<bool>> alive_ =
-        std::make_shared<std::atomic<bool>>(true);
 };
 
 }  // namespace pipensx::ui

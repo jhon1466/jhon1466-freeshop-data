@@ -15,7 +15,7 @@
 
 static void set_error(char *error, size_t size, const char *message) {
     if (error && size)
-        snprintf(error, size, "%s", message ? message : "update failed");
+        snprintf(error, size, "%s", message ? message : "falló la actualización");
 }
 
 static void set_errno_error(char *error, size_t size, const char *operation) {
@@ -27,19 +27,19 @@ static bool read_expected(const char *path, char expected[65],
                           char *error, size_t error_size) {
     FILE *file = fopen(path, "rb");
     if (!file) {
-        set_errno_error(error, error_size, "Unable to open checksum marker");
+        set_errno_error(error, error_size, "No se pudo abrir el marcador de suma de verificación");
         return false;
     }
     char token[66] = {0};
     const int matched = fscanf(file, "%65s", token);
     fclose(file);
     if (matched != 1 || strlen(token) != 64) {
-        set_error(error, error_size, "Staged update checksum is invalid");
+        set_error(error, error_size, "La suma de verificación de la actualización preparada no es válida");
         return false;
     }
     for (size_t i = 0; i < 64; ++i) {
         if (!isxdigit((unsigned char)token[i])) {
-            set_error(error, error_size, "Staged update checksum is invalid");
+            set_error(error, error_size, "La suma de verificación de la actualización preparada no es válida");
             return false;
         }
         expected[i] = (char)tolower((unsigned char)token[i]);
@@ -52,30 +52,30 @@ static bool checksum_file(const char *path, char actual[65],
                           char *error, size_t error_size) {
     struct stat info;
     if (stat(path, &info) != 0) {
-        set_errno_error(error, error_size, "Unable to stat staged update");
+        set_errno_error(error, error_size, "No se pudo consultar la actualización preparada");
         return false;
     }
     if (info.st_size <= 0 || (uint64_t)info.st_size > UPDATE_NRO_LIMIT) {
-        set_error(error, error_size, "Staged update size is invalid");
+        set_error(error, error_size, "El tamaño de la actualización preparada no es válido");
         return false;
     }
     FILE *file = fopen(path, "rb");
     if (!file) {
-        set_errno_error(error, error_size, "Unable to open staged update");
+        set_errno_error(error, error_size, "No se pudo abrir la actualización preparada");
         return false;
     }
     const size_t size = (size_t)info.st_size;
     uint8_t *data = malloc(size);
     if (!data) {
         fclose(file);
-        set_error(error, error_size, "Unable to allocate checksum buffer");
+        set_error(error, error_size, "No se pudo reservar el búfer de la suma de verificación");
         return false;
     }
     const bool read_ok = fread(data, 1, size, file) == size;
     fclose(file);
     if (!read_ok) {
         free(data);
-        set_error(error, error_size, "Unable to read staged update");
+        set_error(error, error_size, "No se pudo leer la actualización preparada");
         return false;
     }
     uint8_t digest[32];
@@ -98,7 +98,7 @@ bool update_transaction_ready(const update_paths_t *paths,
         !checksum_file(paths->staged, actual, error, error_size))
         return false;
     if (strcmp(expected, actual) != 0) {
-        set_error(error, error_size, "Staged update checksum does not match");
+        set_error(error, error_size, "La suma de verificación de la actualización preparada no coincide");
         return false;
     }
     return true;
@@ -111,7 +111,7 @@ bool update_transaction_apply(const update_paths_t *paths,
     unlink(paths->backup);
     const bool had_target = access(paths->target, F_OK) == 0;
     if (had_target && rename(paths->target, paths->backup) != 0) {
-        set_errno_error(error, error_size, "Unable to back up current NRO");
+        set_errno_error(error, error_size, "No se pudo respaldar el NRO actual");
         return false;
     }
     if (rename(paths->staged, paths->target) != 0) {
@@ -119,7 +119,7 @@ bool update_transaction_apply(const update_paths_t *paths,
         if (had_target)
             rename(paths->backup, paths->target);
         errno = saved_errno;
-        set_errno_error(error, error_size, "Unable to install staged NRO");
+        set_errno_error(error, error_size, "No se pudo instalar el NRO preparado");
         return false;
     }
     char expected[65];
@@ -129,7 +129,7 @@ bool update_transaction_apply(const update_paths_t *paths,
         strcmp(expected, actual) != 0) {
         update_transaction_rollback(paths, NULL, 0);
         if (error && error_size && error[0] == '\0')
-            set_error(error, error_size, "Installed NRO checksum does not match");
+            set_error(error, error_size, "La suma de verificación del NRO instalado no coincide");
         return false;
     }
     return true;
@@ -138,13 +138,13 @@ bool update_transaction_apply(const update_paths_t *paths,
 bool update_transaction_rollback(const update_paths_t *paths,
                                  char *error, size_t error_size) {
     if (!paths || access(paths->backup, F_OK) != 0) {
-        set_error(error, error_size, "Update backup is missing");
+        set_error(error, error_size, "Falta el respaldo de la actualización");
         return false;
     }
     unlink(paths->staged);
     if (access(paths->target, F_OK) == 0 &&
         rename(paths->target, paths->staged) != 0) {
-        set_errno_error(error, error_size, "Unable to restage failed NRO");
+        set_errno_error(error, error_size, "No se pudo volver a preparar el NRO fallido");
         return false;
     }
     if (rename(paths->backup, paths->target) != 0) {
@@ -153,7 +153,7 @@ bool update_transaction_rollback(const update_paths_t *paths,
          * restoring the backup fails (for example after an SD I/O error). */
         rename(paths->staged, paths->target);
         errno = saved_errno;
-        set_errno_error(error, error_size, "Unable to restore previous NRO");
+        set_errno_error(error, error_size, "No se pudo restaurar el NRO anterior");
         return false;
     }
     return true;
@@ -162,15 +162,15 @@ bool update_transaction_rollback(const update_paths_t *paths,
 bool update_transaction_confirm(const update_paths_t *paths,
                                 char *error, size_t error_size) {
     if (!paths) {
-        set_error(error, error_size, "Update paths are missing");
+        set_error(error, error_size, "Faltan las rutas de la actualización");
         return false;
     }
     if (unlink(paths->backup) != 0 && errno != ENOENT) {
-        set_errno_error(error, error_size, "Unable to remove update backup");
+        set_errno_error(error, error_size, "No se pudo eliminar el respaldo de la actualización");
         return false;
     }
     if (unlink(paths->marker) != 0 && errno != ENOENT) {
-        set_errno_error(error, error_size, "Unable to remove checksum marker");
+        set_errno_error(error, error_size, "No se pudo eliminar el marcador de suma de verificación");
         return false;
     }
     return true;

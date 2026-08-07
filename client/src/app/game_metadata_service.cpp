@@ -99,20 +99,20 @@ bool readFile(const std::string& path, std::vector<uint8_t>& bytes,
               size_t maxBytes, std::string& error) {
     std::ifstream input(path, std::ios::binary);
     if (!input) {
-        error = "Unable to open metadata file.";
+        error = "No se pudo abrir el archivo de metadatos.";
         return false;
     }
     input.seekg(0, std::ios::end);
     std::streamoff size = input.tellg();
     input.seekg(0, std::ios::beg);
     if (size <= 0 || size > static_cast<std::streamoff>(maxBytes)) {
-        error = "Metadata file is empty or too large.";
+        error = "El archivo de metadatos está vacío o es demasiado grande.";
         return false;
     }
     bytes.resize(static_cast<size_t>(size));
     input.read(reinterpret_cast<char*>(bytes.data()), size);
     if (!input) {
-        error = "Unable to read metadata file.";
+        error = "No se pudo leer el archivo de metadatos.";
         return false;
     }
     if (isZstdPath(path))
@@ -126,7 +126,7 @@ bool writeAtomic(const std::string& path, const std::vector<uint8_t>& data,
     {
         std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
         if (!output) {
-            error = "Unable to create metadata cache.";
+            error = "No se pudo crear la caché de metadatos.";
             return false;
         }
         output.write(reinterpret_cast<const char*>(data.data()),
@@ -134,7 +134,7 @@ bool writeAtomic(const std::string& path, const std::vector<uint8_t>& data,
         output.flush();
         if (!output.good()) {
             unlink(temporary.c_str());
-            error = "Unable to write metadata cache.";
+            error = "No se pudo escribir la caché de metadatos.";
             return false;
         }
     }
@@ -146,7 +146,7 @@ bool writeAtomic(const std::string& path, const std::vector<uint8_t>& data,
         rename(temporary.c_str(), path.c_str()) == 0)
         return true;
     unlink(temporary.c_str());
-    error = "Unable to replace metadata cache.";
+    error = "No se pudo reemplazar la caché de metadatos.";
     return false;
 }
 
@@ -160,7 +160,7 @@ bool httpGetOnce(const std::string& url, size_t limit,
     data.clear();
     CURL* curl = curl_easy_init();
     if (!curl) {
-        error = "Unable to initialize HTTP.";
+        error = "No se pudo inicializar HTTP.";
         return false;
     }
     HttpBuffer buffer;
@@ -208,11 +208,11 @@ bool httpGetOnce(const std::string& url, size_t limit,
     if (result != CURLE_OK || status < 200 || status >= 300 ||
         buffer.overflow) {
         if (buffer.overflow)
-            error = "HTTP response exceeded size limit.";
+            error = "La respuesta HTTP superó el límite de tamaño.";
         else if (result != CURLE_OK)
-            error = std::string("HTTP error: ") + curl_easy_strerror(result);
+            error = std::string("Error HTTP: ") + curl_easy_strerror(result);
         else
-            error = "HTTP status " + std::to_string(status) + ".";
+            error = "Estado HTTP " + std::to_string(status) + ".";
         return false;
     }
     data = std::move(buffer.data);
@@ -497,7 +497,7 @@ bool fetchTrustedMetadata(const std::string& url, size_t limit,
         return false;
     if (!GameMetadataService::isTrustedRedirect(effectiveUrl)) {
         data.clear();
-        error = "Metadata download redirected to an untrusted host.";
+        error = "La descarga de metadatos redirigió a un host no confiable.";
         return false;
     }
     return true;
@@ -575,7 +575,7 @@ bool GameMetadataService::parseIndex(const std::string& json,
     items.clear();
     nlohmann::json root = nlohmann::json::parse(json, nullptr, false);
     if (root.is_discarded() || !root.is_array()) {
-        error = "Metadata index is not a JSON array.";
+        error = "El índice de metadatos no es un arreglo JSON.";
         return false;
     }
     for (const auto& item : root) {
@@ -595,7 +595,7 @@ bool GameMetadataService::parseIndex(const std::string& json,
         items.push_back(std::move(metadata));
     }
     if (items.empty()) {
-        error = "Metadata index contains no usable entries.";
+        error = "El índice de metadatos no contiene entradas utilizables.";
         return false;
     }
     return true;
@@ -631,7 +631,7 @@ bool GameMetadataService::prepareSnapshot(const std::string& manifestJson,
                                           std::string& error) {
     snapshot = {};
     if (manifestJson.empty() || manifestJson.size() > kMaxManifestBytes) {
-        error = "Metadata manifest is empty or too large.";
+        error = "El manifiesto de metadatos está vacío o es demasiado grande.";
         return false;
     }
     nlohmann::json root =
@@ -641,7 +641,7 @@ bool GameMetadataService::prepareSnapshot(const std::string& manifestJson,
         !root["schemaVersion"].is_number_unsigned() ||
         root["schemaVersion"].get<uint32_t>() != 1 ||
         !root.contains("index") || !root["index"].is_object()) {
-        error = "Metadata manifest has an unsupported schema.";
+        error = "El manifiesto de metadatos tiene un esquema no compatible.";
         return false;
     }
     const nlohmann::json& index = root["index"];
@@ -649,7 +649,7 @@ bool GameMetadataService::prepareSnapshot(const std::string& manifestJson,
         !index.contains("bytes") || !index["bytes"].is_number_unsigned() ||
         !index.contains("entries") ||
         !index["entries"].is_number_unsigned()) {
-        error = "Metadata manifest index fields are invalid.";
+        error = "Los campos de índice del manifiesto de metadatos no son válidos.";
         return false;
     }
 
@@ -674,27 +674,27 @@ bool GameMetadataService::prepareSnapshot(const std::string& manifestJson,
         manifest.indexBytes == 0 || manifest.indexBytes > kMaxIndexBytes ||
         manifest.indexBytes != indexJson.size() ||
         manifest.indexSha256.size() != 64 || manifest.entryCount == 0) {
-        error = "Metadata manifest does not match the index.";
+        error = "El manifiesto de metadatos no coincide con el índice.";
         return false;
     }
     if (!std::all_of(manifest.indexSha256.begin(),
                      manifest.indexSha256.end(), [](unsigned char c) {
                          return std::isxdigit(c) != 0;
                      })) {
-        error = "Metadata index SHA-256 is invalid.";
+        error = "El SHA-256 del índice de metadatos no es válido.";
         return false;
     }
     uint8_t digest[32];
     sha256(indexJson.data(), indexJson.size(), digest);
     if (hex32String(digest) != manifest.indexSha256) {
-        error = "Metadata index SHA-256 does not match.";
+        error = "El SHA-256 del índice de metadatos no coincide.";
         return false;
     }
     std::vector<GameMetadata> items;
     if (!parseIndex(indexJson, items, error))
         return false;
     if (items.size() != manifest.entryCount) {
-        error = "Metadata manifest entry count does not match.";
+        error = "La cantidad de entradas del manifiesto de metadatos no coincide.";
         return false;
     }
     snapshot.manifest = std::move(manifest);
@@ -716,7 +716,7 @@ bool GameMetadataService::loadCachedSnapshot(MetadataSnapshot& snapshot,
         manifestBytes.size());
     const std::string sha = manifestIndexSha(manifestJson);
     if (sha.empty()) {
-        error = "Cached metadata manifest is invalid.";
+        error = "El manifiesto de metadatos en caché no es válido.";
         return false;
     }
     std::vector<uint8_t> indexBytes;
@@ -866,11 +866,11 @@ bool GameMetadataService::fetchLatest(MetadataSnapshot& snapshot,
         }
         error = refreshError;
         if (!cacheError.empty())
-            error += " Cached metadata: " + cacheError;
+            error += " Metadatos en caché: " + cacheError;
         return false;
     };
     if (!isTrustedSource(manifestUrl_)) {
-        error = "Metadata manifest URL is not trusted.";
+        error = "La URL del manifiesto de metadatos no es confiable.";
         return false;
     }
     std::vector<uint8_t> manifestBytes;
@@ -887,7 +887,7 @@ bool GameMetadataService::fetchLatest(MetadataSnapshot& snapshot,
         !root["index"].contains("bytes") ||
         !root["index"]["bytes"].is_number_unsigned()) {
         return useCachedAfterFailure(
-            "Metadata manifest index fields are invalid.");
+            "Los campos de índice del manifiesto de metadatos no son válidos.");
     }
     const nlohmann::json& index = root["index"];
     const std::string indexUrl =
@@ -898,7 +898,7 @@ bool GameMetadataService::fetchLatest(MetadataSnapshot& snapshot,
     if (!isTrustedSource(indexUrl) || expectedBytes == 0 ||
         expectedBytes > kMaxIndexBytes) {
         return useCachedAfterFailure(
-            "Metadata index URL or size is not trusted.");
+            "La URL o el tamaño del índice de metadatos no son confiables.");
     }
     std::vector<uint8_t> indexBytes;
     if (!metadataFetcher_(indexUrl, kMaxIndexBytes, indexBytes, error))
@@ -935,7 +935,7 @@ bool GameMetadataService::refreshDetails(const std::string& titleId,
                                          GameMetadata& metadata,
                                          std::string& error) const {
     if (titleId.empty()) {
-        error = "Game metadata has no Title ID.";
+        error = "Los metadatos del juego no tienen Title ID.";
         return false;
     }
     std::string cachePath = cacheRoot_ + "/" + titleId + ".json";
@@ -953,7 +953,7 @@ bool GameMetadataService::refreshDetails(const std::string& titleId,
 
     nlohmann::json root = nlohmann::json::parse(bytes, nullptr, false);
     if (root.is_discarded() || !root.is_object()) {
-        error = "Nlib metadata is not a valid object.";
+        error = "Los metadatos de Nlib no son un objeto válido.";
         return false;
     }
     GameMetadata refreshed = metadata;
@@ -977,7 +977,7 @@ GameMetadataService::ImageLoadResult GameMetadataService::loadImageInternal(
     std::string& error) const {
     bytes.clear();
     if (url.empty()) {
-        error = "No image URL.";
+        error = "No hay URL de imagen.";
         return ImageLoadResult::Failed;
     }
 
@@ -991,7 +991,7 @@ GameMetadataService::ImageLoadResult GameMetadataService::loadImageInternal(
         int channels = 0;
         if (!stbi_info_from_memory(bytes.data(), static_cast<int>(bytes.size()),
                                    &width, &height, &channels)) {
-            error = "Local image is not valid.";
+            error = "La imagen local no es válida.";
             return ImageLoadResult::Failed;
         }
         return ImageLoadResult::Loaded;
@@ -1014,7 +1014,7 @@ GameMetadataService::ImageLoadResult GameMetadataService::loadImageInternal(
     error.clear();
     const ImageNetwork mode = imageNetwork_.load(std::memory_order_relaxed);
     if (mode == ImageNetwork::Off) {
-        error = "Image network is off.";
+        error = "La red de imágenes está desactivada.";
         return ImageLoadResult::Failed;
     }
     // While a torrent transfers, covers still fetch — just under a receive cap
@@ -1025,7 +1025,7 @@ GameMetadataService::ImageLoadResult GameMetadataService::loadImageInternal(
                  recvCap))
         return ImageLoadResult::Failed;
     if (bytes.size() < 8) {
-        error = "Downloaded image is too small.";
+        error = "La imagen descargada es demasiado pequeña.";
         return ImageLoadResult::Failed;
     }
     int width = 0;
@@ -1033,7 +1033,7 @@ GameMetadataService::ImageLoadResult GameMetadataService::loadImageInternal(
     int channels = 0;
     if (!stbi_info_from_memory(bytes.data(), static_cast<int>(bytes.size()),
                                &width, &height, &channels)) {
-        error = "Downloaded response is not an image.";
+        error = "La respuesta descargada no es una imagen.";
         return ImageLoadResult::Failed;
     }
     std::string writeError;
@@ -1060,7 +1060,7 @@ bool GameMetadataService::clearImageCache(std::string& error) const {
             error.clear();
             return true;
         }
-        error = std::string("Unable to open artwork cache: ") +
+        error = std::string("No se pudo abrir la caché de portadas: ") +
                 std::strerror(errno);
         return false;
     }
@@ -1077,7 +1077,7 @@ bool GameMetadataService::clearImageCache(std::string& error) const {
     }
     closedir(directory);
     if (!ok) {
-        error = std::string("Unable to clear artwork cache: ") +
+        error = std::string("No se pudo vaciar la caché de portadas: ") +
                 std::strerror(failure);
         return false;
     }
@@ -1250,7 +1250,7 @@ void GameMetadataService::imageWorkerMain() const {
                     decoded->pixels = std::move(rgba);
                     result = std::move(decoded);
                 } else {
-                    error = "Unable to decode cached image.";
+                    error = "No se pudo decodificar la imagen en caché.";
                 }
                 if (pixels)
                     stbi_image_free(pixels);

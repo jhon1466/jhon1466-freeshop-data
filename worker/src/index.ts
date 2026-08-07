@@ -1,19 +1,19 @@
 // Transparent proxy in front of the GitHub data repo. The Switch client
 // resolves every catalog read (catalog.json, icons, downloads) against
-// whatever `baseUrl` is in sources.json - pointing that at this Worker
-// instead of straight at raw.githubusercontent.com means the repo owner/name
-// never appears in sources.json, in the compiled .nro's strings, or on the
-// wire. See ../README.md.
+// whatever `baseUrl` is configured for the source - pointing that at this
+// Worker instead of straight at raw.githubusercontent.com means the repo
+// owner/name never appears in the compiled .nro's strings or on the wire.
+// See ../README.md.
 //
-// Also proxies the self-update check (client/source/update/self_update.c)
-// the same way: CLIENT_RELEASES_API_URL in client/source/config.h points
-// here instead of straight at api.github.com, for the same reason.
+// Also proxies the self-update check (client/src/app/update_service.cpp's
+// kLatestReleaseUrl/kReleaseAssetPrefix point here instead of straight at
+// api.github.com/github.com), for the same reason and so update checks keep
+// working once REPO is set to private.
 const OWNER = "jhon1466";
 const REPO_NAME = "jhon1466-freeshop-data";
 const REPO = `${OWNER}/${REPO_NAME}`;
 const UPSTREAM = `https://raw.githubusercontent.com/${REPO}/main`;
-// Matches CLIENT_RELEASE_ASSET_NAME in client/source/config.h - the one
-// release asset self_update.c actually looks for.
+// Matches the asset names update_service.cpp's parseRelease() looks for.
 const RELEASE_ASSET_NAME = "freeshop-client.nro";
 
 interface Env {
@@ -39,15 +39,17 @@ function corsHeaders(upstream: Response): Headers {
 }
 
 // GET /releases/latest - proxies api.github.com's "latest release" endpoint
-// (what self_update_check() parses: tag_name, body, assets[].name/
-// browser_download_url). The one rewrite: the freeshop-client.nro asset's
-// browser_download_url gets pointed at this Worker's own /releases/assets/:id
-// (see handleReleaseAsset) instead of GitHub's. That matters specifically
-// for a private repo - GitHub's plain browser_download_url is a
-// github.com/.../releases/download/... link meant for a signed-in browser
-// session, not a bearer token; a token only works against the API's
-// /releases/assets/:id endpoint (with Accept: application/octet-stream),
-// which is what that route actually calls.
+// (what self_update_check() and pipensx's UpdateService::parseRelease parse:
+// tag_name, draft, prerelease, assets[].name/browser_download_url). The
+// rewrite: the freeshop-client.nro asset AND its freeshop-client.nro.sha256
+// checksum sibling (pipensx's UpdateService::install verifies the download
+// against this before staging it) get their browser_download_url pointed at
+// this Worker's own /releases/assets/:id (see handleReleaseAsset) instead of
+// GitHub's. That matters specifically for a private repo - GitHub's plain
+// browser_download_url is a github.com/.../releases/download/... link meant
+// for a signed-in browser session, not a bearer token; a token only works
+// against the API's /releases/assets/:id endpoint (with
+// Accept: application/octet-stream), which is what that route actually calls.
 async function handleReleaseLatest(url: URL, env: Env): Promise<Response> {
   const upstream = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
     headers: githubHeaders(env, {
@@ -62,7 +64,8 @@ async function handleReleaseLatest(url: URL, env: Env): Promise<Response> {
   const release = (await upstream.json()) as { assets?: Array<Record<string, unknown>> };
   if (Array.isArray(release.assets)) {
     for (const asset of release.assets) {
-      if (asset && asset.name === RELEASE_ASSET_NAME && asset.id != null) {
+      if (!asset || asset.id == null) continue;
+      if (asset.name === RELEASE_ASSET_NAME || asset.name === `${RELEASE_ASSET_NAME}.sha256`) {
         asset.browser_download_url = `${url.origin}/releases/assets/${asset.id}`;
       }
     }

@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdio>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -25,6 +26,25 @@ extern "C" {
 #include "ui/theme.hpp"
 
 namespace pipensx::ui {
+
+// Runs a filesystem/network operation launched from a detached background
+// std::thread and converts any escaping exception into a normal ok=false
+// result instead of an instant std::terminate that kills the whole app (the
+// std::thread entry point has no caller left to catch it once .detach() has
+// run) — the same safety net DownloadManager's own runner threads already
+// wrap around every task for the same reason.
+inline bool runGuarded(const std::function<bool(std::string&)>& work,
+                       std::string& error) {
+    try {
+        return work(error);
+    } catch (const std::exception& e) {
+        error = std::string("Error interno: ") + e.what();
+        return false;
+    } catch (...) {
+        error = "Error interno.";
+        return false;
+    }
+}
 
 inline pipensx::install::InstallStorageTarget installTargetFor(InstallLocation value) {
     return value == InstallLocation::SystemMemory
@@ -145,13 +165,30 @@ inline bool isApplicationMode() {
 }
 
 inline void showApplicationModeRequired() {
+    // Runs before Borealis/deko3d init (a library applet must stay on
+    // libnx's plain console renderer here), so ANSI codes are the only
+    // styling available — no Borealis theme/fonts yet.
     consoleInit(nullptr);
-    std::printf("\nFreeShop requires application mode.\n\n");
-    std::printf("Press HOME for exit.\n");
-    std::printf("After that, hold R while launching a game.\n");
-    std::printf("Keep holding R until hbmenu opens, then start FreeShop.\n\n");
-    std::printf("Album applet mode does not provide enough memory and\n");
-    std::printf("network sessions for the GUI torrent client.\n\n");
+    std::printf("\n\n");
+    std::printf("  " CONSOLE_CYAN "FreeShop" CONSOLE_RESET
+               " necesita el modo \"aplicacion\"\n");
+    std::printf("  " CONSOLE_CYAN
+               "--------------------------------------\n" CONSOLE_RESET);
+    std::printf("\n");
+    std::printf("  El modo album (el que abre este menu) no tiene memoria\n");
+    std::printf("  ni sesiones de red suficientes para el cliente torrent.\n");
+    std::printf("\n");
+    std::printf("  " CONSOLE_YELLOW "Como iniciarlo bien:" CONSOLE_RESET "\n");
+    std::printf("\n");
+    std::printf("   1. Pulsa " CONSOLE_GREEN "HOME" CONSOLE_RESET
+               " para salir de aqui.\n");
+    std::printf("   2. Abre cualquier juego desde el menu de inicio.\n");
+    std::printf("   3. Mientras el juego carga, manten pulsado "
+               CONSOLE_GREEN "R" CONSOLE_RESET ".\n");
+    std::printf("   4. Sin soltar " CONSOLE_GREEN "R" CONSOLE_RESET
+               ", espera a que se abra el menu de homebrew.\n");
+    std::printf("   5. Ya ahi, inicia FreeShop.\n");
+    std::printf("\n\n");
     consoleUpdate(nullptr);
 
     while (appletMainLoop()) {

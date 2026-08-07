@@ -138,7 +138,7 @@ StorageSpaceSnapshot queryStorageSpace(const std::string& path) {
     if (R_FAILED(rc) || total < 0 || free < 0) {
         char buffer[96];
         std::snprintf(buffer, sizeof(buffer),
-                      "Unable to query SD storage (0x%08x).", rc);
+                      "No se pudo consultar el almacenamiento SD (0x%08x).", rc);
         result.error = buffer;
         return result;
     }
@@ -147,7 +147,7 @@ StorageSpaceSnapshot queryStorageSpace(const std::string& path) {
 #else
     struct statvfs info {};
     if (statvfs(path.c_str(), &info) != 0) {
-        result.error = std::string("Unable to query storage: ") +
+        result.error = std::string("No se pudo consultar el almacenamiento: ") +
                        std::strerror(errno);
         return result;
     }

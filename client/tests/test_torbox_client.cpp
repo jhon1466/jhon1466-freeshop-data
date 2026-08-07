@@ -48,7 +48,7 @@ void testParseCreate() {
     assert(TorboxClient::parseCreate(kCreateOk, id, error));
     assert(id == 297464);
     assert(!TorboxClient::parseCreate(kCreateAuthFail, id, error));
-    assert(error.rfind("TorBox key rejected", 0) == 0);
+    assert(error.rfind("La clave de TorBox fue rechazada", 0) == 0);
     assert(!TorboxClient::parseCreate("{not json", id, error));
     assert(!error.empty());
 }
@@ -72,7 +72,7 @@ void testParseInfo() {
     assert(TorboxClient::parseInfo(kInfoArray, 297464, info, error));
     assert(info.id == 297464);
     assert(!TorboxClient::parseInfo(kInfoArray, 999, info, error));
-    assert(error == "TorBox torrent not found.");
+    assert(error == "No se encontró el torrent en TorBox.");
 }
 
 void testParseDownloadLink() {
@@ -138,7 +138,7 @@ void testTransportInjection() {
         });
     assert(!authFailClient.createFromMagnet("magnet:?xt=urn:btih:aa11", id,
                                             error));
-    assert(error == "TorBox key rejected - relink in Settings.");
+    assert(error == "La clave de TorBox fue rechazada; vuelve a vincularla en Ajustes.");
 
     // Test HTTP 500 with generic failure message gets status appended
     pipensx::TorboxClient serverErrClient("test-key",
@@ -150,7 +150,7 @@ void testTransportInjection() {
         });
     assert(!serverErrClient.createFromMagnet("magnet:?xt=urn:btih:aa11", id,
                                              error));
-    assert(error == "TorBox request failed (HTTP 500).");
+    assert(error == "Falló la solicitud a TorBox (HTTP 500).");
 }
 
 // Verify that parsers handle wrong-typed / null JSON fields without throwing.

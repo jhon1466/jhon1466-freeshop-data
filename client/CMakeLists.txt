@@ -51,7 +51,14 @@ project(pipensx VERSION ${PIPENSX_VERSION} LANGUAGES C CXX)
 if (PLATFORM_SWITCH)
     set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
     set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+    # Diagnostic: temporarily OFF while chasing a "std::terminate called with
+    # no live exception" crash on the save-backup path that a code-level
+    # try/catch fix did not resolve — LTO across translation units is a known
+    # trouble spot for C++ exception unwinding on some cross-compiler
+    # toolchains (devkitA64 aarch64-none-elf is not a mainstream target), so
+    # this build isolates whether that's the actual cause. Restore to ON once
+    # ruled out either way.
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 endif ()
 
 set(APP_TITLE "FreeShop")
