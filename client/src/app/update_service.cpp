@@ -501,6 +501,48 @@ UpdateCheckResult UpdateService::check() const {
     return result;
 }
 
+bool UpdateService::publishHelper(std::string& error) const {
+    const std::string helper = helperPath();
+    const std::string helperTemporary = helper + ".tmp";
+    unlink(helperTemporary.c_str());
+    if (!copyFileContents(helperSourcePath_, helperTemporary, error)) {
+        unlink(helperTemporary.c_str());
+        return false;
+    }
+    std::string sourceHelperChecksum;
+    std::string copiedHelperChecksum;
+    if (!checksumFile(helperSourcePath_, sourceHelperChecksum, error) ||
+        !checksumFile(helperTemporary, copiedHelperChecksum, error) ||
+        sourceHelperChecksum != copiedHelperChecksum) {
+        if (error.empty())
+            error = "la suma de verificación del ayudante copiado no coincide";
+        unlink(helperTemporary.c_str());
+        return false;
+    }
+    // sdmc:'s rename() can refuse to replace an existing destination even
+    // right after a fresh unlink() of it - same quirk install_journal.cpp's
+    // saveInstallJournal() and main_switch.cpp's legacy-update-hop code
+    // both already work around.
+    unlink(helper.c_str());
+    if (rename(helperTemporary.c_str(), helper.c_str()) != 0) {
+        if (!copyFileContents(helperTemporary, helper, error)) {
+            unlink(helperTemporary.c_str());
+            return false;
+        }
+        unlink(helperTemporary.c_str());
+    }
+    return true;
+}
+
+bool UpdateService::refreshHelper(std::string& error) const {
+    if (!publishHelper(error)) {
+        log_msg("[update] helper refresh failed: %s\n", error.c_str());
+        return false;
+    }
+    log_msg("[update] helper refreshed at %s\n", helperPath().c_str());
+    return true;
+}
+
 bool UpdateService::install(const ReleaseInfo& release, std::string& error) const {
     log_msg("[update] installing %s\n", release.version.c_str());
     if (!trustedAssetUrl(release.nroUrl) ||
@@ -526,11 +568,8 @@ bool UpdateService::install(const ReleaseInfo& release, std::string& error) cons
     log_msg("[update] expected checksum %s\n", expectedChecksum.c_str());
     const std::string temporary = stagedPath();
     const std::string marker = temporary + ".sha256";
-    const std::string helper = helperPath();
-    const std::string helperTemporary = helper + ".tmp";
     unlink(temporary.c_str());
     unlink(marker.c_str());
-    unlink(helperTemporary.c_str());
     log_msg("[update] downloading %s\n", release.nroUrl.c_str());
     if (!fetchWithRetry([&] {
             return assetFetcher_(release.nroUrl, temporary, kNroLimit, error);
@@ -563,29 +602,7 @@ bool UpdateService::install(const ReleaseInfo& release, std::string& error) cons
     }
     markerFile.close();
     std::string helperError;
-    if (!copyFileContents(helperSourcePath_, helperTemporary, helperError)) {
-        unlink(helperTemporary.c_str());
-        unlink(marker.c_str());
-        unlink(temporary.c_str());
-        error = "No se pudo crear el ayudante de actualización: " + helperError;
-        return false;
-    }
-    std::string sourceHelperChecksum;
-    std::string copiedHelperChecksum;
-    if (!checksumFile(helperSourcePath_, sourceHelperChecksum, helperError) ||
-        !checksumFile(helperTemporary, copiedHelperChecksum, helperError) ||
-        sourceHelperChecksum != copiedHelperChecksum) {
-        if (helperError.empty())
-            helperError = "la suma de verificación del ayudante copiado no coincide";
-        unlink(helperTemporary.c_str());
-        unlink(marker.c_str());
-        unlink(temporary.c_str());
-        error = "No se pudo verificar el ayudante de actualización: " + helperError;
-        return false;
-    }
-    if (rename(helperTemporary.c_str(), helper.c_str()) != 0) {
-        helperError = std::strerror(errno);
-        unlink(helperTemporary.c_str());
+    if (!publishHelper(helperError)) {
         unlink(marker.c_str());
         unlink(temporary.c_str());
         error = "No se pudo publicar el ayudante de actualización: " + helperError;

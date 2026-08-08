@@ -62,6 +62,15 @@ public:
     // new" screen once confirmInstalled() lands on the next launch.
     std::string notesPath() const { return targetPath_ + ".update-notes.txt"; }
     const std::string& helperPath() const { return helperPath_; }
+    // Re-copies the helper from this (currently running) build's own romfs
+    // over whatever sits at helperPath() on the SD card, verifying the copy
+    // by checksum. install() already does this for a freshly staged update;
+    // this is the same step, callable on its own right before offering to
+    // run a helper staged by a PREVIOUS run - which may have shipped with a
+    // bug since fixed upstream (see main_switch.cpp's pending-update-confirm
+    // prompt). A stale helper left over from an old attempt would otherwise
+    // never get refreshed just by replacing the main .nro.
+    bool refreshHelper(std::string& error) const;
     void checkAsync(CheckCallback callback);
     bool checkCompleted() const { return checkCompleted_.load(); }
     void installAsync(ReleaseInfo release, InstallCallback callback);
@@ -80,6 +89,8 @@ public:
                              std::string& error);
 
 private:
+    bool publishHelper(std::string& error) const;
+
     std::string targetPath_;
     std::string helperPath_;
     std::string helperSourcePath_;

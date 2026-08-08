@@ -585,11 +585,24 @@ int main(int argc, char** argv) {
             auto* dialog = new brls::Dialog(
                 tr("pipensx/settings/update_pending_install"));
             dialog->addButton(tr("pipensx/settings/install_and_restart"),
-                              [helper] {
+                              [helper, &launchUpdater] {
 #ifdef __SWITCH__
                 if (!envHasNextLoad()) {
                     brls::Application::notify(
                         tr("pipensx/settings/update_no_restart"));
+                    return;
+                }
+                // The helper on disk may have been staged by an EARLIER
+                // run and never touched since - including one built before
+                // a bug fix that shipped in this very build. Re-publish it
+                // from this build's own bundled copy every time, so a
+                // stale/broken helper can never get reused just because
+                // the main .nro was swapped in some other way (manually,
+                // etc.) without going through a fresh install().
+                std::string refreshError;
+                if (!launchUpdater.refreshHelper(refreshError)) {
+                    brls::Application::notify(
+                        tr("pipensx/settings/update_restart_failed"));
                     return;
                 }
                 const std::string arguments =
