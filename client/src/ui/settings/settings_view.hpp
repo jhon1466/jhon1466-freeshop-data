@@ -333,9 +333,8 @@ private:
         if (webAddress_)
             webAddress_->setDetailText(webAddressText());
         if (webPin_)
-            webPin_->setDetailText(settings_->get().webServerPin.empty()
-                                       ? tr("pipensx/settings/web_pin_off")
-                                       : "••••");
+            webPin_->setDetailText(
+                settings_->get().webServerPin.empty() ? "——" : "••••");
     }
 
     void showWebQr() {
@@ -360,7 +359,7 @@ private:
                 if (!persist(values, "web_pin"))
                     return;
                 if (webServer_)
-                    webServer_->setPin(text);
+                    webServer_->setPin(settings_->get().webServerPin);
                 updateWebCells();
             },
             tr("pipensx/settings/web_pin"),

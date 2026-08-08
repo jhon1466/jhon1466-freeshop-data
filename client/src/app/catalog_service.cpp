@@ -1,4 +1,5 @@
 #include "catalog_service.hpp"
+#include "curl_https.hpp"
 #include "magnet_resolver.hpp"
 #include "snapshot_zstd.hpp"
 
@@ -159,12 +160,17 @@ bool httpGet(const std::string& url, std::string& body, std::string& error) {
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 45L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeHttp);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+    curlPinHttpsOnly(curl);
     curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
     CURLcode result = curl_easy_perform(curl);
     long status = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+    char* effective = nullptr;
+    curl_easy_getinfo(curl, CURLINFO_EFFECTIVE_URL, &effective);
+    const std::string effectiveUrl =
+        effective ? std::string(effective) : std::string();
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
     if (result != CURLE_OK || status < 200 || status >= 300 ||
@@ -177,6 +183,10 @@ bool httpGet(const std::string& url, std::string& body, std::string& error) {
         else
             error = "El servidor del catálogo devolvió HTTP " + std::to_string(status) +
                     ".";
+        return false;
+    }
+    if (!CatalogService::isTrustedSource(effectiveUrl)) {
+        error = "La descarga del catálogo redirigió a un servidor no confiable.";
         return false;
     }
     body = std::move(buffer.data);
