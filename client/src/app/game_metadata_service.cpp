@@ -410,6 +410,7 @@ void parseMetadataObject(const nlohmann::json& item, GameMetadata& metadata) {
     metadata.name = stringValue(item, "name");
     metadata.intro = stringValue(item, "intro");
     metadata.description = stringValue(item, "description");
+    metadata.descriptionEs = stringValue(item, "descriptionEs");
     metadata.publisher = stringValue(item, "publisher");
     metadata.releaseDate = stringValue(item, "releaseDate");
     metadata.iconUrl = stringValue(item, "iconUrl");

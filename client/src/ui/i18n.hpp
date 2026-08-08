@@ -33,9 +33,18 @@ inline bool preferCatalogNativeText() {
     return brls::Application::getLocale().rfind("ru", 0) == 0;
 }
 
+// Matches "es" and "es-419" - see scripts/translate-metadata-es.js for where
+// GameMetadata::descriptionEs actually comes from.
+inline bool preferSpanishText() {
+    return brls::Application::getLocale().rfind("es", 0) == 0;
+}
+
 inline TextPreference catalogTextPreference() {
-    return preferCatalogNativeText() ? TextPreference::CatalogNative
-                                     : TextPreference::Metadata;
+    if (preferCatalogNativeText())
+        return TextPreference::CatalogNative;
+    if (preferSpanishText())
+        return TextPreference::Spanish;
+    return TextPreference::Metadata;
 }
 
 }  // namespace pipensx::ui

@@ -10,11 +10,15 @@ namespace pipensx {
 
 std::vector<CatalogEntry> withPreferredDescriptions(
     const std::vector<CatalogEntry>& entries,
-    const GameMetadataService& metadata) {
+    const GameMetadataService& metadata,
+    TextPreference preference) {
     std::vector<CatalogEntry> out = entries;
     for (CatalogEntry& e : out) {
         const GameMetadata* meta = metadata.findByInfoHash(e.infoHash);
-        if (meta && !meta->description.empty())
+        if (preference == TextPreference::Spanish &&
+            meta && !meta->descriptionEs.empty())
+            e.description = meta->descriptionEs;
+        else if (meta && !meta->description.empty())
             e.description = meta->description;
         else if (meta && !meta->intro.empty())
             e.description = meta->intro;
@@ -115,6 +119,9 @@ CatalogPresentation resolveCatalogPresentation(
     if (preference == TextPreference::CatalogNative &&
         !entry.description.empty())
         result.description = entry.description;
+    else if (preference == TextPreference::Spanish &&
+             metadata && !metadata->descriptionEs.empty())
+        result.description = metadata->descriptionEs;
     else if (metadata && !metadata->description.empty())
         result.description = metadata->description;
     else if (metadata && !metadata->intro.empty())

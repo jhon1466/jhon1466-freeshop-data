@@ -33,6 +33,12 @@ struct GameMetadata {
     std::string name;
     std::string intro;
     std::string description;
+    // Locally-generated Spanish translation of `description` (see
+    // scripts/translate-metadata-es.js) - empty when the index shipping
+    // right now hasn't been translated yet, or a title has none. Never a
+    // translation of `intro`, which the catalog only ever falls back to
+    // when `description` itself is empty (see resolveCatalogPresentation).
+    std::string descriptionEs;
     std::string publisher;
     std::string releaseDate;
     std::string iconUrl;

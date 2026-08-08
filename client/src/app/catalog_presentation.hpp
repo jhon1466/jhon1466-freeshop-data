@@ -41,6 +41,11 @@ enum class PlayerFilter {
 enum class TextPreference {
     Metadata,
     CatalogNative,
+    // metadata->descriptionEs (see scripts/translate-metadata-es.js) over
+    // the English metadata->description, for a Spanish-locale UI. Falls
+    // back through the same chain as Metadata (English description, then
+    // intro, then entry.description) for any title not yet translated.
+    Spanish,
 };
 
 std::vector<std::string> mergeScreenshotUrls(
@@ -56,13 +61,18 @@ bool catalogEntryIsGame(const CatalogEntry& entry,
 
 bool catalogEntryHasMatchedTitle(const GameMetadata* metadata);
 
-// Applies the same metadata-over-catalogue text preference resolveCatalogPresentation
-// uses for TextPreference::Metadata to a full entry list, for callers that need a flat
-// CatalogEntry vector rather than the UI's per-entry CatalogPresentation — e.g. the web
-// companion's /api/catalog endpoint, which otherwise serves the Langegen catalogue's raw
-// (Russian) description straight through.
+// Applies the same text preference resolveCatalogPresentation uses to a full
+// entry list, for callers that need a flat CatalogEntry vector rather than
+// the UI's per-entry CatalogPresentation — e.g. the web companion's
+// /api/catalog endpoint, which otherwise serves the Langegen catalogue's raw
+// (Russian) description straight through. `preference` should normally come
+// from pipensx::ui::catalogTextPreference() so the companion matches
+// whatever language the console itself is set to — there's no browser-side
+// signal to key this off instead, since the catalogue is built once on the
+// console and just served as-is to whoever connects.
 std::vector<CatalogEntry> withPreferredDescriptions(
     const std::vector<CatalogEntry>& entries,
-    const GameMetadataService& metadata);
+    const GameMetadataService& metadata,
+    TextPreference preference = TextPreference::Metadata);
 
 } // namespace pipensx

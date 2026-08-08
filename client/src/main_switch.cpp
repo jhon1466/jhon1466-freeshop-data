@@ -548,7 +548,8 @@ int main(int argc, char** argv) {
                 std::shared_ptr<const std::vector<pipensx::CatalogEntry>> e) {
                 webServer.updateCatalog(std::make_shared<
                     const std::vector<pipensx::CatalogEntry>>(
-                    withPreferredDescriptions(*e, metadata)));
+                    withPreferredDescriptions(*e, metadata,
+                                              catalogTextPreference())));
             });
         if (settings.get().webServerEnabled)
             webServer.start();
@@ -567,8 +568,8 @@ int main(int argc, char** argv) {
         // descriptions now that the loader above has landed.
         webServer.updateCatalog(
             std::make_shared<const std::vector<pipensx::CatalogEntry>>(
-                withPreferredDescriptions(*catalog.sharedEntries(),
-                                          metadata)));
+                withPreferredDescriptions(*catalog.sharedEntries(), metadata,
+                                          catalogTextPreference())));
 
         startupStage("MainActivity construction");
         auto* activity = new MainActivity(&manager, &catalog, &metadata,
