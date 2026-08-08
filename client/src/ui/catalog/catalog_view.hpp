@@ -839,8 +839,14 @@ private:
         std::vector<CatalogShelf> shelves;
         int heroIndex = -1;
         std::string heroImage;
+        // Favoritos gets the same "plain grid" treatment as a search: with
+        // the catalogue filtered down to a handful of titles, a "Popular"/
+        // "New" shelf built from that same small set duplicates entries
+        // between the shelf row and the full grid right below it - at full
+        // catalogue scale the two are different-enough subsets that this
+        // never shows, but favoritesOnly can filter to just one or two.
         if (query_.empty() && !shelfDrilldown_ && !batchMode_ &&
-            !visible.empty()) {
+            !favoritesOnly && !visible.empty()) {
             bool popularFallback = false;
             const std::vector<int> popular =
                 popularityOrder(visible, popularFallback);
@@ -1006,7 +1012,15 @@ private:
             recycler_->setContentOffsetY(0, false);
         const bool empty = count == 0;
         if (empty) {
-            if (query_.empty()) {
+            if (favoritesOnly) {
+                ensureEmptyState()->setContent(
+                    tr("pipensx/catalog/favorites_empty_title"),
+                    tr("pipensx/catalog/favorites_empty_body"),
+                    tr("pipensx/catalog/favorites_empty_action"), [this] {
+                        favoritesOnly_ = false;
+                        rebuildEntries();
+                    });
+            } else if (query_.empty()) {
                 ensureEmptyState()->setContent(
                     tr("pipensx/catalog/empty_title"),
                     tr("pipensx/catalog/empty_body"),
