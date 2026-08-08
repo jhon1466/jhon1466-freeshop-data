@@ -42,7 +42,7 @@ set(BRLS_UNITY_BUILD OFF CACHE BOOL "" FORCE)
 include(${BOREALIS_LIBRARY}/cmake/commonOption.cmake)
 include(${BOREALIS_LIBRARY}/cmake/toolchain.cmake)
 
-set(PIPENSX_VERSION "2.0.0" CACHE STRING "pipensx release version")
+set(PIPENSX_VERSION "2.0.1" CACHE STRING "pipensx release version")
 project(pipensx VERSION ${PIPENSX_VERSION} LANGUAGES C CXX)
 
 # devkitA64 defaults Release to "-g -O2": the debug info balloons the ELF to
@@ -62,7 +62,7 @@ if (PLATFORM_SWITCH)
 endif ()
 
 set(APP_TITLE "FreeShop")
-set(APP_AUTHOR "FreeShop")
+set(APP_AUTHOR "jhon1466")
 set(APP_ICON ${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.jpg)
 set(ROMFS_DIR ${CMAKE_BINARY_DIR}/romfs)
 

@@ -12,6 +12,7 @@
 
 extern "C" {
 #include "../core/bencode.h"
+#include "../core/util.h"
 }
 
 namespace pipensx::install {
@@ -284,9 +285,15 @@ bool saveInstallJournal(const std::string& path,
     const std::string blob = journal.serialize();
     const std::string tmp = path + ".tmp";
     std::FILE* file = std::fopen(tmp.c_str(), "wb");
-    if (!file)
+    if (!file) {
+        log_msg("[install] journal open failed '%s': %s\n", tmp.c_str(),
+                std::strerror(errno));
         return false;
+    }
     bool ok = std::fwrite(blob.data(), 1, blob.size(), file) == blob.size();
+    if (!ok)
+        log_msg("[install] journal write short '%s': %s\n", tmp.c_str(),
+                std::strerror(errno));
     ok = std::fflush(file) == 0 && ok;
 #if !defined(_WIN32)
     if (ok)
@@ -297,9 +304,21 @@ bool saveInstallJournal(const std::string& path,
         std::remove(tmp.c_str());
         return false;
     }
+    // The sdmc: driver's rename() (like plain POSIX rename on some libc/FS
+    // backends) can refuse to replace an existing destination — every write
+    // after the first one to the same journal path would then silently
+    // fail here forever. Clear the old journal first; losing it between
+    // this remove() and the rename() below only costs one lost checkpoint,
+    // never corruption.
     if (std::rename(tmp.c_str(), path.c_str()) != 0) {
-        std::remove(tmp.c_str());
-        return false;
+        int renameErrno = errno;
+        std::remove(path.c_str());
+        if (std::rename(tmp.c_str(), path.c_str()) != 0) {
+            log_msg("[install] journal rename failed '%s' -> '%s': %s\n",
+                    tmp.c_str(), path.c_str(), std::strerror(renameErrno));
+            std::remove(tmp.c_str());
+            return false;
+        }
     }
     return true;
 }

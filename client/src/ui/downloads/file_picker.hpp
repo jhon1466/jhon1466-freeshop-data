@@ -3,6 +3,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 
+#include <cerrno>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -14,6 +15,7 @@
 #include "ui/common/ui_helpers.hpp"
 #include "ui/debrid_ui.hpp"
 #include "ui/i18n.hpp"
+#include "ui/theme.hpp"
 
 namespace pipensx::ui {
 
@@ -41,11 +43,15 @@ class FileCell : public brls::RecyclerCell {
 public:
     FileCell() {
         setFocusable(true);
+        setAxis(brls::Axis::ROW);
+        setAlignItems(brls::AlignItems::CENTER);
         setHeight(64);
         setPadding(12, 24, 12, 24);
         label_ = new brls::Label();
         label_->setSingleLine(true);
         label_->setFontSize(21);
+        label_->setGrow(1);
+        label_->setTextColor(theme::textPrimary());
         addView(label_);
     }
     void setEntry(const FileEntry& entry) {
@@ -62,14 +68,19 @@ public:
     FilePickerActivity(DownloadManager* manager, AppSettings* settings)
         : manager_(manager), settings_(settings), currentPath_("sdmc:/") {
         recycler_ = new brls::RecyclerFrame();
+        // Every other recyclerHost() screen (Explorer, torrent selection, ...)
+        // sets grow=1 on the recycler itself so it fills its host box instead
+        // of collapsing to its minimum content height — missing here, which
+        // left room for roughly one row before the frame ran out of space.
+        recycler_->setGrow(1);
         recycler_->setPadding(8, 32, 8, 32);
         recycler_->estimatedRowHeight = 64;
         recycler_->registerCell("File", [] { return new FileCell(); });
         recycler_->setDataSource(new FileDataSource(this));
-        // AppletFrame::setContentView inserts the content at index 1, below the
-        // header, so handing it the recycler directly would give the recycler a
-        // non-zero localY — see recyclerHost().
-        frame_ = new brls::AppletFrame(recyclerHost(recycler_));
+        auto* content = new brls::Box(brls::Axis::COLUMN);
+        content->setGrow(1);
+        content->addView(recyclerHost(recycler_));
+        frame_ = new brls::AppletFrame(content);
         loadDirectory(currentPath_);
     }
 
@@ -170,26 +181,38 @@ private:
         std::vector<FileEntry> files;
         DIR* dir = opendir(path.c_str());
         if (!dir) {
+            log_msg("[picker] opendir failed '%s': %s\n", path.c_str(),
+                    strerror(errno));
             brls::Application::notify(tr("pipensx/picker/unable_to_open"));
             return;
         }
+        int rawEntries = 0;
+        int statFailures = 0;
         while (dirent* item = readdir(dir)) {
             if (std::strcmp(item->d_name, ".") == 0 ||
                 std::strcmp(item->d_name, "..") == 0)
                 continue;
+            ++rawEntries;
             std::string child = path;
             if (!child.empty() && child.back() != '/')
                 child += '/';
             child += item->d_name;
             struct stat st {};
-            if (stat(child.c_str(), &st) != 0)
+            if (stat(child.c_str(), &st) != 0) {
+                ++statFailures;
+                log_msg("[picker] stat failed '%s': %s\n", child.c_str(),
+                        strerror(errno));
                 continue;
+            }
             if (S_ISDIR(st.st_mode))
                 directories.push_back({item->d_name, child, true});
             else if (hasTorrentExtension(item->d_name))
                 files.push_back({item->d_name, child, false});
         }
         closedir(dir);
+        log_msg("[picker] loaded '%s': raw=%d dirs=%zu torrents=%zu "
+                "stat_failed=%d\n", path.c_str(), rawEntries,
+                directories.size(), files.size(), statFailures);
         auto byName = [](const FileEntry& a, const FileEntry& b) {
             return a.name < b.name;
         };

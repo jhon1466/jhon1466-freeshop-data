@@ -8,6 +8,7 @@
 #include <borealis.hpp>
 
 #include "app/app_settings.hpp"
+#include "app/catalog_service.hpp"
 #include "app/download_manager.hpp"
 #include "app/game_metadata_service.hpp"
 #include "ui/common/message_cells.hpp"
@@ -47,10 +48,10 @@ private:
 
 class MainView : public brls::Box {
 public:
-    MainView(DownloadManager* manager, GameMetadataService* metadata,
-             AppSettings* settings)
-        : brls::Box(brls::Axis::COLUMN), manager_(manager), metadata_(metadata),
-          settings_(settings) {
+    MainView(DownloadManager* manager, CatalogService* catalog,
+             GameMetadataService* metadata, AppSettings* settings)
+        : brls::Box(brls::Axis::COLUMN), manager_(manager), catalog_(catalog),
+          metadata_(metadata), settings_(settings) {
         recycler_ = new brls::RecyclerFrame();
         recycler_->setGrow(1);
         recycler_->setPadding(6, 32, 6, 32);
@@ -82,7 +83,7 @@ public:
 
     void openDetails(const std::string& taskId) {
         brls::Application::pushActivity(
-            new DetailsActivity(taskId, manager_));
+            new DetailsActivity(taskId, manager_, catalog_, metadata_));
     }
 
     void openFilePicker() {
@@ -207,6 +208,7 @@ public:
     }
 
     GameMetadataService* metadataService() const { return metadata_; }
+    CatalogService* catalogService() const { return catalog_; }
 
 private:
     bool containsFocus(brls::View* focused) const {
@@ -279,7 +281,7 @@ private:
             for (auto* cell : visibleCells<DownloadCell>(recycler_))
                 if (const DownloadTask* task =
                         dataSource_->taskAt(cell->getIndexPath()))
-                    cell->setTask(*task, metadata_);
+                    cell->setTask(*task, metadata_, catalog_);
             return;
         }
         brls::View* focused = brls::Application::getCurrentFocus();
@@ -318,6 +320,7 @@ private:
     }
 
     DownloadManager* manager_;
+    CatalogService* catalog_;
     GameMetadataService* metadata_;
     AppSettings* settings_;
     EmptyStateView* emptyState_ = nullptr;

@@ -24,6 +24,7 @@
 
 extern "C" {
 #include "core/sha256.h"
+#include "core/util.h"
 }
 
 namespace pipensx {
@@ -476,38 +477,52 @@ bool UpdateService::parseRelease(const std::string& json, ReleaseInfo& release,
 }
 
 UpdateCheckResult UpdateService::check() const {
+    log_msg("[update] checking for updates (current=%s)\n", PIPENSX_VERSION);
     UpdateCheckResult result;
     std::string body;
     if (!fetchWithRetry([&] {
             return metadataFetcher_(kLatestReleaseUrl, kMetadataLimit, body,
                                     result.error);
-        }, result.error, stopping_, stopMutex_, stopReady_))
+        }, result.error, stopping_, stopMutex_, stopReady_)) {
+        log_msg("[update] check failed: %s\n", result.error.c_str());
         return result;
-    if (!parseRelease(body, result.release, result.error))
+    }
+    if (!parseRelease(body, result.release, result.error)) {
+        log_msg("[update] release parse failed: %s\n", result.error.c_str());
         return result;
+    }
     result.ok = true;
     result.updateAvailable = isNewerVersion(result.release.version,
                                             PIPENSX_VERSION);
+    log_msg("[update] latest=%s current=%s update_available=%d\n",
+            result.release.version.c_str(), PIPENSX_VERSION,
+            result.updateAvailable ? 1 : 0);
     return result;
 }
 
 bool UpdateService::install(const ReleaseInfo& release, std::string& error) const {
+    log_msg("[update] installing %s\n", release.version.c_str());
     if (!trustedAssetUrl(release.nroUrl) ||
         !trustedAssetUrl(release.checksumUrl)) {
         error = "La URL del archivo de actualización no es confiable.";
+        log_msg("[update] install failed: %s\n", error.c_str());
         return false;
     }
     std::string checksumText;
     if (!fetchWithRetry([&] {
             return metadataFetcher_(release.checksumUrl, kChecksumLimit,
                                     checksumText, error);
-        }, error, stopping_, stopMutex_, stopReady_))
+        }, error, stopping_, stopMutex_, stopReady_)) {
+        log_msg("[update] checksum fetch failed: %s\n", error.c_str());
         return false;
+    }
     std::string expectedChecksum;
     if (!parseChecksum(checksumText, expectedChecksum)) {
         error = "La suma de verificación de la actualización no es válida.";
+        log_msg("[update] install failed: %s\n", error.c_str());
         return false;
     }
+    log_msg("[update] expected checksum %s\n", expectedChecksum.c_str());
     const std::string temporary = stagedPath();
     const std::string marker = temporary + ".sha256";
     const std::string helper = helperPath();
@@ -515,20 +530,27 @@ bool UpdateService::install(const ReleaseInfo& release, std::string& error) cons
     unlink(temporary.c_str());
     unlink(marker.c_str());
     unlink(helperTemporary.c_str());
+    log_msg("[update] downloading %s\n", release.nroUrl.c_str());
     if (!fetchWithRetry([&] {
             return assetFetcher_(release.nroUrl, temporary, kNroLimit, error);
-        }, error, stopping_, stopMutex_, stopReady_))
+        }, error, stopping_, stopMutex_, stopReady_)) {
+        log_msg("[update] download failed: %s\n", error.c_str());
         return false;
+    }
     std::string actualChecksum;
     if (!checksumFile(temporary, actualChecksum, error)) {
+        log_msg("[update] checksum read failed: %s\n", error.c_str());
         unlink(temporary.c_str());
         return false;
     }
     if (actualChecksum != expectedChecksum) {
+        log_msg("[update] checksum mismatch: got %s want %s\n",
+                actualChecksum.c_str(), expectedChecksum.c_str());
         unlink(temporary.c_str());
         error = "La suma de verificación de la actualización no coincide con el lanzamiento de GitHub.";
         return false;
     }
+    log_msg("[update] download verified\n");
     std::ofstream markerFile(marker, std::ios::binary | std::ios::trunc);
     markerFile << expectedChecksum << '\n';
     markerFile.flush();
@@ -566,16 +588,20 @@ bool UpdateService::install(const ReleaseInfo& release, std::string& error) cons
         unlink(marker.c_str());
         unlink(temporary.c_str());
         error = "No se pudo publicar el ayudante de actualización: " + helperError;
+        log_msg("[update] install failed: %s\n", error.c_str());
         return false;
     }
 #ifdef __SWITCH__
     const Result commit = fsdevCommitDevice("sdmc");
     if (R_FAILED(commit)) {
         error = "No se pudieron confirmar los archivos de actualización preparados.";
+        log_msg("[update] install failed: %s\n", error.c_str());
         discardStaged();
         return false;
     }
 #endif
+    log_msg("[update] staged %s, ready to relaunch via updater helper\n",
+            release.version.c_str());
     return true;
 }
 
@@ -599,6 +625,8 @@ bool UpdateService::hasPendingConfirmation() const {
 }
 
 bool UpdateService::confirmInstalled(std::string& error) const {
+    log_msg("[update] confirming install after relaunch (target=%s)\n",
+            targetPath_.c_str());
     const std::string staged = stagedPath();
     const std::string marker = staged + ".sha256";
     const std::string backup = backupPath();
@@ -608,6 +636,7 @@ bool UpdateService::confirmInstalled(std::string& error) const {
     if (!update_transaction_confirm(&paths, transactionError,
                                     sizeof(transactionError))) {
         error = transactionError;
+        log_msg("[update] confirm failed: %s\n", error.c_str());
         return false;
     }
     unlink(helperPath_.c_str());
@@ -615,9 +644,11 @@ bool UpdateService::confirmInstalled(std::string& error) const {
     const Result commit = fsdevCommitDevice("sdmc");
     if (R_FAILED(commit)) {
         error = "No se pudo confirmar la limpieza de la actualización.";
+        log_msg("[update] confirm failed: %s\n", error.c_str());
         return false;
     }
 #endif
+    log_msg("[update] confirmed, now running the new version\n");
     return true;
 }
 

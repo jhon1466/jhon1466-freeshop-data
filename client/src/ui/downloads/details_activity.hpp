@@ -1,10 +1,14 @@
 #pragma once
 
+#include <memory>
 #include <string>
 
 #include <borealis.hpp>
 
+#include "app/catalog_service.hpp"
 #include "app/download_manager.hpp"
+#include "app/game_metadata_service.hpp"
+#include "ui/common/async_image.hpp"
 #include "ui/common/progress_bar.hpp"
 #include "ui/common/speed_graph.hpp"
 #include "ui/common/ui_helpers.hpp"
@@ -19,16 +23,46 @@ namespace pipensx::ui {
 // live as compact chips in one row rather than a vertical stats list.
 class DetailsActivity : public brls::Activity {
 public:
-    DetailsActivity(std::string taskId, DownloadManager* manager)
-        : taskId_(std::move(taskId)), manager_(manager) {
+    DetailsActivity(std::string taskId, DownloadManager* manager,
+                    CatalogService* catalog = nullptr,
+                    GameMetadataService* metadata = nullptr)
+        : taskId_(std::move(taskId)), manager_(manager), catalog_(catalog),
+          metadata_(metadata) {
         auto* content = new brls::Box(brls::Axis::COLUMN);
         content->setPadding(24, 40, 24, 40);
         content->setAlignItems(brls::AlignItems::STRETCH);
 
+        auto* hero = new brls::Box(brls::Axis::ROW);
+        hero->setAlignItems(brls::AlignItems::CENTER);
+        hero->setMarginBottom(18);
+
+        thumb_ = new brls::Box();
+        thumb_->setWidth(64);
+        thumb_->setHeight(64);
+        thumb_->setCornerRadius(8);
+        thumb_->setBackgroundColor(theme::surface());
+        thumb_->setMarginRight(16);
+        thumb_->setAlignItems(brls::AlignItems::CENTER);
+        thumb_->setJustifyContent(brls::JustifyContent::CENTER);
+        thumbPlaceholder_ = new brls::Label();
+        thumbPlaceholder_->setFontSize(26);
+        thumbPlaceholder_->setTextColor(theme::textSecondary());
+        thumb_->addView(thumbPlaceholder_);
+        thumbImage_ = new AsyncRgbaImage();
+        thumbImage_->setWidth(64);
+        thumbImage_->setHeight(64);
+        thumbImage_->setPositionType(brls::PositionType::ABSOLUTE);
+        thumbImage_->setPositionTop(0);
+        thumbImage_->setPositionLeft(0);
+        thumbImage_->setCornerRadius(8);
+        thumbImage_->setScalingType(brls::ImageScalingType::FILL);
+        thumb_->addView(thumbImage_);
+        hero->addView(thumb_);
+
         status_ = new brls::Label();
         status_->setFontSize(theme::kFontHeading);
-        status_->setMarginBottom(18);
-        content->addView(status_);
+        hero->addView(status_);
+        content->addView(hero);
 
         // Action buttons replace the old X/Y hotkeys.
         auto* actions = new brls::Box(brls::Axis::ROW);
@@ -238,10 +272,27 @@ private:
         if (frameTitle_ != task->name) {
             frameTitle_ = task->name;
             frame_->setTitle(frameTitle_);
+            setTextIfChanged(thumbPlaceholder_, placeholderLetter(task->name));
         }
         setTextIfChanged(status_, tr("pipensx/downloads/status_line",
                                      downloadStatusLabel(task->status)));
         status_->setTextColor(statusColor(task->status));
+
+        // Most torrent-sourced titles have no entry in the (much smaller)
+        // metadata-match index — fall back to the catalog's own poster.
+        std::string iconUrl;
+        if (metadata_) {
+            const GameMetadata* found = metadata_->findByInfoHash(task->id);
+            if (found)
+                iconUrl = found->iconUrl;
+        }
+        if (iconUrl.empty() && catalog_) {
+            const CatalogEntry* entry = catalog_->findByInfoHash(task->id);
+            if (entry)
+                iconUrl = entry->posterUrl;
+        }
+        setArtworkUrl(thumbImage_, metadata_, iconUrl, currentIconUrl_,
+                      imageState_);
 
         bool installing = task->status == DownloadStatus::Installing ||
                           task->status == DownloadStatus::Committing;
@@ -391,8 +442,16 @@ private:
 
     std::string taskId_;
     DownloadManager* manager_;
+    CatalogService* catalog_;
+    GameMetadataService* metadata_;
     std::string frameTitle_;
     brls::AppletFrame* frame_;
+    brls::Box* thumb_;
+    brls::Label* thumbPlaceholder_;
+    AsyncRgbaImage* thumbImage_;
+    std::string currentIconUrl_;
+    std::shared_ptr<ImageRequestState> imageState_ =
+        std::make_shared<ImageRequestState>();
     brls::Label* status_;
     brls::Button* pauseButton_;
     brls::Button* verifyButton_;

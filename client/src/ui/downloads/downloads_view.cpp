@@ -95,7 +95,8 @@ brls::RecyclerCell* DownloadDataSource::cellForRow(
         return recycler->dequeueReusableCell("Message");
     auto* cell = static_cast<DownloadCell*>(
         recycler->dequeueReusableCell("Download"));
-    cell->setTask(section.tasks[index.row], owner_->metadataService());
+    cell->setTask(section.tasks[index.row], owner_->metadataService(),
+                  owner_->catalogService());
     return cell;
 }
 

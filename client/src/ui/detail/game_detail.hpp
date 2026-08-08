@@ -644,7 +644,7 @@ private:
             else
                 // O5: tapping the live status button opens the download details.
                 brls::Application::pushActivity(
-                    new DetailsActivity(task->id, manager_));
+                    new DetailsActivity(task->id, manager_, nullptr, metadata_));
             return;
         }
         // One-tap install: resolve, then queue silently (picker only on Select files).
@@ -657,7 +657,7 @@ private:
         const DownloadTask* task = currentTask();
         if (task) {
             brls::Application::pushActivity(
-                new DetailsActivity(task->id, manager_));
+                new DetailsActivity(task->id, manager_, nullptr, metadata_));
             return;
         }
         // Select files: always open the per-file picker after resolve.

@@ -23,6 +23,7 @@ extern "C" {
 #include <cstdio>
 #include <cstdlib>
 #include <exception>
+#include <fstream>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -46,6 +47,7 @@ extern "C" {
 #include "ui/settings/help_view.hpp"
 #include "ui/settings/settings_view.hpp"
 #include "ui/theme.hpp"
+#include "ui/welcome_view.hpp"
 
 using pipensx::AppSettings;
 using pipensx::CatalogService;
@@ -118,8 +120,8 @@ public:
                                    mods, favorites);
         });
         tabs->addNavTab(tr("pipensx/nav/downloads"), NavIconType::Downloads,
-                        [manager, metadata, settings] {
-            return new MainView(manager, metadata, settings);
+                        [manager, catalog, metadata, settings] {
+            return new MainView(manager, catalog, metadata, settings);
         });
         tabs->addNavTab(tr("pipensx/nav/installed"), NavIconType::Installed,
                         [installed, manager, metadata, settings, catalog] {
@@ -246,9 +248,82 @@ int main(int argc, char** argv) {
     mkdir("sdmc:/switch/freeshop-client", 0755);
     log_init(LogPath);
 
-    (void)argc;
-    (void)argv;
-    UpdateService launchUpdater;
+    // The path this process actually launched from. UpdateService needs
+    // this as its target - its hardcoded default assumes the app lives at
+    // sdmc:/switch/freeshop-client/freeshop-client.nro, which isn't where
+    // every install actually is (dropped straight in sdmc:/switch/, a
+    // differently-named copy, etc). Updating against the wrong assumed
+    // path doesn't fail loudly - it stages the download onto whatever file
+    // happens to sit at the hardcoded path, which may not exist yet or may
+    // be a stale copy from a previous experiment, leaving two separate
+    // launchable .nro's on the card instead of replacing the one actually
+    // in use.
+    std::string resolvedSelfPath =
+        (argc > 0 && argv[0] && argv[0][0]) ? argv[0] : std::string();
+
+    // Legacy self-update compatibility (v1.6.4 and earlier, pre-Borealis).
+    // Those clients download the new build to "<self>.update" and
+    // chain-load straight into it, expecting THAT process to swap itself
+    // onto the canonical path (see the removed self_update.c's
+    // self_update_finish_swap). This codebase's own updater (UpdateService/
+    // update_transaction.c) uses a completely different protocol via a
+    // separate helper .nro and has no idea it might be running from a
+    // ".update" staging copy - without this check, a v1.6.4-initiated
+    // update runs once from the leftover file and never touches the real
+    // launch path, so closing and reopening from hbmenu goes right back to
+    // the old binary.
+    //
+    // Deliberately does NOT chain-load into the canonical path afterward
+    // (unlike the old code): envSetNextLoad-ing a Borealis app into itself
+    // re-initializes the graphics/applet/service stack a second time in the
+    // same hbloader session and hangs at a black screen - confirmed on
+    // hardware, and exactly why update_helper.c's own comment says the same
+    // about relaunching the main app. Just fix the file on disk and keep
+    // running this same process normally; the swap is what future launches
+    // needed anyway.
+    if (!resolvedSelfPath.empty()) {
+        const std::string suffix = ".update";
+        if (resolvedSelfPath.size() > suffix.size() &&
+            resolvedSelfPath.compare(resolvedSelfPath.size() - suffix.size(),
+                                     suffix.size(), suffix) == 0) {
+            const std::string canonical = resolvedSelfPath.substr(
+                0, resolvedSelfPath.size() - suffix.size());
+            log_msg("[startup] legacy update hop: %s -> %s\n",
+                    resolvedSelfPath.c_str(), canonical.c_str());
+            std::remove(canonical.c_str());
+            bool swapped =
+                std::rename(resolvedSelfPath.c_str(), canonical.c_str()) == 0;
+            if (!swapped) {
+                // sdmc:'s rename() can refuse to replace an existing
+                // destination even right after remove() (same quirk
+                // worked around in install_journal.cpp's journal save) -
+                // fall back to a full copy.
+                std::ifstream input(resolvedSelfPath, std::ios::binary);
+                std::ofstream output(canonical,
+                                     std::ios::binary | std::ios::trunc);
+                if (input && output) {
+                    output << input.rdbuf();
+                    swapped = static_cast<bool>(output);
+                    output.flush();
+                }
+                if (swapped)
+                    std::remove(resolvedSelfPath.c_str());
+                log_msg("[startup] legacy update hop: rename failed, copy "
+                        "fallback %s\n", swapped ? "ok" : "failed");
+            }
+            log_msg("[startup] legacy update hop: swap %s, continuing in "
+                    "this process\n", swapped ? "ok" : "failed");
+            // Either way, the real file (updated or not) now lives at
+            // `canonical`, not the ".update" path this process started at.
+            resolvedSelfPath = canonical;
+        }
+    }
+    const std::string updateTargetPath = !resolvedSelfPath.empty()
+        ? resolvedSelfPath
+        : "sdmc:/switch/freeshop-client/freeshop-client.nro";
+    log_msg("[startup] update target path: %s\n", updateTargetPath.c_str());
+
+    UpdateService launchUpdater(updateTargetPath);
     const bool updatePendingConfirmation =
         launchUpdater.hasPendingConfirmation();
     // A verified download staged by a previous session that quit before the
@@ -270,6 +345,8 @@ int main(int argc, char** argv) {
         log_msg("[startup] proxy %s\n", settings.get().proxyUrl.c_str());
     log_msg("[telemetry] setting enabled=%d interval_ms=5000 build='%s %s'\n",
             telemetry_enabled(), __DATE__, __TIME__);
+    log_msg("[TEST] build %s arrancando - marcador de prueba de autoupdate\n",
+            PIPENSX_VERSION);
     startupStage("entered main");
 
     openBorealisLog();
@@ -435,7 +512,7 @@ int main(int argc, char** argv) {
                 ? GameMetadataService::ImageNetwork::Throttled
                 : GameMetadataService::ImageNetwork::Full);
 
-        UpdateService updater;
+        UpdateService updater(updateTargetPath);
 
         startupStage("WebServer construction");
         WebServer webServer(manager, "romfs:/web", PIPENSX_VERSION);
@@ -522,6 +599,7 @@ int main(int argc, char** argv) {
             const bool needsDefaults = !values.torrentingEnabled ||
                 !values.firstRunCompleted ||
                 !values.catalogDisclaimerAcknowledged;
+            const bool showWelcome = !values.firstRunCompleted;
             if (needsDefaults) {
                 values.torrentingEnabled = true;
                 values.firstRunCompleted = true;
@@ -531,6 +609,8 @@ int main(int argc, char** argv) {
                     log_msg("[settings] first-run defaults persist failed: %s\n",
                             error.c_str());
             }
+            if (showWelcome)
+                pipensx::ui::showWelcomeScreen();
             manager.setTorrentingEnabled(true);
         }
 

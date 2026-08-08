@@ -4,6 +4,24 @@
     "exit": "Salir",
     "web_qr": "QR web"
   },
+  "welcome": {
+    "title": "Bienvenido",
+    "greeting": "¡Bienvenido a FreeShop!",
+    "intro": "Tu cliente todo en uno para descargar, instalar y administrar juegos de Switch directo desde la consola. Esto es lo que podés hacer:",
+    "feature_catalog_title": "Catálogo",
+    "feature_catalog_body": "Explorá miles de juegos, buscá por nombre y descargalos directo a tu consola.",
+    "feature_downloads_title": "Descargas",
+    "feature_downloads_body": "Torrents con instalación en paralelo mientras se descarga. Pausá y reanudá cuando quieras sin perder el progreso.",
+    "feature_explorer_title": "Explorador",
+    "feature_explorer_body": "Navegá, copiá, movés y borrá archivos de tu tarjeta SD sin salir de la app.",
+    "feature_saves_title": "Guardados",
+    "feature_saves_body": "Respaldá y restaurá las partidas de tus juegos, con una copia de seguridad automática antes de cada restauración.",
+    "feature_web_title": "Compañero web",
+    "feature_web_body": "Subí y bajá archivos desde el navegador de tu PC o celular, sin cables ni tarjeta SD de por medio.",
+    "feature_settings_title": "Ajustes",
+    "feature_settings_body": "Elegí tu proveedor de torrents, actualizá el catálogo de juegos y mantené la app al día.",
+    "start": "Comenzar"
+  },
   "web": {
     "off": "Web apagada"
   },
@@ -198,8 +216,8 @@
     "move_to_top": "Iniciar siguiente",
     "move_to_top_failed": "No se pudo reordenar la cola: {}",
     "remove_question": "¿Quitar esta descarga de FreeShop?",
-    "remove_keep": "Conservar los datos descargados",
-    "remove_delete": "Eliminar los datos descargados",
+    "remove_keep": "Conservar datos",
+    "remove_delete": "Eliminar datos",
     "status_queued": "En cola",
     "status_checking": "Verificando",
     "status_downloading": "Descargando",
@@ -238,7 +256,7 @@
   },
   "picker": {
     "folder": "[Carpeta]  {}",
-    "frame_title": "Elegir .torrent   {}",
+    "frame_title": "Elegir .torrent — entrá a una carpeta: {}",
     "preview": "{}\n{}   {} archivos   {} trackers",
     "preview_packages": "\n{} paquete(s) NSP/NSZ instalable(s)",
     "added": "Torrent agregado a la cola.",

@@ -4,6 +4,24 @@
     "exit": "Exit",
     "web_qr": "Web QR"
   },
+  "welcome": {
+    "title": "Welcome",
+    "greeting": "Welcome to FreeShop!",
+    "intro": "Your all-in-one client for downloading, installing and managing Switch games right from the console. Here's what you can do:",
+    "feature_catalog_title": "Catalog",
+    "feature_catalog_body": "Browse thousands of games, search by name, and download them straight to your console.",
+    "feature_downloads_title": "Downloads",
+    "feature_downloads_body": "Torrents that install in parallel while they download. Pause and resume anytime without losing progress.",
+    "feature_explorer_title": "Explorer",
+    "feature_explorer_body": "Browse, copy, move and delete files on your SD card without leaving the app.",
+    "feature_saves_title": "Saves",
+    "feature_saves_body": "Back up and restore your game saves, with an automatic safety backup before every restore.",
+    "feature_web_title": "Web companion",
+    "feature_web_body": "Upload and download files from your PC or phone's browser - no cables or SD card swapping.",
+    "feature_settings_title": "Settings",
+    "feature_settings_body": "Pick your torrent provider, refresh the game catalog, and keep the app up to date.",
+    "start": "Get started"
+  },
   "web": {
     "off": "Web off"
   },
@@ -238,7 +256,7 @@
   },
   "picker": {
     "folder": "[Folder]  {}",
-    "frame_title": "Select .torrent   {}",
+    "frame_title": "Select .torrent — open a folder: {}",
     "preview": "{}\n{}   {} files   {} trackers",
     "preview_packages": "\n{} installable NSP/NSZ package(s)",
     "added": "Torrent added to the queue.",

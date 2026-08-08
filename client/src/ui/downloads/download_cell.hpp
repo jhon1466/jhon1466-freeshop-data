@@ -5,6 +5,7 @@
 
 #include <borealis.hpp>
 
+#include "app/catalog_service.hpp"
 #include "app/download_manager.hpp"
 #include "ui/common/async_image.hpp"
 #include "ui/common/progress_bar.hpp"
@@ -76,7 +77,8 @@ public:
         addView(right);
     }
 
-    void setTask(const DownloadTask& task, GameMetadataService* service) {
+    void setTask(const DownloadTask& task, GameMetadataService* service,
+                 CatalogService* catalog = nullptr) {
         setTextIfChanged(title_, task.name);
         setTextIfChanged(placeholder_, placeholderLetter(task.name));
         setTextIfChanged(status_, taskStatusText(task));
@@ -118,11 +120,19 @@ public:
             meta += "   " + task.error;
         setTextIfChanged(meta_, meta);
 
+        // Most torrent-sourced titles have no entry in the (much smaller)
+        // metadata-match index — fall back to the catalog's own poster,
+        // present for every catalog entry regardless of a metadata match.
         std::string iconUrl;
         if (service) {
             const GameMetadata* found = service->findByInfoHash(task.id);
             if (found)
                 iconUrl = found->iconUrl;
+        }
+        if (iconUrl.empty() && catalog) {
+            const CatalogEntry* entry = catalog->findByInfoHash(task.id);
+            if (entry)
+                iconUrl = entry->posterUrl;
         }
         setArtworkUrl(image_, service, iconUrl, currentIconUrl_, imageState_);
     }
