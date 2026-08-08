@@ -253,6 +253,20 @@ private:
     brls::SidebarItem* owner_;
 };
 
+// Masks the last IPv4 octet of a "host[:port]" string for display (e.g.
+// "192.168.1.23:8080" -> "192.168.1.xxx:8080"). The full address is still
+// used for the QR code in Settings — this only hides it from the always-on
+// status row, in case the screen ends up in a screenshot or stream.
+inline std::string maskHostOctet(const std::string& hostPort) {
+    const size_t colon = hostPort.find(':');
+    const std::string host = hostPort.substr(0, colon);
+    const std::string port = colon == std::string::npos ? "" : hostPort.substr(colon);
+    const size_t lastDot = host.rfind('.');
+    if (lastDot == std::string::npos)
+        return hostPort;
+    return host.substr(0, lastDot + 1) + "xxx" + port;
+}
+
 // One line of web-companion status for the sidebar footer: a state dot
 // (accent = serving, muted = off) and the reachable address. Non-focusable —
 // the QR/action surface is the global Minus hint, this is just the readout.
@@ -282,9 +296,10 @@ public:
             label_->setTextColor(theme::textTertiary());
         } else {
             // Drop the scheme: the footer column is 216px, every pixel counts.
-            setTextIfChanged(label_, url.rfind("http://", 0) == 0
-                                         ? url.substr(7)
-                                         : url);
+            const std::string hostPort = url.rfind("http://", 0) == 0
+                                              ? url.substr(7)
+                                              : url;
+            setTextIfChanged(label_, maskHostOctet(hostPort));
             label_->setTextColor(theme::textSecondary());
         }
     }
