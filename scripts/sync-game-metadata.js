@@ -3,8 +3,16 @@
 // optional metadata enrichment (screenshots, developer/publisher, etc. -
 // see client/src/app/game_metadata_service.cpp) doesn't depend on upstream's
 // GitHub repo staying up. Re-run this periodically to pick up upstream's
-// refreshed dataset; the client always points at "latest", so nothing else
-// needs to change afterwards.
+// refreshed dataset.
+//
+// Published under a FIXED tag (TAG below), updated in place, rather than a
+// new commit-hash-derived tag each run: this repo also hosts client .nro
+// releases (see publish-client-release.js), and GitHub's "latest" release is
+// just the newest one in the whole repo regardless of its assets - a fresh
+// commit-hash tag here would make this the newest release right up until
+// the next client version ships, at which point the client's
+// .../releases/latest/... fetch would start 404ing again. The client points
+// at this fixed tag directly (not "latest"), so that never happens.
 //
 // The mirrored manifest.json is byte-identical to upstream's except for the
 // "index" object's "url" field, which is rewritten to point at our own
@@ -22,6 +30,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const REPO = "jhon1466/jhon1466-freeshop-data";
+const TAG = "metadata-mirror";
 const UPSTREAM_MANIFEST_URL =
   "https://github.com/i3sey/pipensx-metadata/releases/latest/download/manifest.json";
 
@@ -78,20 +87,52 @@ async function main() {
     "User-Agent": "freeshop-metadata-sync-script",
   };
 
-  const tag = `metadata-${manifest.langegenCommit.slice(0, 12)}-${manifest.titledbCommit.slice(0, 12)}`;
-  console.log(`Creating release ${tag} on ${REPO}`);
-  const release = await githubJson(`https://api.github.com/repos/${REPO}/releases`, {
-    method: "POST",
-    headers: { ...headers, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      tag_name: tag,
-      name: `Metadata mirror ${manifest.generatedAt}`,
-      body: `Mirrored from i3sey/pipensx-metadata (generatedAt ${manifest.generatedAt}, ${manifest.index.entries} entries).`,
-      draft: false,
-      prerelease: false,
-    }),
+  const releaseBody = `Mirrored from i3sey/pipensx-metadata (generatedAt ${manifest.generatedAt}, ${manifest.index.entries} entries).`;
+  const releaseName = `Metadata mirror ${manifest.generatedAt}`;
+
+  console.log(`Looking up existing release ${TAG} on ${REPO}`);
+  const existingRes = await fetch(`https://api.github.com/repos/${REPO}/releases/tags/${TAG}`, {
+    headers,
   });
-  console.log(`Release created: ${release.html_url}`);
+  let release;
+  if (existingRes.status === 404) {
+    console.log(`No existing ${TAG} release - creating it`);
+    release = await githubJson(`https://api.github.com/repos/${REPO}/releases`, {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tag_name: TAG,
+        name: releaseName,
+        body: releaseBody,
+        draft: false,
+        prerelease: false,
+      }),
+    });
+    console.log(`Release created: ${release.html_url}`);
+  } else {
+    const existingBody = await existingRes.text();
+    if (!existingRes.ok) {
+      throw new Error(`GET releases/tags/${TAG} -> HTTP ${existingRes.status}\n${existingBody}`);
+    }
+    const existing = JSON.parse(existingBody);
+    console.log(`Found existing release ${existing.html_url} (id ${existing.id}) - updating in place`);
+    for (const asset of existing.assets) {
+      console.log(`Deleting old asset ${asset.name} (id ${asset.id})`);
+      const deleteRes = await fetch(`https://api.github.com/repos/${REPO}/releases/assets/${asset.id}`, {
+        method: "DELETE",
+        headers,
+      });
+      if (!deleteRes.ok && deleteRes.status !== 404) {
+        throw new Error(`DELETE asset ${asset.id} -> HTTP ${deleteRes.status}`);
+      }
+    }
+    release = await githubJson(`https://api.github.com/repos/${REPO}/releases/${existing.id}`, {
+      method: "PATCH",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ name: releaseName, body: releaseBody }),
+    });
+    console.log(`Release updated: ${release.html_url}`);
+  }
 
   const uploadUrlBase = release.upload_url.replace(/\{.*\}$/, "");
 
@@ -113,7 +154,7 @@ async function main() {
   };
   await uploadAsset("manifest.json", Buffer.from(JSON.stringify(mirroredManifest, null, 2), "utf8"));
 
-  console.log("Done. Client points at releases/latest/download, so no further changes are needed.");
+  console.log(`Done. Client points at releases/download/${TAG}/..., so no further changes are needed.`);
 }
 
 main().catch((err) => {

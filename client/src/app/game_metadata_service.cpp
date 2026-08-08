@@ -46,8 +46,8 @@ constexpr size_t kImageWorkerCount = 2;
 // per fetch, so the real worst case is this times kImageWorkerCount.
 constexpr long kThrottledImageBytesPerSecond = 128 * 1024;
 constexpr const char* kDefaultMetadataIndexUrl =
-    "https://github.com/jhon1466/jhon1466-freeshop-data/releases/latest/"
-    "download/game_metadata_index.json";
+    "https://github.com/jhon1466/jhon1466-freeshop-data/releases/"
+    "download/metadata-mirror/game_metadata_index.json";
 
 #ifdef __SWITCH__
 std::atomic<bool> imageRelayLogged{false};

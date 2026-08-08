@@ -8,6 +8,20 @@
 
 namespace pipensx {
 
+std::vector<CatalogEntry> withPreferredDescriptions(
+    const std::vector<CatalogEntry>& entries,
+    const GameMetadataService& metadata) {
+    std::vector<CatalogEntry> out = entries;
+    for (CatalogEntry& e : out) {
+        const GameMetadata* meta = metadata.findByInfoHash(e.infoHash);
+        if (meta && !meta->description.empty())
+            e.description = meta->description;
+        else if (meta && !meta->intro.empty())
+            e.description = meta->intro;
+    }
+    return out;
+}
+
 std::vector<std::string> mergeScreenshotUrls(
     const GameMetadata* metadata, const CatalogEntry& entry, size_t limit) {
     std::vector<std::string> result;

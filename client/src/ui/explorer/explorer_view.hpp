@@ -1,19 +1,38 @@
 #pragma once
 
+#include <cstring>
 #include <memory>
 #include <optional>
 #include <string>
+#include <strings.h>
 #include <thread>
 #include <vector>
 
 #include <borealis.hpp>
 
+#include "app/app_settings.hpp"
 #include "app/file_explorer_service.hpp"
+#include "install/install_backend.hpp"
 #include "ui/common/ui_helpers.hpp"
 #include "ui/i18n.hpp"
 #include "ui/theme.hpp"
 
 namespace pipensx::ui {
+
+// Same extension set the MTP responder installs directly (see
+// mtp/mtp_ptp.cpp's open_sink_for_recv) - .nsp/.nsz stream through PFS0,
+// .xci/.xcz through XCI's nested HFS0, both via install::PackageStream.
+inline bool isInstallablePackageName(const std::string& name) {
+    const size_t dot = name.find_last_of('.');
+    if (dot == std::string::npos)
+        return false;
+    const std::string ext = name.substr(dot);
+    auto ciEquals = [](const std::string& a, const char* b) {
+        return strcasecmp(a.c_str(), b) == 0;
+    };
+    return ciEquals(ext, ".nsp") || ciEquals(ext, ".nsz") ||
+           ciEquals(ext, ".xci") || ciEquals(ext, ".xcz");
+}
 
 class ExplorerView;
 
@@ -70,8 +89,9 @@ private:
 // data directory, since that is the point of an explorer.
 class ExplorerView : public brls::Box {
 public:
-    ExplorerView()
+    explicit ExplorerView(AppSettings* settings)
         : brls::Box(brls::Axis::COLUMN), currentPath_("sdmc:/"),
+          settings_(settings),
           alive_(std::make_shared<std::atomic<bool>>(true)) {
         setPadding(0, 34, 0, 34);
 
@@ -97,7 +117,15 @@ public:
         recycler_->estimatedRowHeight = 60;
         recycler_->registerCell("Explorer", [] { return new ExplorerCell(); });
         recycler_->setDataSource(new ExplorerDataSource(this));
+        // ScrollingFrame (RecyclerFrame's base) doesn't clip its own content
+        // by default - a short list that doesn't need to scroll can still
+        // end up with the recycler's computed content height running a row
+        // past this tab's actual available space, and without clipping that
+        // extra row renders wherever it lands instead of being cut off,
+        // showing up as a stray empty highlighted box over the hint bar.
+        recycler_->setClipsToBounds(true);
         recyclerHost_ = recyclerHost(recycler_);
+        recyclerHost_->setClipsToBounds(true);
         addView(recyclerHost_);
 
         registerAction(tr("pipensx/explorer/options"), brls::BUTTON_X,
@@ -113,6 +141,26 @@ public:
         registerAction(tr("pipensx/common/refresh"), brls::BUTTON_RB,
                        [this](brls::View*) {
             reload();
+            return true;
+        });
+        // Inside a subfolder, B should feel like a file manager's back
+        // button (go up one level), not the generic AppletFrame back
+        // action (which exits the whole Explorador tab back to the
+        // sidebar) - that default only kicks in once this returns false,
+        // which only happens at the SD root, where "up" has nowhere to go.
+        //
+        // This has to be registered on recycler_, not `this`: TabFrame::
+        // addTab() re-registers its own "give focus to the sidebar" B
+        // action directly on this view's content root right after
+        // constructing it (tab_frame.cpp), unconditionally overwriting
+        // whatever B action this constructor sets on itself. Action
+        // dispatch walks from the focused view up through its parents
+        // (Application::handleAction), so registering one level down, on
+        // the recycler the file rows actually focus, gets checked first.
+        recycler_->registerAction("", brls::BUTTON_B, [this](brls::View*) {
+            if (busy_ || currentPath_ == "sdmc:/")
+                return false;
+            navigateTo(explorerParentPath(currentPath_));
             return true;
         });
 
@@ -192,6 +240,11 @@ private:
 
     void openOptions(const ExplorerEntry& entry) {
         auto* dialog = new brls::Dialog(entry.name);
+        if (!entry.directory && isInstallablePackageName(entry.name)) {
+            dialog->addButton(tr("pipensx/explorer/install"), [this, entry] {
+                performInstall(entry);
+            });
+        }
         dialog->addButton(tr("pipensx/explorer/copy"), [this, entry] {
             clipboard_ = {entry.path, entry.name, entry.directory,
                          ClipboardMode::Copy};
@@ -317,6 +370,65 @@ private:
         });
     }
 
+    // .nsp/.nsz/.xci/.xcz straight off the SD card - the same
+    // install::PackageStream + install::InstallBackend pipeline MTP and
+    // torrent installs use, just reading a whole local file instead of a
+    // live byte stream. installLocalFile() (explorer_view.cpp) does the
+    // actual work on a background thread; this just wires up busy-state and
+    // progress reporting the same way paste()/performDelete() do.
+    void performInstall(const ExplorerEntry& entry) {
+        if (busy_)
+            return;
+        setBusy(true, tr("pipensx/explorer/installing", entry.name));
+        auto alive = alive_;
+        const std::string path = entry.path;
+        const std::string name = entry.name;
+        AppSettings* settings = settings_;
+        brls::async([this, alive, path, name, settings] {
+            const install::InstallStorageTarget target = settings
+                ? installTargetFor(settings->get().installLocation)
+                : install::InstallStorageTarget::SdCard;
+            std::string error;
+            const bool ok = installLocalFile(path, name, target, alive, error);
+            brls::sync([this, alive, ok, error] {
+                if (!alive->load())
+                    return;
+                setBusy(false, "");
+                if (!ok)
+                    brls::Application::notify(
+                        tr("pipensx/explorer/operation_failed", error));
+                else
+                    brls::Application::notify(tr("pipensx/explorer/install_done"));
+                reload();
+            });
+        });
+    }
+
+    // Called from installLocalFile()'s background thread via brls::sync -
+    // always on the UI thread.
+    void updateInstallProgress(const std::string& name, uint64_t done,
+                               uint64_t total) {
+        if (!busy_)
+            return;
+        std::string text = tr("pipensx/explorer/installing", name);
+        if (total > 0) {
+            const int pct = static_cast<int>(
+                (static_cast<double>(done) / static_cast<double>(total)) * 100.0);
+            text += "  " + formatBytes(done) + " / " + formatBytes(total) +
+                    "  (" + std::to_string(pct) + "%)";
+        }
+        pathLabel_->setText(text);
+    }
+
+    // Reads `path` from disk in chunks and feeds them to a fresh
+    // install::PackageStream/InstallBackend pair, reporting progress back
+    // through updateInstallProgress() every ~200ms. Runs entirely off the
+    // UI thread (called from brls::async in performInstall()).
+    bool installLocalFile(const std::string& path, const std::string& name,
+                          install::InstallStorageTarget target,
+                          std::shared_ptr<std::atomic<bool>> alive,
+                          std::string& error);
+
     void promptRename(const ExplorerEntry& entry) {
         if (busy_)
             return;
@@ -369,6 +481,7 @@ private:
     };
 
     std::string currentPath_;
+    AppSettings* settings_ = nullptr;
     std::vector<ExplorerEntry> entries_;
     std::optional<ClipboardEntry> clipboard_;
     std::optional<brls::ActionIdentifier> pasteAction_;

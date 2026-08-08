@@ -22,6 +22,27 @@
     "feature_settings_body": "Elegí tu proveedor de torrents, actualizá el catálogo de juegos y mantené la app al día.",
     "start": "Comenzar"
   },
+  "update_notes": {
+    "title": "Novedades",
+    "heading": "Se actualizó a la versión {}",
+    "continue": "Continuar"
+  },
+  "mtp": {
+    "waiting_usb": "Esperando cable USB…",
+    "waiting_usb_help": "Conectá la consola a tu PC con un cable USB.",
+    "waiting_host": "Esperando conexión…",
+    "waiting_host_help": "El cable está conectado. Esperando a que la PC abra la conexión MTP.",
+    "ready": "Listo para recibir archivos",
+    "help": "Arrastrá un archivo .nsp o .nsz desde tu PC hasta el ícono de la consola para instalarlo directamente, sin sacar la tarjeta SD.",
+    "formats": "Formatos: .nsp, .nsz, .xci y .xcz se instalan directo. Otros archivos se guardan en la SD sin instalar.",
+    "receiving": "Recibiendo…",
+    "installing_now": "Instalando…",
+    "queue_title": "Historial de esta sesión",
+    "queue_empty": "Todavía no se recibió ningún archivo.",
+    "status_installed": "Instalado",
+    "status_error": "Error",
+    "start_failed": "No se pudo iniciar MTP: {}"
+  },
   "web": {
     "off": "Web apagada"
   },
@@ -31,6 +52,7 @@
     "installed": "Instalados",
     "explorer": "Explorador",
     "saves": "Guardados",
+    "mtp": "MTP",
     "settings": "Ajustes",
     "help": "Ayuda",
     "about": "Acerca de"
@@ -363,7 +385,12 @@
     "language_auto": "Automático",
     "language_en": "English",
     "language_es": "Español",
+    "theme": "Tema",
+    "theme_auto": "Automático",
+    "theme_light": "Claro",
+    "theme_dark": "Oscuro",
     "language_restart": "Reinicia FreeShop para aplicar el idioma.",
+    "theme_restart": "Reinicia FreeShop para aplicar el tema.",
     "visible_releases": "Lanzamientos visibles",
     "filter_all": "Todos",
     "filter_games": "Juegos",
@@ -535,6 +562,7 @@
     "folder": "[Carpeta]  {}",
     "options": "Opciones",
     "new_folder": "Nueva carpeta",
+    "install": "Instalar",
     "copy": "Copiar",
     "move": "Mover",
     "rename": "Cambiar nombre",
@@ -548,6 +576,8 @@
     "copying": "Copiando {}...",
     "moving": "Moviendo {}...",
     "deleting": "Eliminando {}...",
+    "installing": "Instalando {}...",
+    "install_done": "Instalación completa.",
     "operation_failed": "No se pudo hacer eso: {}",
     "list_failed": "No se pudo abrir esa carpeta: {}"
   },

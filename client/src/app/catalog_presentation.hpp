@@ -56,4 +56,13 @@ bool catalogEntryIsGame(const CatalogEntry& entry,
 
 bool catalogEntryHasMatchedTitle(const GameMetadata* metadata);
 
+// Applies the same metadata-over-catalogue text preference resolveCatalogPresentation
+// uses for TextPreference::Metadata to a full entry list, for callers that need a flat
+// CatalogEntry vector rather than the UI's per-entry CatalogPresentation — e.g. the web
+// companion's /api/catalog endpoint, which otherwise serves the Langegen catalogue's raw
+// (Russian) description straight through.
+std::vector<CatalogEntry> withPreferredDescriptions(
+    const std::vector<CatalogEntry>& entries,
+    const GameMetadataService& metadata);
+
 } // namespace pipensx

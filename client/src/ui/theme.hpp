@@ -107,6 +107,16 @@ inline void registerColors() {
         brls::Theme::getLightTheme().addColor(t.name, t.light);
         brls::Theme::getDarkTheme().addColor(t.name, t.dark);
     }
+    // borealis's own dark theme table declares brls/highlight/background as
+    // a dark tone (see vendor/borealis/library/lib/core/theme.cpp), but the
+    // focused-cell highlight kept rendering the light theme's near-white
+    // fill even with ThemeVariant::DARK active - forcing it here explicitly
+    // for both variants stops depending on whatever upstream path was
+    // skipping the dark entry.
+    brls::Theme::getDarkTheme().addColor(
+        "brls/highlight/background", nvgRGB(40, 43, 48));
+    brls::Theme::getLightTheme().addColor(
+        "brls/highlight/background", nvgRGB(252, 255, 248));
 }
 
 inline NVGcolor color(Tok t) {

@@ -64,6 +64,33 @@ public:
             });
         content->addView(language_);
 
+        theme_ = new brls::SelectorCell();
+        theme_->init(tr("pipensx/settings/theme"),
+            {tr("pipensx/settings/theme_auto"),
+             tr("pipensx/settings/theme_light"),
+             tr("pipensx/settings/theme_dark")},
+            themeModeIndex(settings_->get().themeMode),
+            [this](int selected) {
+                AppSettingsData values = settings_->get();
+                const std::string previous = values.themeMode;
+                values.themeMode = kThemeModeValues[selected];
+                if (!persist(values, "theme_mode")) {
+                    theme_->setSelection(themeModeIndex(previous), true);
+                    return;
+                }
+                // Most of the app's own colors are set once when each
+                // screen is built (setBackgroundColor(theme::x()) etc.),
+                // not re-evaluated every frame - only borealis's own
+                // generic focus highlight reads the live theme per frame.
+                // Applying immediately made just that one highlight flip
+                // while everything else stayed on the old colors until
+                // restart, which read as broken. Same restart notice as
+                // language, for the same reason.
+                brls::Application::notify(
+                    tr("pipensx/settings/theme_restart"));
+            });
+        content->addView(theme_);
+
         checkForUpdates_ = new brls::BooleanCell();
         checkForUpdates_->init(tr("pipensx/settings/check_updates"),
             settings_->get().checkForUpdatesOnLaunch,
@@ -282,6 +309,14 @@ private:
     static int languageIndex(const std::string& value) {
         for (size_t i = 0; i < std::size(kLanguageValues); ++i) {
             if (value == kLanguageValues[i])
+                return static_cast<int>(i);
+        }
+        return 0;
+    }
+
+    static int themeModeIndex(const std::string& value) {
+        for (size_t i = 0; i < std::size(kThemeModeValues); ++i) {
+            if (value == kThemeModeValues[i])
                 return static_cast<int>(i);
         }
         return 0;
@@ -649,6 +684,7 @@ private:
     void applyValues() {
         const AppSettingsData& values = settings_->get();
         language_->setSelection(languageIndex(values.language), true);
+        theme_->setSelection(themeModeIndex(values.themeMode), true);
         catalogFilter_->setSelection(
             values.catalogFilter == CatalogFilter::Games ? 1 : 0, true);
         refreshCatalog_->setOn(values.refreshCatalogOnLaunch, false);
@@ -680,6 +716,7 @@ private:
     WebServer* webServer_;
     std::shared_ptr<std::atomic<bool>> alive_;
     brls::SelectorCell* language_ = nullptr;
+    brls::SelectorCell* theme_ = nullptr;
     brls::SelectorCell* catalogFilter_ = nullptr;
     brls::BooleanCell* refreshCatalog_ = nullptr;
     brls::BooleanCell* checkForUpdates_ = nullptr;

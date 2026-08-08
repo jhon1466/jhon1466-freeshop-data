@@ -42,7 +42,7 @@ set(BRLS_UNITY_BUILD OFF CACHE BOOL "" FORCE)
 include(${BOREALIS_LIBRARY}/cmake/commonOption.cmake)
 include(${BOREALIS_LIBRARY}/cmake/toolchain.cmake)
 
-set(PIPENSX_VERSION "2.0.1" CACHE STRING "pipensx release version")
+set(PIPENSX_VERSION "2.0.2" CACHE STRING "pipensx release version")
 project(pipensx VERSION ${PIPENSX_VERSION} LANGUAGES C CXX)
 
 # devkitA64 defaults Release to "-g -O2": the debug info balloons the ELF to
@@ -257,6 +257,9 @@ set(APP_SOURCES
     src/platform/switch_performance.cpp
     ${APP_SERVICE_SOURCES}
     src/install/install_backend_switch.cpp
+    src/mtp/mtp_usb.c
+    src/mtp/mtp_ptp.cpp
+    src/app/mtp_service.cpp
     src/main_switch.cpp
     ${UI_SOURCES}
     vendor/qrcodegen/qrcodegen.cpp

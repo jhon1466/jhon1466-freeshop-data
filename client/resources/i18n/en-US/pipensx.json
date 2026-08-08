@@ -22,6 +22,27 @@
     "feature_settings_body": "Pick your torrent provider, refresh the game catalog, and keep the app up to date.",
     "start": "Get started"
   },
+  "update_notes": {
+    "title": "What's New",
+    "heading": "Updated to version {}",
+    "continue": "Continue"
+  },
+  "mtp": {
+    "waiting_usb": "Waiting for USB cable…",
+    "waiting_usb_help": "Connect the console to your PC with a USB cable.",
+    "waiting_host": "Waiting for connection…",
+    "waiting_host_help": "The cable is connected. Waiting for the PC to open the MTP connection.",
+    "ready": "Ready to receive files",
+    "help": "Drag a .nsp or .nsz file from your PC onto the console's icon to install it directly, no SD card removal needed.",
+    "formats": "Formats: .nsp, .nsz, .xci and .xcz install directly. Other files are saved to the SD card without installing.",
+    "receiving": "Receiving…",
+    "installing_now": "Installing…",
+    "queue_title": "This session's history",
+    "queue_empty": "No file received yet.",
+    "status_installed": "Installed",
+    "status_error": "Error",
+    "start_failed": "Could not start MTP: {}"
+  },
   "web": {
     "off": "Web off"
   },
@@ -31,6 +52,7 @@
     "installed": "Installed",
     "explorer": "Explorer",
     "saves": "Saves",
+    "mtp": "MTP",
     "settings": "Settings",
     "help": "Help",
     "about": "About"
@@ -363,7 +385,12 @@
     "language_auto": "Auto",
     "language_en": "English",
     "language_es": "Español",
+    "theme": "Theme",
+    "theme_auto": "Auto",
+    "theme_light": "Light",
+    "theme_dark": "Dark",
     "language_restart": "Restart FreeShop to apply the language.",
+    "theme_restart": "Restart FreeShop to apply the theme.",
     "visible_releases": "Visible releases",
     "filter_all": "All",
     "filter_games": "Games",
@@ -535,6 +562,7 @@
     "folder": "[Folder]  {}",
     "options": "Options",
     "new_folder": "New folder",
+    "install": "Install",
     "copy": "Copy",
     "move": "Move",
     "rename": "Rename",
@@ -548,6 +576,8 @@
     "copying": "Copying {}...",
     "moving": "Moving {}...",
     "deleting": "Deleting {}...",
+    "installing": "Installing {}...",
+    "install_done": "Install complete.",
     "operation_failed": "Could not do that: {}",
     "list_failed": "Could not open that folder: {}"
   },

@@ -74,8 +74,16 @@ struct PackageStreamState {
 
 class PackageStream {
 public:
+    // `xci`: the input is an XCI's (or XCZ's) HFS0 container - a root
+    // partition table locating a nested "secure" partition, itself another
+    // HFS0 table of the actual .nca/.ncz/.tik/.cert entries - rather than a
+    // single flat PFS0 (NSP/NSZ) table. Once that entry table is found,
+    // routing/NCZ decode/checkpointing are identical either way; only
+    // header parsing differs. `compressed` means the same thing for both:
+    // some entries are the .ncz (Zstandard) form of an .nca, not that the
+    // outer container itself is compressed.
     PackageStream(bool compressed, PackageCallbacks callbacks,
-                  std::string telemetryTag = {});
+                  std::string telemetryTag = {}, bool xci = false);
     ~PackageStream();
 
     PackageStream(const PackageStream&) = delete;

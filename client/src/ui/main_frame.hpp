@@ -37,7 +37,7 @@
 namespace pipensx::ui {
 
 enum class NavIconType {
-    Catalog, Downloads, Installed, Explorer, Saves, Settings, Help, About
+    Catalog, Downloads, Installed, Explorer, Saves, Mtp, Settings, Help, About
 };
 
 // Shrinks the stock sidebar so the icon rail + expanded menu both look right.
@@ -86,6 +86,7 @@ public:
             case NavIconType::Installed: drawInstalled(vg, gx, gy, s); break;
             case NavIconType::Explorer:    drawExplorer(vg, gx, gy, s); break;
             case NavIconType::Saves:       drawSaves(vg, gx, gy, s); break;
+            case NavIconType::Mtp:         drawMtp(vg, gx, gy, s); break;
             case NavIconType::Settings:    drawSettings(vg, gx, gy, s); break;
             case NavIconType::Help:        drawHelp(vg, gx, gy, s); break;
             case NavIconType::About:       drawAbout(vg, gx, gy, s); break;
@@ -161,6 +162,27 @@ private:
         nvgMoveTo(vg, gx + 5.0f, gy + s - 8.0f);
         nvgLineTo(vg, gx + s - 5.0f, gy + s - 8.0f);
         nvgStroke(vg);
+    }
+
+    // A USB cable plugging into a device: a small connector plug on the
+    // left, a line running to a rounded device outline on the right.
+    static void drawMtp(NVGcontext* vg, float gx, float gy, float s) {
+        // Plug.
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, gx + 1.0f, gy + s / 2.0f - 3.0f, 6.0f, 6.0f, 1.5f);
+        nvgStroke(vg);
+        // Cable.
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, gx + 7.0f, gy + s / 2.0f);
+        nvgLineTo(vg, gx + 11.0f, gy + s / 2.0f);
+        nvgStroke(vg);
+        // Device.
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, gx + 11.0f, gy + 3.0f, s - 12.0f, s - 6.0f, 3.0f);
+        nvgStroke(vg);
+        nvgBeginPath(vg);
+        nvgCircle(vg, gx + 11.0f + (s - 12.0f) / 2.0f, gy + s - 6.5f, 1.3f);
+        nvgFill(vg);
     }
 
     // Rounded square with a checkmark.

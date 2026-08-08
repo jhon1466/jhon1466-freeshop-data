@@ -24,6 +24,7 @@ extern "C" {
 #include <cstdlib>
 #include <exception>
 #include <fstream>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -39,6 +40,7 @@ extern "C" {
 #include "ui/first_run_view.hpp"
 #include "ui/i18n.hpp"
 #include "ui/main_frame.hpp"
+#include "ui/mtp_view.hpp"
 #include "ui/downloads/downloads_view.hpp"
 #include "ui/explorer/explorer_view.hpp"
 #include "ui/installed/installed_view.hpp"
@@ -47,6 +49,7 @@ extern "C" {
 #include "ui/settings/help_view.hpp"
 #include "ui/settings/settings_view.hpp"
 #include "ui/theme.hpp"
+#include "ui/update_notes_view.hpp"
 #include "ui/welcome_view.hpp"
 
 using pipensx::AppSettings;
@@ -129,12 +132,16 @@ public:
                                      catalog);
         });
         tabs->addNavTab(tr("pipensx/nav/explorer"), NavIconType::Explorer,
-                        [] {
-            return new ExplorerView();
+                        [settings] {
+            return new ExplorerView(settings);
         });
         tabs->addNavTab(tr("pipensx/nav/saves"), NavIconType::Saves,
                         [installed, metadata] {
             return new SavesView(installed, metadata);
+        });
+        tabs->addNavTab(tr("pipensx/nav/mtp"), NavIconType::Mtp,
+                        [settings] {
+            return new MtpView(settings);
         });
         tabs->addNavTab(tr("pipensx/nav/settings"), NavIconType::Settings,
                         [settings, manager, catalog, metadata,
@@ -436,6 +443,20 @@ int main(int argc, char** argv) {
         brls::Application::createWindow("pipensx");
         brls::Application::setGlobalQuit(false);
 
+        // "auto" leaves whatever SwitchPlatform's constructor already read
+        // from the console's own theme setting - only override for an
+        // explicit choice. Must come after createWindow(): setThemeVariant()
+        // re-records the deko3d static command list against the video
+        // context's swapchain/framebuffers, which do not exist yet before
+        // createWindow() runs - calling it earlier crashed on hardware with
+        // a null-pointer data abort.
+        if (settings.get().themeMode == "light")
+            brls::Application::getPlatform()->setThemeVariant(
+                brls::ThemeVariant::LIGHT);
+        else if (settings.get().themeMode == "dark")
+            brls::Application::getPlatform()->setThemeVariant(
+                brls::ThemeVariant::DARK);
+
         startupStage("CatalogService construction");
         log_msg("[startup] image relay: relays-first + disk cache (rev4)\n");
         unlink("sdmc:/switch/freeshop-client/rutracker.cfg");
@@ -523,9 +544,11 @@ int main(int argc, char** argv) {
         // lands on the UI thread, so this callback keeps the companion's
         // catalogue reference current from all of them.
         catalog.setOnAdopt(
-            [&webServer](
+            [&webServer, &metadata](
                 std::shared_ptr<const std::vector<pipensx::CatalogEntry>> e) {
-                webServer.updateCatalog(std::move(e));
+                webServer.updateCatalog(std::make_shared<
+                    const std::vector<pipensx::CatalogEntry>>(
+                    withPreferredDescriptions(*e, metadata)));
             });
         if (settings.get().webServerEnabled)
             webServer.start();
@@ -537,6 +560,15 @@ int main(int argc, char** argv) {
         if (!metadataOk)
             log_msg("[metadata] initial load failed: %s\n",
                     metadataError.c_str());
+        // The web companion is served over the network to a general-purpose
+        // browser (no Russian locale option there), so it should always read
+        // like the in-app catalog does once metadata is available - refresh
+        // the snapshot handed to it at construction with metadata-preferred
+        // descriptions now that the loader above has landed.
+        webServer.updateCatalog(
+            std::make_shared<const std::vector<pipensx::CatalogEntry>>(
+                withPreferredDescriptions(*catalog.sharedEntries(),
+                                          metadata)));
 
         startupStage("MainActivity construction");
         auto* activity = new MainActivity(&manager, &catalog, &metadata,
@@ -635,6 +667,18 @@ int main(int argc, char** argv) {
                         log_msg("[update] installed update confirmed\n");
                         brls::Application::notify(
                             tr("pipensx/settings/updated_to", PIPENSX_VERSION));
+                        const std::string notesPath = launchUpdater.notesPath();
+                        std::ifstream notesFile(notesPath, std::ios::binary);
+                        if (notesFile) {
+                            std::ostringstream buffer;
+                            buffer << notesFile.rdbuf();
+                            notesFile.close();
+                            std::remove(notesPath.c_str());
+                            const std::string notes = buffer.str();
+                            if (!notes.empty())
+                                pipensx::ui::showUpdateNotesScreen(
+                                    PIPENSX_VERSION, notes);
+                        }
                     }
                 }
                 firstFrame = false;

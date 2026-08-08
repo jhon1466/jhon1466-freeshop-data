@@ -170,8 +170,18 @@ bool parseSettings(const std::string& text, AppSettingsData& values,
     if (fileVersion < 3)
         values.torrentingEnabled = true;
 
+    // Optional key: absent in a file written before theme mode existed, so
+    // only read it when present and otherwise leave the "auto" default.
+    if (root.contains("theme_mode")) {
+        if (!readString(root, "theme_mode", values.themeMode, error))
+            return false;
+    }
     if (!isSupportedLanguage(values.language)) {
         error = "El ajuste 'language' tiene un valor desconocido.";
+        return false;
+    }
+    if (!isSupportedThemeMode(values.themeMode)) {
+        error = "El ajuste 'theme_mode' tiene un valor desconocido.";
         return false;
     }
     if (catalog == "all")
@@ -205,6 +215,7 @@ std::string serializeSettings(const AppSettingsData& values) {
     Json root;
     root["version"] = kSettingsVersion;
     root["language"] = values.language;
+    root["theme_mode"] = values.themeMode;
     root["catalog_filter"] = catalogFilterName(values.catalogFilter);
     root["refresh_catalog_on_launch"] = values.refreshCatalogOnLaunch;
     root["last_catalog_refresh_ms"] = values.lastCatalogRefreshMs;
@@ -235,6 +246,14 @@ std::string serializeSettings(const AppSettingsData& values) {
 
 bool isSupportedLanguage(const std::string& value) {
     for (const char* supported : kLanguageValues) {
+        if (value == supported)
+            return true;
+    }
+    return false;
+}
+
+bool isSupportedThemeMode(const std::string& value) {
+    for (const char* supported : kThemeModeValues) {
         if (value == supported)
             return true;
     }
@@ -302,6 +321,7 @@ void applyProxySetting(const std::string& proxyUrl) {
 
 bool AppSettingsData::operator==(const AppSettingsData& other) const {
     return language == other.language &&
+           themeMode == other.themeMode &&
            catalogFilter == other.catalogFilter &&
            refreshCatalogOnLaunch == other.refreshCatalogOnLaunch &&
            lastCatalogRefreshMs == other.lastCatalogRefreshMs &&

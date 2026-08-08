@@ -99,10 +99,19 @@ public:
                                  std::string bundledPath =
                                      "romfs:/catalog/"
                                      "game_metadata_index.json.zst",
+                                 // A pinned tag, not .../releases/latest/... :
+                                 // this repo also hosts client .nro releases,
+                                 // and GitHub's "latest" is the newest
+                                 // release in the WHOLE repo regardless of
+                                 // its assets - a client release published
+                                 // after the metadata mirror steals "latest"
+                                 // and 404s this fetch (see
+                                 // scripts/sync-game-metadata.js, which keeps
+                                 // this same tag updated in place).
                                  std::string manifestUrl =
                                      "https://github.com/jhon1466/"
-                                     "jhon1466-freeshop-data/releases/latest/"
-                                     "download/manifest.json",
+                                     "jhon1466-freeshop-data/releases/"
+                                     "download/metadata-mirror/manifest.json",
                                  MetadataFetcher metadataFetcher = {});
     ~GameMetadataService();
 

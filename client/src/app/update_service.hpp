@@ -15,6 +15,9 @@ struct ReleaseInfo {
     std::string version;
     std::string nroUrl;
     std::string checksumUrl;
+    // GitHub release body (changelog). Shown by the post-update "what's new"
+    // screen once the new binary confirms itself on the next launch.
+    std::string notes;
 };
 
 struct UpdateCheckResult {
@@ -55,6 +58,9 @@ public:
     const std::string& targetPath() const { return targetPath_; }
     std::string stagedPath() const { return targetPath_ + ".update"; }
     std::string backupPath() const { return targetPath_ + ".previous"; }
+    // Release notes staged alongside the update, read back by the "what's
+    // new" screen once confirmInstalled() lands on the next launch.
+    std::string notesPath() const { return targetPath_ + ".update-notes.txt"; }
     const std::string& helperPath() const { return helperPath_; }
     void checkAsync(CheckCallback callback);
     bool checkCompleted() const { return checkCompleted_.load(); }

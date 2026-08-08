@@ -449,6 +449,7 @@ bool UpdateService::parseRelease(const std::string& json, ReleaseInfo& release,
         return false;
     }
     release.version = root.value("tag_name", "");
+    release.notes = root.value("body", "");
     if (!isNewerVersion(release.version, "0.0.0")) {
         error = "El lanzamiento de GitHub tiene una etiqueta de versión no válida.";
         return false;
@@ -591,6 +592,16 @@ bool UpdateService::install(const ReleaseInfo& release, std::string& error) cons
         log_msg("[update] install failed: %s\n", error.c_str());
         return false;
     }
+    // Best-effort: the "what's new" screen just has nothing to show if this
+    // fails, so a write error here must not fail the update itself.
+    unlink(notesPath().c_str());
+    if (!release.notes.empty()) {
+        std::ofstream notesFile(notesPath(), std::ios::binary | std::ios::trunc);
+        notesFile << release.notes;
+        notesFile.flush();
+        if (!notesFile)
+            unlink(notesPath().c_str());
+    }
 #ifdef __SWITCH__
     const Result commit = fsdevCommitDevice("sdmc");
     if (R_FAILED(commit)) {
@@ -658,6 +669,7 @@ void UpdateService::discardStaged() const {
     unlink((temporary + ".sha256").c_str());
     unlink((helperPath() + ".tmp").c_str());
     unlink(helperPath().c_str());
+    unlink(notesPath().c_str());
 }
 
 void UpdateService::checkAsync(CheckCallback callback) {

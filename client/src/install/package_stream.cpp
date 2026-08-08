@@ -92,6 +92,94 @@ struct PfsEntry {
     std::string name;
 };
 
+// ---- XCI's outer HFS0 root partition table - only used to locate the
+// nested "secure" partition (see PackageStream::Impl::parseXciRoot). HFS0's
+// on-disk shape is the same header+entries+strings layout PFS0 uses, just
+// with a bigger (64-byte) per-entry struct that also carries a hashed-region
+// size + SHA256 (unused here, matching this project's sha256-optional
+// design elsewhere): offset(8) + size(8) + string_table_offset(4) +
+// hashed_size(4) + reserved(8) + hash(32) = 64.
+constexpr size_t kHfs0EntrySize = 64;
+constexpr size_t kHfs0EntryNameOffsetOffset = 16;
+
+// Is there a plausible root partition table at `offset` within `buf`?
+// "Plausible" deliberately includes finding the literal string "secure" in
+// the candidate's string table: the HFS0 magic alone is only four bytes and
+// does occur by chance inside compressed/encrypted content, so accepting a
+// bare magic match would just move the confusing failure one step later.
+// Every real XCI root table names its partitions ("secure", plus some of
+// "update"/"normal"/"logo"), so requiring that is both cheap and decisive.
+bool looksLikeRootHfs0(const uint8_t* buf, size_t bufLen, uint64_t offset) {
+    if (offset + 16 > bufLen)
+        return false;
+    const uint8_t* h = buf + offset;
+    if (std::memcmp(h, "HFS0", 4) != 0)
+        return false;
+    const uint32_t numFiles = read32(h + 4);
+    const uint32_t stringsSize = read32(h + 8);
+    // A root table holds only the handful of gamecard partitions.
+    if (numFiles == 0 || numFiles > 8)
+        return false;
+    if (stringsSize == 0 || stringsSize > 64 * 1024)
+        return false;
+    const uint64_t entriesSize = static_cast<uint64_t>(numFiles) * kHfs0EntrySize;
+    const uint64_t stringsOffset = offset + 16 + entriesSize;
+    if (stringsOffset + stringsSize > bufLen)
+        return false;
+    const uint8_t* strings = buf + stringsOffset;
+    for (uint32_t i = 0; i + 6 <= stringsSize; ++i) {
+        if (std::memcmp(strings + i, "secure", 6) == 0)
+            return true;
+    }
+    return false;
+}
+
+// Locating an XCI's root HFS0 partition table is genuinely not a fixed
+// constant, and not even reliably readable from one header field:
+//
+//  - A byte-for-byte physical gamecard image puts it at 0x10000, but a
+//    "trimmed" dump (the norm for files shared online, cutting the
+//    gamecard's wasted padding) shifts it earlier - 0xF000 is the most
+//    common value.
+//  - The gamecard header states its own value at offset 0x130, which is
+//    what reference tools (hactool's `hfs0_offset`) use - but real-world
+//    files exist whose header says one thing while the actual HFS0 sits
+//    somewhere else entirely.
+//
+// So: take the header's value as a hint, fall back to the well-known fixed
+// offsets, and if none of those hold up, scan for the "HFS0" magic
+// directly (on the 0x200 boundary every real XCI partition table sits on)
+// and verify each candidate actually parses as a partition table
+// containing "secure".
+bool findXciRootHfs0(const uint8_t* buf, size_t bufLen, uint64_t& outOffset) {
+    constexpr size_t kXciHeaderSize = 0x200;
+    constexpr size_t kXciHeaderMagicOffset = 0x100;   // 4 bytes, literal ASCII "HEAD"
+    constexpr size_t kXciHeaderHfs0OffsetField = 0x130; // 8 bytes, little-endian u64
+
+    if (bufLen >= kXciHeaderSize &&
+        std::memcmp(buf + kXciHeaderMagicOffset, "HEAD", 4) == 0) {
+        const uint64_t stated = read64(buf + kXciHeaderHfs0OffsetField);
+        if (looksLikeRootHfs0(buf, bufLen, stated)) {
+            outOffset = stated;
+            return true;
+        }
+    }
+    static constexpr uint64_t kWellKnown[] = {0xF000ULL, 0x10000ULL};
+    for (uint64_t candidate : kWellKnown) {
+        if (looksLikeRootHfs0(buf, bufLen, candidate)) {
+            outOffset = candidate;
+            return true;
+        }
+    }
+    for (uint64_t off = 0; off + 16 <= bufLen; off += 0x200) {
+        if (looksLikeRootHfs0(buf, bufLen, off)) {
+            outOffset = off;
+            return true;
+        }
+    }
+    return false;
+}
+
 // Append-at-back / consume-from-front byte buffer with an O(1) consume cursor.
 // consume() advances head_ instead of erase(begin, ...), which would memmove
 // the whole remaining tail on every call — expensive at PFS0/NCZ boundaries
@@ -1004,9 +1092,10 @@ private:
 
 class PackageStream::Impl {
 public:
-    Impl(bool compressed, PackageCallbacks callbacks, std::string telemetryTag)
+    Impl(bool compressed, PackageCallbacks callbacks, std::string telemetryTag,
+        bool xci)
         : compressed_(compressed), callbacks_(std::move(callbacks)),
-          telemetryTag_(std::move(telemetryTag)) {}
+          telemetryTag_(std::move(telemetryTag)), xci_(xci) {}
 
     bool write(const uint8_t* data, size_t size) {
         if (failed_ || finished_ || (!data && size)) {
@@ -1015,8 +1104,25 @@ public:
             return false;
         }
         consumed_ += size;
+        // The gap between XCI's root partition table and its "secure"
+        // partition (the actual install target) can be tens to hundreds of
+        // MB - discard it directly from the incoming bytes, never through
+        // pending_, so this never buffers more than one write() call's
+        // worth of it.
+        if (xci_ && xciStage_ == XciStage::Seek) {
+            const uint64_t remaining = xciSecureAbsOffset_ - xciSeekConsumed_;
+            const size_t skip = static_cast<size_t>(
+                std::min<uint64_t>(remaining, size));
+            xciSeekConsumed_ += skip;
+            data += skip;
+            size -= skip;
+            if (xciSeekConsumed_ >= xciSecureAbsOffset_)
+                xciStage_ = XciStage::Secure;
+            else
+                return true; // still seeking - nothing else to do this call
+        }
         pending_.append(data, size);
-        if (!headerReady_ && !parseHeader())
+        if (!headerReady_ && !parseHeader(false))
             return false;
         if (!headerReady_)
             return true;
@@ -1026,10 +1132,15 @@ public:
     bool finish() {
         if (failed_ || finished_)
             return false;
-        if (!headerReady_ && !parseHeader()) {
-            if (error_.empty())
-                error_ = "Encabezado PFS0 incompleto.";
-            return false;
+        if (!headerReady_) {
+            if (!parseHeader(true))
+                return false;
+            if (!headerReady_) {
+                if (error_.empty())
+                    error_ = xci_ ? "El archivo XCI está incompleto o dañado."
+                                 : "Encabezado PFS0 incompleto.";
+                return fail();
+            }
         }
         if (!process())
             return false;
@@ -1041,7 +1152,7 @@ public:
         if (fileOpen_ && !endCurrentFile())
             return false;
         if (entryIndex_ != entries_.size() || !pending_.empty()) {
-            error_ = "El flujo PFS0 terminó antes de procesar todos los archivos.";
+            error_ = "El flujo del paquete terminó antes de procesar todos los archivos.";
             return fail();
         }
         finished_ = true;
@@ -1226,7 +1337,170 @@ private:
         return false;
     }
 
-    bool parseHeader() {
+    // `forceFinal`: finish() calling with no more data ever coming - lets
+    // the XCI root stage attempt its search against whatever's buffered
+    // rather than waiting for a full kXciSearchWindow that will never
+    // arrive (a file genuinely smaller than the window). NSP doesn't need
+    // this - an incomplete PFS0 header is already caught by finish()'s own
+    // leftover-bytes check afterwards.
+    bool parseHeader(bool forceFinal) {
+        if (xci_) {
+            switch (xciStage_) {
+                case XciStage::Root:   return parseXciRoot(forceFinal);
+                case XciStage::Seek:   return true; // write() resolves this before ever calling here
+                case XciStage::Secure: return parseXciSecure();
+            }
+            return true;
+        }
+        return parseNspHeader();
+    }
+
+    // ---- XCI: locate the root HFS0's "secure" partition, then parse
+    // secure's own HFS0 table exactly like an NSP's PFS0 - see
+    // package_stream.hpp's doc comment on why nothing past this point needs
+    // to know which container type it came from. ----
+
+    static constexpr size_t kXciSearchWindow = 0x20000;
+
+    bool parseXciRoot(bool forceFinal) {
+        if (pending_.size() < kXciSearchWindow && !forceFinal)
+            return true; // keep accumulating the search window
+        const size_t windowLen = std::min(pending_.size(), kXciSearchWindow);
+        uint64_t rootOffset = 0;
+        if (windowLen < 16 || !findXciRootHfs0(pending_.data(), windowLen, rootOffset)) {
+            error_ = "El archivo no es un XCI válido (no se encontró la tabla de particiones).";
+            return fail();
+        }
+        if (rootOffset + 16 > windowLen) {
+            error_ = "El archivo no es un XCI válido (tabla de particiones raíz incompleta).";
+            return fail();
+        }
+        const uint8_t* h = pending_.data() + rootOffset;
+        const uint32_t numFiles = read32(h + 4);
+        const uint32_t stringsSize = read32(h + 8);
+        const uint64_t entriesOffset = rootOffset + 16;
+        const uint64_t entriesSize = static_cast<uint64_t>(numFiles) * kHfs0EntrySize;
+        const uint64_t stringsOffset = entriesOffset + entriesSize;
+        if (stringsOffset + stringsSize > windowLen) {
+            error_ = "El archivo no es un XCI válido (tabla de particiones raíz incompleta).";
+            return fail();
+        }
+        const uint8_t* strings = pending_.data() + stringsOffset;
+        int secureIndex = -1;
+        uint64_t secureDataOffset = 0;
+        for (uint32_t i = 0; i < numFiles; ++i) {
+            const uint8_t* entry = pending_.data() + entriesOffset + i * kHfs0EntrySize;
+            const uint32_t nameOffset = read32(entry + kHfs0EntryNameOffsetOffset);
+            if (nameOffset >= stringsSize)
+                continue;
+            const char* name = reinterpret_cast<const char*>(strings + nameOffset);
+            const size_t available = stringsSize - nameOffset;
+            const void* end = std::memchr(name, '\0', available);
+            const size_t nameLen = end
+                ? static_cast<size_t>(static_cast<const uint8_t*>(end) -
+                                      reinterpret_cast<const uint8_t*>(name))
+                : available;
+            if (nameLen == 6 && std::memcmp(name, "secure", 6) == 0) {
+                secureIndex = static_cast<int>(i);
+                secureDataOffset = read64(entry);
+                break;
+            }
+        }
+        if (secureIndex < 0) {
+            error_ = "El XCI no tiene partición 'secure'.";
+            return fail();
+        }
+        const uint64_t rootDataRegion = stringsOffset + stringsSize;
+        xciSecureAbsOffset_ = rootDataRegion + secureDataOffset;
+
+        if (pending_.size() >= xciSecureAbsOffset_) {
+            // "secure" already starts inside what's buffered (a small XCI,
+            // or an unusually early "secure") - keep those bytes, discard
+            // the window bytes before it, and parse its header directly.
+            pending_.consume(static_cast<size_t>(xciSecureAbsOffset_));
+            xciStage_ = XciStage::Secure;
+            return parseXciSecure();
+        }
+        // Nothing buffered so far is needed past this point - it was only
+        // ever the root's own table. write()'s Seek branch takes over from
+        // here without holding any of the actual gap in memory.
+        xciSeekConsumed_ = pending_.size();
+        pending_.clear();
+        xciStage_ = XciStage::Seek;
+        return true;
+    }
+
+    bool parseXciSecure() {
+        if (pending_.size() < 16)
+            return true;
+        if (std::memcmp(pending_.data(), "HFS0", 4) != 0) {
+            error_ = "La partición 'secure' del XCI no es válida.";
+            return fail();
+        }
+        const uint32_t count = read32(pending_.data() + 4);
+        const uint32_t stringsSize = read32(pending_.data() + 8);
+        if (count == 0 || count > 4096 || stringsSize > 16 * 1024 * 1024) {
+            error_ = "Valores de encabezado no válidos en la partición 'secure' del XCI.";
+            return fail();
+        }
+        const uint64_t header64 = 16 + static_cast<uint64_t>(count) * kHfs0EntrySize +
+                                  stringsSize;
+        if (header64 > std::numeric_limits<size_t>::max()) {
+            error_ = "El encabezado de la partición 'secure' es demasiado grande.";
+            return fail();
+        }
+        const size_t header = static_cast<size_t>(header64);
+        if (pending_.size() < header)
+            return true;
+        const uint8_t* table = pending_.data() + 16 + count * kHfs0EntrySize;
+        for (uint32_t i = 0; i < count; ++i) {
+            const uint8_t* entry = pending_.data() + 16 + i * kHfs0EntrySize;
+            const uint32_t nameOffset = read32(entry + kHfs0EntryNameOffsetOffset);
+            if (nameOffset >= stringsSize) {
+                error_ = "Desplazamiento de tabla de cadenas no válido en la partición 'secure'.";
+                return fail();
+            }
+            const char* name = reinterpret_cast<const char*>(table + nameOffset);
+            const size_t available = stringsSize - nameOffset;
+            const void* end = std::memchr(name, '\0', available);
+            if (!end) {
+                error_ = "Nombre de archivo sin terminar en la partición 'secure'.";
+                return fail();
+            }
+            PfsEntry parsed;
+            parsed.offset = read64(entry);
+            parsed.size = read64(entry + 8);
+            parsed.name.assign(name, static_cast<const char*>(end) - name);
+            entries_.push_back(std::move(parsed));
+        }
+        std::sort(entries_.begin(), entries_.end(),
+                  [](const PfsEntry& a, const PfsEntry& b) {
+                      return a.offset < b.offset;
+                  });
+        uint64_t previousEnd = 0;
+        for (const auto& entry : entries_) {
+            if (entry.offset < previousEnd ||
+                entry.size > std::numeric_limits<uint64_t>::max() -
+                                 entry.offset) {
+                error_ = "Los rangos de archivo de la partición 'secure' se superponen o desbordan.";
+                return fail();
+            }
+            previousEnd = entry.offset + entry.size;
+        }
+        // Absolute from XCI byte 0, matching how NSP's headerSize_ marks
+        // where its own data region begins - everything from here on
+        // (process(), checkpoint/restore, NCZ decode) is format-agnostic.
+        headerSize_ = xciSecureAbsOffset_ + header;
+        dataPosition_ = 0;
+        pending_.consume(header);
+        headerReady_ = true;
+        telemetry_log("package", telemetryTag_.c_str(),
+            "event=xci_secure_header entries=%u header_bytes=%zu",
+            count, header);
+        return true;
+    }
+
+    bool parseNspHeader() {
         if (pending_.size() < 16)
             return true;
         uint64_t parseStartedUs = telemetry_enabled() ? now_us() : 0;
@@ -1420,12 +1694,18 @@ private:
     bool currentSkipped_ = false;
     bool finished_ = false;
     bool failed_ = false;
+
+    bool xci_ = false;
+    enum class XciStage { Root, Seek, Secure };
+    XciStage xciStage_ = XciStage::Root;
+    uint64_t xciSecureAbsOffset_ = 0; // absolute XCI byte offset of "secure"'s HFS0 header
+    uint64_t xciSeekConsumed_ = 0;    // absolute XCI bytes discarded so far while seeking to it
 };
 
 PackageStream::PackageStream(bool compressed, PackageCallbacks callbacks,
-                             std::string telemetryTag)
+                             std::string telemetryTag, bool xci)
     : impl_(std::make_unique<Impl>(compressed, std::move(callbacks),
-                                   std::move(telemetryTag))) {}
+                                   std::move(telemetryTag), xci)) {}
 
 PackageStream::~PackageStream() = default;
 

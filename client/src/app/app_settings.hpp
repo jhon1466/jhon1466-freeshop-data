@@ -30,6 +30,12 @@ struct AppSettingsData {
     // Platform::APP_LOCALE_DEFAULT; borealis loads translations once, so a
     // change only takes effect on the next launch.
     std::string language = "auto";
+    // Color scheme: "auto" follows the console's system theme (read once at
+    // startup by borealis's SwitchPlatform, same as language), "light" and
+    // "dark" force it regardless. Applied right after Application::init()
+    // via Platform::setThemeVariant() - unlike language this takes effect
+    // immediately, no restart needed.
+    std::string themeMode = "auto";
     CatalogFilter catalogFilter = CatalogFilter::Games;
     bool refreshCatalogOnLaunch = false;
     uint64_t lastCatalogRefreshMs = 0;
@@ -88,7 +94,12 @@ struct AppSettingsData {
 // settings.json cannot leave the app pointing at a locale we do not ship.
 inline constexpr const char* kLanguageValues[] = {"auto", "en-US", "es"};
 
+// Supported values for AppSettingsData::themeMode, in the order the
+// Settings selector lists them.
+inline constexpr const char* kThemeModeValues[] = {"auto", "light", "dark"};
+
 bool isSupportedLanguage(const std::string& value);
+bool isSupportedThemeMode(const std::string& value);
 
 // True for a valid web PIN: empty (auth off) or 4-8 ASCII digits.
 bool isValidWebPin(const std::string& value);
