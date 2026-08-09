@@ -175,7 +175,10 @@ void testInvalidWebPinIsCleared() {
     AppSettings settings(SettingsPath, LegacyPath);
     std::string error;
     assert(settings.load(error));
-    assert(settings.get().webServerPin.empty());
+    // An invalid stored PIN is cleared, then load()'s fail-closed guard
+    // immediately generates a fresh valid one rather than leaving it empty.
+    assert(pipensx::isValidWebPin(settings.get().webServerPin));
+    assert(!settings.get().webServerPin.empty());
     assert(settings.get().webServerEnabled);
 
     assert(pipensx::isValidWebPin(""));
@@ -341,8 +344,11 @@ void testProxySettingReachesEnvironment() {
     applyProxySetting("socks5://192.168.1.2:10808");
     const char* value = std::getenv("ALL_PROXY");
     assert(value && std::string(value) == "socks5://192.168.1.2:10808");
+    const char* noProxy = std::getenv("NO_PROXY");
+    assert(noProxy && std::string(noProxy).find("127.0.0.1") != std::string::npos);
     applyProxySetting("");
     assert(std::getenv("ALL_PROXY") == nullptr);
+    assert(std::getenv("NO_PROXY") == nullptr);
 }
 
 } // namespace

@@ -294,14 +294,6 @@ static void test_recv_drains_socket_until_would_block(void) {
     message[2] = (uint8_t)(payloadSize >> 8);
     message[3] = (uint8_t)payloadSize;
     message[4] = MSG_PIECE;
-    for (uint32_t index = 0; index < 8; ++index) {
-        message[5] = (uint8_t)(index >> 24);
-        message[6] = (uint8_t)(index >> 16);
-        message[7] = (uint8_t)(index >> 8);
-        message[8] = (uint8_t)index;
-        memset(message + 13, (int)index, BLOCK_SIZE);
-        send_all(sockets[1], message, sizeof(message));
-    }
 
     peer_t peer;
     memset(&peer, 0, sizeof(peer));
@@ -310,6 +302,20 @@ static void test_recv_drains_socket_until_would_block(void) {
     peer_ctx_t context;
     memset(&context, 0, sizeof(context));
     context.num_pieces = 8;
+
+    /* PIECE only reaches on_block for an exact outstanding request — queue
+       one per index before sending, so this stays a drain-loop test rather
+       than an unsolicited-strike test. */
+    for (uint32_t index = 0; index < 8; ++index) {
+        message[5] = (uint8_t)(index >> 24);
+        message[6] = (uint8_t)(index >> 16);
+        message[7] = (uint8_t)(index >> 8);
+        message[8] = (uint8_t)index;
+        memset(message + 13, (int)index, BLOCK_SIZE);
+        send_all(sockets[1], message, sizeof(message));
+        peer.pipeline[peer.pipeline_len++] =
+            (block_req_t){(int)index, 0, BLOCK_SIZE, now_ms()};
+    }
 
     block_capture_t capture = {0};
     assert(peer_recv(&peer, &context, capture_block, NULL, NULL, &capture) == 0);
@@ -354,6 +360,11 @@ static void test_recv_reassembles_message_split_across_reads(void) {
 
     block_capture_t capture = {0};
 
+    /* PIECE only reaches on_block for an exact outstanding request. */
+    peer.pipeline_len = 2;
+    peer.pipeline[0] = (block_req_t){0, 0, BLOCK_SIZE, now_ms()};
+    peer.pipeline[1] = (block_req_t){1, 0, BLOCK_SIZE, now_ms()};
+
     /* Whole first message plus a torn 3-byte prefix of the second: leaves a
        partial frame parked at a nonzero rbuf_head. */
     send_all(sockets[1], first, sizeof(first));
@@ -392,34 +403,110 @@ static void test_piece_receipt_samples_block_latency(void) {
     memset(&context, 0, sizeof(context));
     context.num_pieces = 8;
 
-    /* Unsolicited block (empty pipeline): no latency sample. */
+    /* Unsolicited block (empty pipeline): dropped before on_block, no
+       latency sample. */
     fill_piece(message, 0);
     send_all(sockets[1], message, sizeof(message));
     block_capture_t capture = {0};
     assert(peer_recv(&peer, &context, capture_block, NULL, NULL, &capture) == 0);
-    assert(capture.count == 1);
+    assert(capture.count == 0);
     assert(peer.block_lat_ema_ms == 0);
 
-    /* Requested ~400 ms ago: first sample seeds the EMA directly. */
+    /* Requested ~400 ms ago: first sample seeds the EMA directly.
+       capture_block asserts index == capture->count, and the unsolicited
+       block above never reached it, so this solicited block must carry
+       wire index 0, matching capture->count's current value. */
     peer.pipeline_len = 1;
-    peer.pipeline[0] = (block_req_t){1, 0, 8192, now_ms() - 400};
-    fill_piece(message, 1);
+    peer.pipeline[0] = (block_req_t){0, 0, 8192, now_ms() - 400};
+    fill_piece(message, 0);
     send_all(sockets[1], message, sizeof(message));
     assert(peer_recv(&peer, &context, capture_block, NULL, NULL, &capture) == 0);
-    assert(capture.count == 2);
+    assert(capture.count == 1);
     assert(peer.pipeline_len == 0);
     assert(peer.block_lat_ema_ms >= 400 && peer.block_lat_ema_ms < 2000);
 
     /* Second sample moves the EMA toward the new latency, not to it. */
     uint32_t first_ema = peer.block_lat_ema_ms;
     peer.pipeline_len = 1;
-    peer.pipeline[0] = (block_req_t){2, 0, 8192, now_ms() - 4000};
-    fill_piece(message, 2);
+    peer.pipeline[0] = (block_req_t){1, 0, 8192, now_ms() - 4000};
+    fill_piece(message, 1);
     send_all(sockets[1], message, sizeof(message));
     assert(peer_recv(&peer, &context, capture_block, NULL, NULL, &capture) == 0);
-    assert(capture.count == 3);
+    assert(capture.count == 2);
     assert(peer.block_lat_ema_ms > first_ema);
     assert(peer.block_lat_ema_ms < 4000);
+
+    close(sockets[0]);
+    close(sockets[1]);
+}
+
+/* Requests we expired or CANCEL'd ourselves must not become unsolicited
+   strikes when the peer's late PIECE arrives. */
+static void test_late_piece_after_expire_is_not_a_strike(void) {
+    int sockets[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
+    assert(net_set_nonblock(sockets[0]));
+
+    enum { MESSAGE_SIZE = 4 + 1 + 8 + 8192 };
+    uint8_t message[MESSAGE_SIZE];
+
+    peer_t peer;
+    memset(&peer, 0, sizeof(peer));
+    peer.fd = sockets[0];
+    peer.state = PS_ACTIVE;
+    peer_ctx_t context;
+    memset(&context, 0, sizeof(context));
+    context.num_pieces = 8;
+
+    peer.pipeline_len = 1;
+    peer.pipeline[0] = (block_req_t){3, 0, 8192, 1};
+    expired_capture_t expired = {0};
+    assert(peer_expire_requests(&peer, 10000, 1000, capture_expired,
+                                &expired) == 1);
+    assert(peer.pipeline_len == 0);
+    assert(expired.count == 1);
+
+    fill_piece(message, 3);
+    send_all(sockets[1], message, sizeof(message));
+    block_capture_t capture = {0};
+    assert(peer_recv(&peer, &context, capture_block, NULL, NULL, &capture) == 0);
+    assert(capture.count == 0);
+    assert(peer.unsolicited_piece_strikes == 0);
+
+    close(sockets[0]);
+    close(sockets[1]);
+}
+
+static void test_late_piece_after_cancel_is_not_a_strike(void) {
+    int sockets[2];
+    assert(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
+    assert(net_set_nonblock(sockets[0]));
+
+    enum { MESSAGE_SIZE = 4 + 1 + 8 + 8192 };
+    uint8_t message[MESSAGE_SIZE];
+
+    peer_t peer;
+    memset(&peer, 0, sizeof(peer));
+    peer.fd = sockets[0];
+    peer.state = PS_ACTIVE;
+    peer_ctx_t context;
+    memset(&context, 0, sizeof(context));
+    context.num_pieces = 8;
+
+    peer.pipeline_len = 1;
+    peer.pipeline[0] = (block_req_t){4, 0, 8192, now_ms()};
+    assert(peer_cancel_block(&peer, 4, 0, 8192) == 1);
+    assert(peer.pipeline_len == 0);
+
+    /* Drain the CANCEL frame we just queued so the socket stays clean. */
+    peer_flush(&peer);
+
+    fill_piece(message, 4);
+    send_all(sockets[1], message, sizeof(message));
+    block_capture_t capture = {0};
+    assert(peer_recv(&peer, &context, capture_block, NULL, NULL, &capture) == 0);
+    assert(capture.count == 0);
+    assert(peer.unsolicited_piece_strikes == 0);
 
     close(sockets[0]);
     close(sockets[1]);
@@ -585,6 +672,8 @@ int main(void) {
     test_receive_buffer_holds_256_kib();
     test_recv_reassembles_message_split_across_reads();
     test_piece_receipt_samples_block_latency();
+    test_late_piece_after_expire_is_not_a_strike();
+    test_late_piece_after_cancel_is_not_a_strike();
     test_utp_loopback_transfers_ordered_stream();
     puts("peer tests passed");
     return 0;
