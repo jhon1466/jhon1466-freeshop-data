@@ -166,7 +166,9 @@ int main() {
     {
         std::string resp = request(port, "GET", "/api/info");
         assert(resp.find("200 OK") != std::string::npos);
-        assert(resp.find("\"authRequired\":false") != std::string::npos);
+        // Fail-closed: mutating endpoints require a PIN even when none is
+        // configured yet, so authRequired is always true.
+        assert(resp.find("\"authRequired\":true") != std::string::npos);
         assert(resp.find("test-1.0") != std::string::npos);
 
         resp = request(port, "GET", "/");
@@ -195,27 +197,33 @@ int main() {
         // reads stay open
         resp = request(port, "GET", "/api/tasks");
         assert(resp.find("200 OK") != std::string::npos);
-        server.setPin("");
     }
 
-    // CSRF: a page served from somewhere else must not drive the console
+    // CSRF: a page served from somewhere else must not drive the console.
+    // The PIN stays set (fail-closed rejects mutations with no PIN
+    // configured at all) — every request below that should succeed carries
+    // it, so only the origin/CSRF gate, which runs before the PIN check, is
+    // actually under test.
     {
         const std::string host = "Host: 192.168.1.50:8080\r\n";
+        const std::string pinHeader = "X-FreeShop-Pin: 1234\r\n";
         std::string resp = request(port, "POST", "/api/auth/check", "",
-                                   host + "Origin: http://evil.example\r\n");
+                                   host + "Origin: http://evil.example\r\n" +
+                                       pinHeader);
         assert(resp.find("403") != std::string::npos);
 
         resp = request(port, "POST", "/api/auth/check", "",
-                       host + "Origin: http://192.168.1.50:8080\r\n");
+                       host + "Origin: http://192.168.1.50:8080\r\n" +
+                           pinHeader);
         assert(resp.find("204") != std::string::npos);
 
         // "null" origin (sandboxed iframe, file://) is not the host either
         resp = request(port, "POST", "/api/auth/check", "",
-                       host + "Origin: null\r\n");
+                       host + "Origin: null\r\n" + pinHeader);
         assert(resp.find("403") != std::string::npos);
 
         // no Origin at all: not a browser (curl, a script on the LAN)
-        resp = request(port, "POST", "/api/auth/check");
+        resp = request(port, "POST", "/api/auth/check", "", pinHeader);
         assert(resp.find("204") != std::string::npos);
 
         // reads are untouched — they mutate nothing

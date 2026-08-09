@@ -292,11 +292,12 @@ test: $(TEST_TARGET) $(MANAGER_TEST_TARGET) $(PACKAGE_TEST_TARGET) \
 	# network. Running it here keeps that from hiding the other 25.
 	./$(MANAGER_TEST_TARGET)
 
-$(SETTINGS_TEST_TARGET): tests/test_app_settings.cpp src/app/app_settings.cpp
+$(SETTINGS_TEST_TARGET): tests/test_app_settings.cpp src/app/app_settings.cpp \
+		src/core/util.o
 	$(CXX) $(CXXFLAGS) -Isrc -o $@ $^
 
 $(UPDATE_TEST_TARGET): tests/test_update_service.cpp src/app/update_service.cpp \
-		src/app/update_transaction.o src/core/sha256.c
+		src/app/update_transaction.o src/core/sha256.c src/core/util.o
 	$(CXX) $(CXXFLAGS) -Isrc -o $@ $^ $(LDFLAGS) -Wl,--wrap=rename
 
 $(GAME_UPDATE_TEST_TARGET): tests/test_game_update_service.cpp \
@@ -351,7 +352,7 @@ $(INSTALL_PACER_TEST_TARGET): tests/test_install_pacer.cpp \
 	$(CXX) $(CXXFLAGS) -Isrc -o $@ $^ -pthread
 
 $(JOURNAL_TEST_TARGET): tests/test_install_journal.cpp \
-		src/install/install_journal.o src/core/bencode.o
+		src/install/install_journal.o src/core/bencode.o src/core/util.o
 	$(CXX) $(CXXFLAGS) -Isrc -o $@ $^
 
 $(WEB_SEED_TEST_TARGET): tests/test_web_seed.cpp src/app/web_seed_source.o \
