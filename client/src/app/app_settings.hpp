@@ -88,6 +88,11 @@ struct AppSettingsData {
     // proxy that can reach that host. Validated at parse time so a
     // hand-edited settings.json cannot smuggle an odd scheme.
     std::string proxyUrl;
+    // Seconds of no controller/touch input before the OLED burn-in saver
+    // (ui/common/burn_in_saver.hpp) covers the screen. One of
+    // kBurnInIdleSecValues; a hand-edited value snaps to the nearest one at
+    // parse time (see clampBurnInIdleSec).
+    uint32_t burnInIdleSec = 300;
 
     bool operator==(const AppSettingsData& other) const;
     bool operator!=(const AppSettingsData& other) const {
@@ -129,6 +134,17 @@ void applyProxySetting(const std::string& proxyUrl);
 // The supported range for AppSettingsData::maxActiveDownloads lives in
 // download_manager.hpp: it is the engine's limit, and settings only validate
 // against it. Include that header where you need clampMaxActiveDownloads.
+
+// Selectable values for AppSettingsData::burnInIdleSec, in the order the
+// Settings selector lists them. A short 15s option is included on purpose —
+// it is what you pick to actually see the saver kick in while testing,
+// nobody would want it that low for daily use.
+inline constexpr uint32_t kBurnInIdleSecValues[] = {15, 30, 60, 120, 300, 600, 1800};
+
+// Snaps an arbitrary (e.g. hand-edited) value to the closest entry in
+// kBurnInIdleSecValues, same "degrade to nearest supported value" contract
+// as clampMaxActiveDownloads.
+uint32_t clampBurnInIdleSec(uint64_t value);
 
 bool dailyRefreshDue(uint64_t nowMs, uint64_t lastRefreshMs);
 

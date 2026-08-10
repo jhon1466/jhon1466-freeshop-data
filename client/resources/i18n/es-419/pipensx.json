@@ -414,6 +414,7 @@
     "check_update_now": "Buscar actualización de FreeShop",
     "check_update_detail": "Versión actual {}",
     "sound_effects": "Efectos de sonido",
+    "burn_in_idle": "Espera del protector de pantalla OLED",
     "checking": "Buscando...",
     "check_failed": "Falló la búsqueda",
     "up_to_date": "Al día",

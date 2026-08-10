@@ -175,6 +175,10 @@ bool parseSettings(const std::string& text, AppSettingsData& values,
         return false;
     if (!isValidProxyUrl(values.proxyUrl))
         values.proxyUrl.clear();
+    uint64_t burnInIdle = values.burnInIdleSec;
+    if (!readUnsigned(root, "burn_in_idle_sec", burnInIdle, error))
+        return false;
+    values.burnInIdleSec = clampBurnInIdleSec(burnInIdle);
     // v2 -> v3: debrid arrived and the struct default flipped torrenting off,
     // but a pre-v3 file was written by a build where torrenting was the only
     // way to download anything. Migrate it back on rather than silently
@@ -251,6 +255,7 @@ std::string serializeSettings(const AppSettingsData& values) {
             ? "torrserver" : "torbox";
     root["first_run_completed"] = values.firstRunCompleted;
     root["proxy_url"] = values.proxyUrl;
+    root["burn_in_idle_sec"] = values.burnInIdleSec;
     return root.dump(2) + "\n";
 }
 
@@ -330,6 +335,20 @@ bool isValidProxyUrl(const std::string& value) {
     return !authority.empty();
 }
 
+uint32_t clampBurnInIdleSec(uint64_t value) {
+    uint32_t closest = kBurnInIdleSecValues[0];
+    uint64_t bestDiff = value > closest ? value - closest : closest - value;
+    for (uint32_t candidate : kBurnInIdleSecValues) {
+        const uint64_t diff =
+            value > candidate ? value - candidate : candidate - value;
+        if (diff < bestDiff) {
+            bestDiff = diff;
+            closest = candidate;
+        }
+    }
+    return closest;
+}
+
 void applyProxySetting(const std::string& proxyUrl) {
     if (proxyUrl.empty()) {
         unsetenv("ALL_PROXY");
@@ -375,7 +394,8 @@ bool AppSettingsData::operator==(const AppSettingsData& other) const {
            torrserverUrl == other.torrserverUrl &&
            debridProvider == other.debridProvider &&
            firstRunCompleted == other.firstRunCompleted &&
-           proxyUrl == other.proxyUrl;
+           proxyUrl == other.proxyUrl &&
+           burnInIdleSec == other.burnInIdleSec;
 }
 
 bool dailyRefreshDue(uint64_t nowMs, uint64_t lastRefreshMs) {

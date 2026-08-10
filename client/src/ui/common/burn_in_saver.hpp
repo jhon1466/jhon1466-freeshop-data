@@ -57,8 +57,4 @@ inline bool burnInSaverIsTop() {
            dynamic_cast<BurnInSaverActivity*>(stack.back()) != nullptr;
 }
 
-// Five minutes of no button/touch input — long enough for a download screen
-// to sit idle, short enough to protect OLED panels that stay on a static UI.
-constexpr uint64_t kBurnInIdleMs = 5ull * 60ull * 1000ull;
-
 } // namespace pipensx::ui

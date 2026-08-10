@@ -123,6 +123,22 @@ public:
             });
         content->addView(soundEffects_);
 
+        burnInIdle_ = new brls::SelectorCell();
+        burnInIdle_->init(tr("pipensx/settings/burn_in_idle"),
+            {"15 s", "30 s", "1 min", "2 min", "5 min", "10 min", "30 min"},
+            burnInIdleIndex(settings_->get().burnInIdleSec),
+            [this](int selected) {
+                AppSettingsData values = settings_->get();
+                uint32_t previous = values.burnInIdleSec;
+                values.burnInIdleSec = kBurnInIdleSecValues[selected];
+                if (!persist(values, "burn_in_idle_sec")) {
+                    burnInIdle_->setSelection(burnInIdleIndex(previous), true);
+                }
+                // main_switch's loop reads settings_->get().burnInIdleSec
+                // live every frame - no restart needed.
+            });
+        content->addView(burnInIdle_);
+
         addSection(content, tr("pipensx/settings/section_catalog"));
         catalogFilter_ = new brls::SelectorCell();
         catalogFilter_->init(tr("pipensx/settings/visible_releases"),
@@ -317,6 +333,14 @@ private:
     static int themeModeIndex(const std::string& value) {
         for (size_t i = 0; i < std::size(kThemeModeValues); ++i) {
             if (value == kThemeModeValues[i])
+                return static_cast<int>(i);
+        }
+        return 0;
+    }
+
+    static int burnInIdleIndex(uint32_t seconds) {
+        for (size_t i = 0; i < std::size(kBurnInIdleSecValues); ++i) {
+            if (seconds == kBurnInIdleSecValues[i])
                 return static_cast<int>(i);
         }
         return 0;
@@ -684,6 +708,7 @@ private:
         const AppSettingsData& values = settings_->get();
         language_->setSelection(languageIndex(values.language), true);
         theme_->setSelection(themeModeIndex(values.themeMode), true);
+        burnInIdle_->setSelection(burnInIdleIndex(values.burnInIdleSec), true);
         catalogFilter_->setSelection(
             values.catalogFilter == CatalogFilter::Games ? 1 : 0, true);
         refreshCatalog_->setOn(values.refreshCatalogOnLaunch, false);
@@ -716,6 +741,7 @@ private:
     std::shared_ptr<std::atomic<bool>> alive_;
     brls::SelectorCell* language_ = nullptr;
     brls::SelectorCell* theme_ = nullptr;
+    brls::SelectorCell* burnInIdle_ = nullptr;
     brls::SelectorCell* catalogFilter_ = nullptr;
     brls::BooleanCell* refreshCatalog_ = nullptr;
     brls::BooleanCell* checkForUpdates_ = nullptr;

@@ -414,6 +414,7 @@
     "check_update_now": "Check for FreeShop update",
     "check_update_detail": "Current version {}",
     "sound_effects": "Sound effects",
+    "burn_in_idle": "OLED screen saver delay",
     "checking": "Checking...",
     "check_failed": "Check failed",
     "up_to_date": "Up to date",

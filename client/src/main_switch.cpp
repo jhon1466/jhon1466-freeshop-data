@@ -673,11 +673,13 @@ int main(int argc, char** argv) {
             if (!brls::Application::mainLoop())
                 break;
 
-            // OLED burn-in guard: after five minutes without a button/touch,
-            // cover the UI with a drifting black saver. Any input dismisses it
-            // (including D-pad and touch) and resets the idle clock. Open state
-            // is derived from the activity stack so a dismiss cannot desync a
-            // bool and stack another saver on the next idle period.
+            // OLED burn-in guard: after the configured idle delay (Ajustes ->
+            // "OLED screen saver delay", default 5 min) without a
+            // button/touch, cover the UI with a drifting black saver. Any
+            // input dismisses it (including D-pad and touch) and resets the
+            // idle clock. Open state is derived from the activity stack so a
+            // dismiss cannot desync a bool and stack another saver on the
+            // next idle period.
             brls::ControllerState pad {};
             std::vector<brls::RawTouchState> touches;
             auto* input = brls::Application::getPlatform()->getInputManager();
@@ -691,13 +693,15 @@ int main(int argc, char** argv) {
                 }
             }
             const bool saverOpen = pipensx::ui::burnInSaverIsTop();
+            const uint64_t burnInIdleMs =
+                static_cast<uint64_t>(settings.get().burnInIdleSec) * 1000ULL;
             if (pipensx::ui::controllerHasButtonDown(pad) || touched) {
                 lastInputMs = now_ms();
                 if (saverOpen)
                     brls::Application::popActivity(
                         brls::TransitionAnimation::NONE);
             } else if (!saverOpen &&
-                       now_ms() - lastInputMs >= pipensx::ui::kBurnInIdleMs) {
+                       now_ms() - lastInputMs >= burnInIdleMs) {
                 brls::Application::pushActivity(
                     new pipensx::ui::BurnInSaverActivity(),
                     brls::TransitionAnimation::NONE);
