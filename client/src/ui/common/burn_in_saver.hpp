@@ -27,8 +27,14 @@ public:
         // Explicit fill instead of relying on the Box's own background
         // paint: guarantees a flat, fully opaque black covering the exact
         // frame regardless of any theme/background-style interaction.
+        // Overdrawn a few px past each edge so sub-pixel scale rounding
+        // (Application::contentWidth/Height round up from windowScale)
+        // cannot leave a sliver of whatever was behind uncovered at the
+        // screen's corners.
+        constexpr float kOverdraw = 4.f;
         nvgBeginPath(vg);
-        nvgRect(vg, x, y, width, height);
+        nvgRect(vg, x - kOverdraw, y - kOverdraw,
+               width + kOverdraw * 2.f, height + kOverdraw * 2.f);
         nvgFillColor(vg, nvgRGB(0, 0, 0));
         nvgFill(vg);
         brls::Box::draw(vg, x, y, width, height, style, ctx);
