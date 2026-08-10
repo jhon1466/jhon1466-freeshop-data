@@ -17,17 +17,10 @@ constexpr const char* Target = "/tmp/pipensx-update-test.nro";
 constexpr const char* HelperSource = "/tmp/freeshop-client-updater-fixture.nro";
 
 bool emulateSwitchRename = false;
-bool failHelperPublish = false;
 
 extern "C" int __real_rename(const char* oldPath, const char* newPath);
 
 extern "C" int __wrap_rename(const char* oldPath, const char* newPath) {
-    if (failHelperPublish &&
-        std::strcmp(oldPath, "/tmp/freeshop-client-updater.nro.tmp") == 0 &&
-        std::strcmp(newPath, "/tmp/freeshop-client-updater.nro") == 0) {
-        errno = EIO;
-        return -1;
-    }
     if (emulateSwitchRename) {
         if (std::strcmp(oldPath, Target) == 0) {
             errno = EACCES;
@@ -289,8 +282,13 @@ void testHelperPublishFailurePreservesPreviousHelper() {
     unlink("/tmp/pipensx-update-test.nro.update");
     unlink("/tmp/pipensx-update-test.nro.update.sha256");
     unlink("/tmp/freeshop-client-updater.nro.tmp");
+    unlink(HelperSource);
     write(Target, "old");
-    write(HelperSource, "new minimal updater helper");
+    // HelperSource deliberately left missing: publishHelper()'s very first
+    // step (copy from helperSourcePath_) fails with no fallback, unlike a
+    // rename() EIO, which is recoverable (see the copy-fallback in
+    // publishHelper() for the sdmc: quirk where rename() can spuriously
+    // refuse to replace an existing destination).
     write("/tmp/freeshop-client-updater.nro", "previous helper");
     const std::string payload = "new verified pipensx nro";
     const std::string checksum =
@@ -305,9 +303,7 @@ void testHelperPublishFailurePreservesPreviousHelper() {
         "https://freeshop-proxy.freeshopnx.workers.dev/releases/assets/1001",
         "https://freeshop-proxy.freeshopnx.workers.dev/releases/assets/1002"};
     std::string error;
-    failHelperPublish = true;
     const bool installed = service.install(release, error);
-    failHelperPublish = false;
     assert(!installed);
     assert(error.find("No se pudo publicar el ayudante de actualización") !=
           std::string::npos);
