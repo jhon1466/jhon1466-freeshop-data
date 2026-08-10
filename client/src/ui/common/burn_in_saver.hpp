@@ -24,6 +24,13 @@ public:
 
     void draw(NVGcontext* vg, float x, float y, float width, float height,
               brls::Style style, brls::FrameContext* ctx) override {
+        // Explicit fill instead of relying on the Box's own background
+        // paint: guarantees a flat, fully opaque black covering the exact
+        // frame regardless of any theme/background-style interaction.
+        nvgBeginPath(vg);
+        nvgRect(vg, x, y, width, height);
+        nvgFillColor(vg, nvgRGB(0, 0, 0));
+        nvgFill(vg);
         brls::Box::draw(vg, x, y, width, height, style, ctx);
         const float t = static_cast<float>(brls::getCPUTimeUsec()) * 1e-6f;
         const float marker = 48.f;
