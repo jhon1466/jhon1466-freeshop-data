@@ -27,14 +27,12 @@ public:
         // Explicit fill instead of relying on the Box's own background
         // paint: guarantees a flat, fully opaque black covering the exact
         // frame regardless of any theme/background-style interaction.
-        // Overdrawing outward didn't clear stray corner pixels (so the gap
-        // isn't missing coverage at the edge) - inset a couple px instead,
-        // in case the panel's outermost row/column of physical pixels isn't
-        // reliably driven by whatever is rendered exactly at the boundary.
-        constexpr float kInset = 2.f;
+        // Neither overdrawing nor insetting the fill changed the stray
+        // corner pixels (tried both) - back to the exact frame. Whatever
+        // shows through at the corners is below this draw call, not a
+        // coverage gap in it.
         nvgBeginPath(vg);
-        nvgRect(vg, x + kInset, y + kInset,
-               width - kInset * 2.f, height - kInset * 2.f);
+        nvgRect(vg, x, y, width, height);
         nvgFillColor(vg, nvgRGB(0, 0, 0));
         nvgFill(vg);
         brls::Box::draw(vg, x, y, width, height, style, ctx);
