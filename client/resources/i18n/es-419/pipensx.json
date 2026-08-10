@@ -419,6 +419,7 @@
     "check_update_detail": "Versión actual {}",
     "sound_effects": "Efectos de sonido",
     "burn_in_idle": "Espera del protector de pantalla OLED",
+    "burn_in_clock": "Mostrar reloj en el protector de pantalla",
     "checking": "Buscando...",
     "check_failed": "Falló la búsqueda",
     "up_to_date": "Al día",

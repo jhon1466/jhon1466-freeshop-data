@@ -419,6 +419,7 @@
     "check_update_detail": "Current version {}",
     "sound_effects": "Sound effects",
     "burn_in_idle": "OLED screen saver delay",
+    "burn_in_clock": "Show clock in screen saver",
     "checking": "Checking...",
     "check_failed": "Check failed",
     "up_to_date": "Up to date",

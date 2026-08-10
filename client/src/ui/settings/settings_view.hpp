@@ -140,6 +140,20 @@ public:
             });
         content->addView(burnInIdle_);
 
+        burnInShowClock_ = new brls::BooleanCell();
+        burnInShowClock_->init(tr("pipensx/settings/burn_in_clock"),
+            settings_->get().burnInShowClock,
+            [this](bool enabled) {
+                AppSettingsData values = settings_->get();
+                bool previous = values.burnInShowClock;
+                values.burnInShowClock = enabled;
+                if (!persist(values, "burn_in_show_clock"))
+                    burnInShowClock_->setOn(previous, false);
+                // main_switch reads settings_->get().burnInShowClock when it
+                // next opens the saver - no restart needed.
+            });
+        content->addView(burnInShowClock_);
+
         addSection(content, tr("pipensx/settings/section_catalog"));
         catalogFilter_ = new brls::SelectorCell();
         catalogFilter_->init(tr("pipensx/settings/visible_releases"),
@@ -713,6 +727,7 @@ private:
         language_->setSelection(languageIndex(values.language), true);
         theme_->setSelection(themeModeIndex(values.themeMode), true);
         burnInIdle_->setSelection(burnInIdleIndex(values.burnInIdleSec), true);
+        burnInShowClock_->setOn(values.burnInShowClock, false);
         catalogFilter_->setSelection(
             values.catalogFilter == CatalogFilter::Games ? 1 : 0, true);
         refreshCatalog_->setOn(values.refreshCatalogOnLaunch, false);
@@ -746,6 +761,7 @@ private:
     brls::SelectorCell* language_ = nullptr;
     brls::SelectorCell* theme_ = nullptr;
     brls::SelectorCell* burnInIdle_ = nullptr;
+    brls::BooleanCell* burnInShowClock_ = nullptr;
     brls::SelectorCell* catalogFilter_ = nullptr;
     brls::BooleanCell* refreshCatalog_ = nullptr;
     brls::BooleanCell* checkForUpdates_ = nullptr;

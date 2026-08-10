@@ -182,6 +182,8 @@ bool parseSettings(const std::string& text, AppSettingsData& values,
     if (!readUnsigned(root, "burn_in_idle_sec", burnInIdle, error))
         return false;
     values.burnInIdleSec = clampBurnInIdleSec(burnInIdle);
+    if (!readBool(root, "burn_in_show_clock", values.burnInShowClock, error))
+        return false;
     // v2 -> v3: debrid arrived and the struct default flipped torrenting off,
     // but a pre-v3 file was written by a build where torrenting was the only
     // way to download anything. Migrate it back on rather than silently
@@ -260,6 +262,7 @@ std::string serializeSettings(const AppSettingsData& values) {
     root["first_run_completed"] = values.firstRunCompleted;
     root["proxy_url"] = values.proxyUrl;
     root["burn_in_idle_sec"] = values.burnInIdleSec;
+    root["burn_in_show_clock"] = values.burnInShowClock;
     return root.dump(2) + "\n";
 }
 
@@ -400,7 +403,8 @@ bool AppSettingsData::operator==(const AppSettingsData& other) const {
            debridProvider == other.debridProvider &&
            firstRunCompleted == other.firstRunCompleted &&
            proxyUrl == other.proxyUrl &&
-           burnInIdleSec == other.burnInIdleSec;
+           burnInIdleSec == other.burnInIdleSec &&
+           burnInShowClock == other.burnInShowClock;
 }
 
 bool dailyRefreshDue(uint64_t nowMs, uint64_t lastRefreshMs) {

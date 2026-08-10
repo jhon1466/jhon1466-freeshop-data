@@ -98,6 +98,9 @@ struct AppSettingsData {
     // kBurnInIdleSecValues; a hand-edited value snaps to the nearest one at
     // parse time (see clampBurnInIdleSec).
     uint32_t burnInIdleSec = 300;
+    // Whether the OLED burn-in saver shows a dim drifting clock. Off keeps
+    // the screen fully black (nothing at all) while the saver is up.
+    bool burnInShowClock = true;
 
     bool operator==(const AppSettingsData& other) const;
     bool operator!=(const AppSettingsData& other) const {

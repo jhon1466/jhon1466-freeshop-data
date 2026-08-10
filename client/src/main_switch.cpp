@@ -703,7 +703,8 @@ int main(int argc, char** argv) {
             } else if (!saverOpen &&
                        now_ms() - lastInputMs >= burnInIdleMs) {
                 brls::Application::pushActivity(
-                    new pipensx::ui::BurnInSaverActivity(),
+                    new pipensx::ui::BurnInSaverActivity(
+                        settings.get().burnInShowClock),
                     brls::TransitionAnimation::NONE);
                 lastInputMs = now_ms();
             }
