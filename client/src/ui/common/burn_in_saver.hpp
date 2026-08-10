@@ -24,18 +24,36 @@ public:
         setGrow(1.f);
         setBackgroundColor(theme::burnInBackdrop());
         if (showClock_) {
+            // Clock + battery drift together as one unit (phone-AOD style):
+            // absolute + a translation animated in draw() below, since a
+            // plain flex child cannot drift freely around the screen the way
+            // a screensaver needs to.
+            drifter_ = new brls::Box();
+            drifter_->setAxis(brls::Axis::COLUMN);
+            drifter_->setAlignItems(brls::AlignItems::CENTER);
+            drifter_->setFocusable(false);
+            drifter_->setPositionType(brls::PositionType::ABSOLUTE);
+            drifter_->setPositionTopPercentage(50.f);
+            drifter_->setPositionLeftPercentage(50.f);
+
             clock_ = new brls::Label();
             clock_->setFontSize(48.f);
             clock_->setTextColor(theme::burnInClock());
             clock_->setSingleLine(true);
             clock_->setFocusable(false);
-            // Absolute + a translation animated in draw() below: a plain
-            // flex child cannot drift freely around the screen the way a
-            // screensaver needs to.
-            clock_->setPositionType(brls::PositionType::ABSOLUTE);
-            clock_->setPositionTopPercentage(50.f);
-            clock_->setPositionLeftPercentage(50.f);
-            addView(clock_);
+            drifter_->addView(clock_);
+
+            if (brls::Application::getPlatform()->canShowBatteryLevel()) {
+                battery_ = new brls::Label();
+                battery_->setFontSize(20.f);
+                battery_->setTextColor(theme::burnInClock());
+                battery_->setSingleLine(true);
+                battery_->setFocusable(false);
+                battery_->setMarginTop(6.f);
+                drifter_->addView(battery_);
+            }
+
+            addView(drifter_);
         }
     }
 
@@ -53,7 +71,7 @@ public:
         nvgFillColor(vg, nvgRGB(0, 0, 0));
         nvgFill(vg);
 
-        if (showClock_ && clock_) {
+        if (showClock_ && drifter_) {
             const time_t now = time(nullptr);
             struct tm local {};
 #if defined(_WIN32)
@@ -68,14 +86,18 @@ public:
                 lastText_ = buf;
                 clock_->setText(lastText_);
             }
+
+            if (battery_)
+                updateBattery();
+
             // Drifts around the center of the screen; the anchor above puts
-            // the label's top-left at 50%/50%, so this offset also serves
-            // as the (rough) centering — good enough for a screensaver.
+            // the box's top-left at 50%/50%, so this offset also serves as
+            // the (rough) centering — good enough for a screensaver.
             const float t = static_cast<float>(brls::getCPUTimeUsec()) * 1e-6f;
             const float ampX = width * 0.32f;
             const float ampY = height * 0.32f;
-            clock_->setTranslationX(ampX * std::sin(t * 0.05f));
-            clock_->setTranslationY(ampY * std::cos(t * 0.037f));
+            drifter_->setTranslationX(ampX * std::sin(t * 0.05f));
+            drifter_->setTranslationY(ampY * std::cos(t * 0.037f));
         }
 
         brls::Box::draw(vg, x, y, width, height, style, ctx);
@@ -84,9 +106,44 @@ public:
     brls::View* getDefaultFocus() override { return this; }
 
 private:
+    // Refreshes the cached battery level/charging state off the main thread
+    // every 5s - same throttled, fire-and-forget pattern as borealis's own
+    // BatteryWidget/WirelessWidget, since psmGetBatteryChargePercentage is an
+    // IPC call with no business running on the render thread every frame.
+    // The label itself is only touched here, on the main thread.
+    void updateBattery() {
+        const brls::Time now = brls::getCPUTimeUsec();
+        if (lastBatteryPollUsec_ == 0 ||
+            now - lastBatteryPollUsec_ > 5'000'000) {
+            lastBatteryPollUsec_ = now;
+            ASYNC_RETAIN
+            brls::async([ASYNC_TOKEN]() {
+                ASYNC_RELEASE
+                batteryLevel_ =
+                    brls::Application::getPlatform()->getBatteryLevel();
+                batteryCharging_ =
+                    brls::Application::getPlatform()->isBatteryCharging();
+            });
+        }
+
+        char buf[16];
+        std::snprintf(buf, sizeof(buf), batteryCharging_ ? "%d%% +" : "%d%%",
+                      batteryLevel_);
+        if (lastBatteryText_ != buf) {
+            lastBatteryText_ = buf;
+            battery_->setText(lastBatteryText_);
+        }
+    }
+
     bool showClock_;
+    brls::Box* drifter_ = nullptr;
     brls::Label* clock_ = nullptr;
+    brls::Label* battery_ = nullptr;
     std::string lastText_;
+    std::string lastBatteryText_;
+    int batteryLevel_ = 0;
+    bool batteryCharging_ = false;
+    brls::Time lastBatteryPollUsec_ = 0;
 };
 
 class BurnInSaverActivity : public brls::Activity {
