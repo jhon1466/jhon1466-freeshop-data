@@ -129,9 +129,9 @@ void testRejectsMalformed() {
     {
         // Wrong version.
         std::string bad = blob;
-        size_t pos = bad.rfind("1:vi1e");
+        size_t pos = bad.rfind("1:vi2e");
         assert(pos != std::string::npos);
-        bad[pos + 4] = '2';
+        bad[pos + 4] = '3';
         InstallJournal loaded;
         assert(!loaded.load(bad.data(), bad.size()));
     }
