@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ctime>
 #include <functional>
 #include <memory>
 #include <numeric>
@@ -242,10 +243,34 @@ public:
         // X/Y hotkeys still work; the chips make the current state visible
         // and touch-reachable. Single row: with the search field collapsed
         // to a 40px icon everything fits at 1280 without clipping.
+        //
+        // Freshness lives ABOVE this row, top-right — never in the chip row,
+        // where it shoved the magnifier off-screen once the sidebar folded.
+        freshnessRow_ = new brls::Box(brls::Axis::ROW);
+        freshnessRow_->setHeight(28);
+        freshnessRow_->setShrink(0.0f);
+        freshnessRow_->setMarginTop(6);
+        freshnessRow_->setMarginBottom(0);
+        freshnessRow_->setMarginLeft(34);
+        freshnessRow_->setMarginRight(34);
+        freshnessRow_->setJustifyContent(brls::JustifyContent::FLEX_END);
+        freshnessRow_->setAlignItems(brls::AlignItems::CENTER);
+        freshnessRow_->setFocusable(false);
+        auto* freshnessSpacer = new brls::Box();
+        freshnessSpacer->setGrow(1.0f);
+        freshnessSpacer->setFocusable(false);
+        freshnessRow_->addView(freshnessSpacer);
+        freshness_ = new brls::Label();
+        freshness_->setFontSize(theme::kFontCaption);
+        freshness_->setSingleLine(true);
+        freshness_->setFocusable(false);
+        freshness_->setShrink(0.0f);
+        freshnessRow_->addView(freshness_);
+
         header_ = new brls::Box(brls::Axis::ROW);
         header_->setHeight(40);
         header_->setShrink(0.0f);
-        header_->setMarginTop(10);
+        header_->setMarginTop(6);
         header_->setMarginBottom(10);
         header_->setMarginLeft(34);
         header_->setMarginRight(34);
@@ -365,6 +390,7 @@ public:
         });
         batchControls_->addView(prepareBatch_);
 
+        addView(freshnessRow_);
         addView(header_);
         addView(status_);
         addView(batchControls_);
@@ -373,6 +399,7 @@ public:
         recyclerHost_ = recyclerHost(recycler_);
         addView(recyclerHost_);
         rebuildEntries();
+        updateFreshnessLabel();
 
         // X and Y carry no hint. This view stacks more gamepad actions than the
         // bottom bar can render: on hardware the bar also holds the frame's
@@ -1087,6 +1114,36 @@ private:
         styleChip(filterGames_, gamesOnly);
         styleChip(filterFavorites_, favoritesOnly_);
         count_->setText(countText_);
+        updateFreshnessLabel();
+    }
+
+    // Top-right freshness badge. Bundled dumps do not count: only a successful
+    // network refresh stamps lastCatalogRefreshWallSec. Green = refreshed
+    // today, red = never / not today, orange = in flight.
+    void updateFreshnessLabel() {
+        if (!freshness_)
+            return;
+        if (busy_) {
+            freshness_->setText(tr("pipensx/catalog/freshness_updating"));
+            freshness_->setTextColor(theme::warning());
+            return;
+        }
+        const uint64_t wallSec =
+            settings_ ? settings_->get().lastCatalogRefreshWallSec : 0;
+        if (wallSec == 0) {
+            freshness_->setText(tr("pipensx/catalog/freshness_never"));
+            freshness_->setTextColor(theme::error());
+            return;
+        }
+        const int64_t epoch = static_cast<int64_t>(wallSec);
+        const std::string date = formatEpochDateUtc(epoch);
+        if (isLocalToday(epoch)) {
+            freshness_->setText(tr("pipensx/catalog/freshness_ok", date));
+            freshness_->setTextColor(theme::success());
+        } else {
+            freshness_->setText(tr("pipensx/catalog/freshness_stale", date));
+            freshness_->setTextColor(theme::error());
+        }
     }
 
     // Only the active chip carries an arrow: the direction belongs to the sort
@@ -1318,6 +1375,7 @@ private:
     void setBusy(bool busy) {
         busy_ = busy;
         registerSortAction(busy);
+        updateFreshnessLabel();
         // Neither registerAction nor updateActionHint fires this, so without it
         // the bar keeps the stale hint until some unrelated focus change
         // refills it.
@@ -1451,12 +1509,15 @@ private:
                 refreshSources(false, false, false);
             return;
         }
-        const uint64_t now = now_ms();
+        // Bundled dumps do not count. Due when this console has never pulled
+        // the catalogue, or the last pull was not today.
         const AppSettingsData& values = settings_->get();
-        refreshSources(
-            dailyRefreshDue(now, values.lastCatalogRefreshMs),
-            metadata_ && dailyRefreshDue(now, values.lastMetadataRefreshMs),
-            false);
+        const uint64_t wallSec = values.lastCatalogRefreshWallSec;
+        const bool catalogDue =
+            wallSec == 0 || !isLocalToday(static_cast<int64_t>(wallSec));
+        const bool metadataDue =
+            metadata_ && dailyRefreshDue(now_ms(), values.lastMetadataRefreshMs);
+        refreshSources(catalogDue, catalogDue || metadataDue, false);
     }
 
     void recordRefreshSuccess(bool catalog, bool metadata, bool mods) {
@@ -1464,8 +1525,11 @@ private:
             return;
         AppSettingsData values = settings_->get();
         const uint64_t now = now_ms();
-        if (catalog)
+        if (catalog) {
             values.lastCatalogRefreshMs = now;
+            values.lastCatalogRefreshWallSec =
+                static_cast<uint64_t>(time(nullptr));
+        }
         if (metadata)
             values.lastMetadataRefreshMs = now;
         if (mods)
@@ -1635,9 +1699,15 @@ private:
                 }
                 if (catalogOk || metadataOk || modsOk)
                     rebuildEntries();
+                else if (heavy)
+                    updateFreshnessLabel();
                 recordRefreshSuccess(fetchCatalog && catalogOk,
                                      fetchMetadata && metadataOk,
                                      fetchMods && modsOk);
+                // Stamp may have landed after rebuildEntries — refresh the
+                // badge once settings are written.
+                if (fetchCatalog && catalogOk)
+                    updateFreshnessLabel();
                 if (notify)
                     notifyRefreshResult(fetchCatalog, fetchMetadata, catalogOk,
                                         metadataOk, catalogError,
@@ -1658,6 +1728,8 @@ private:
     brls::Box* recyclerHost_ = nullptr;
     CatalogDataSource* dataSource_;
     brls::Box* header_ = nullptr;
+    brls::Box* freshnessRow_ = nullptr;
+    brls::Label* freshness_ = nullptr;
     SearchIconButton* searchField_ = nullptr;
     brls::Button* clearSearch_ = nullptr;
     brls::Button* sortLatest_ = nullptr;

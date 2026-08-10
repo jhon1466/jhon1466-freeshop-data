@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <fstream>
 #include <string>
 #include <unistd.h>
@@ -15,6 +16,7 @@ using pipensx::DebridProviderKind;
 using pipensx::StreamSelection;
 using pipensx::InstallLocation;
 using pipensx::dailyRefreshDue;
+using pipensx::isLocalToday;
 using pipensx::isValidProxyUrl;
 using pipensx::applyProxySetting;
 
@@ -38,6 +40,7 @@ void testMissingFileUsesSafeDefaults() {
     assert(values.catalogFilter == CatalogFilter::Games);
     assert(!values.refreshCatalogOnLaunch);
     assert(values.lastCatalogRefreshMs == 0);
+    assert(values.lastCatalogRefreshWallSec == 0);
     assert(values.lastMetadataRefreshMs == 0);
     assert(values.lastModsRefreshMs == 0);
     assert(values.streamSelection == StreamSelection::AllFiles);
@@ -68,6 +71,7 @@ void testUpdatePersistsEveryPublicSetting() {
     changed.catalogFilter = CatalogFilter::All;
     changed.refreshCatalogOnLaunch = true;
     changed.lastCatalogRefreshMs = 123456;
+    changed.lastCatalogRefreshWallSec = 1700000000;
     changed.lastMetadataRefreshMs = 234567;
     changed.lastModsRefreshMs = 345678;
     changed.streamSelection = StreamSelection::PackagesOnly;
@@ -111,6 +115,7 @@ void testOldSettingsJsonDefaultsRefreshTimes() {
     assert(settings.load(error));
     assert(settings.get().refreshCatalogOnLaunch);
     assert(settings.get().lastCatalogRefreshMs == 0);
+    assert(settings.get().lastCatalogRefreshWallSec == 0);
     assert(settings.get().lastMetadataRefreshMs == 0);
     assert(settings.get().lastModsRefreshMs == 0);
     assert(settings.get().catalogDisclaimerAcknowledged);
@@ -267,6 +272,13 @@ void testDailyRefreshDue() {
     assert(dailyRefreshDue(999, 1000));
 }
 
+void testIsLocalToday() {
+    assert(!isLocalToday(0));
+    assert(!isLocalToday(-1));
+    assert(isLocalToday(static_cast<int64_t>(time(nullptr))));
+    assert(!isLocalToday(static_cast<int64_t>(time(nullptr)) - 48 * 60 * 60));
+}
+
 void testLegacyDebridKeysTolerated() {
     cleanup();
     {
@@ -371,6 +383,7 @@ int main() {
     testInvalidProxyUrlIsCleared();
     testProxySettingReachesEnvironment();
     testDailyRefreshDue();
+    testIsLocalToday();
     cleanup();
     std::puts("app settings tests passed");
     return 0;

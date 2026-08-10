@@ -39,6 +39,11 @@ struct AppSettingsData {
     CatalogFilter catalogFilter = CatalogFilter::Games;
     bool refreshCatalogOnLaunch = false;
     uint64_t lastCatalogRefreshMs = 0;
+    // Wall-clock seconds of the last successful catalogue download. 0 = never
+    // refreshed on this console (a bundled dump does not count). Used by the
+    // freshness badge — distinct from lastCatalogRefreshMs, which is
+    // monotonic now_ms() for the refresh-on-launch gate.
+    uint64_t lastCatalogRefreshWallSec = 0;
     uint64_t lastMetadataRefreshMs = 0;
     uint64_t lastModsRefreshMs = 0;
     StreamSelection streamSelection = StreamSelection::AllFiles;
@@ -147,6 +152,10 @@ inline constexpr uint32_t kBurnInIdleSecValues[] = {15, 30, 60, 120, 300, 600, 1
 uint32_t clampBurnInIdleSec(uint64_t value);
 
 bool dailyRefreshDue(uint64_t nowMs, uint64_t lastRefreshMs);
+
+// True when `epochSec` falls on the local calendar day of `time(nullptr)`.
+// epochSec <= 0 is never "today" (unknown / never refreshed).
+bool isLocalToday(int64_t epochSec);
 
 class AppSettings {
 public:
