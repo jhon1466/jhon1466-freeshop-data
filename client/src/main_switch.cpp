@@ -35,6 +35,7 @@ extern "C" {
 
 #include "app/mod_index_service.hpp"
 #include "ui/catalog/catalog_view.hpp"
+#include "ui/common/burn_in_saver.hpp"
 #include "ui/common/ui_helpers.hpp"
 #include "ui/common/web_qr.hpp"
 #include "ui/first_run_view.hpp"
@@ -662,6 +663,7 @@ int main(int argc, char** argv) {
 
         startupStage("first main loop");
         bool firstFrame = true;
+        uint64_t lastInputMs = now_ms();
         while (true) {
             bool activeTransfer = manager.hasActiveTransfer();
             performance.setCpuBoostActive(activeTransfer);
@@ -670,6 +672,38 @@ int main(int argc, char** argv) {
                                : GameMetadataService::ImageNetwork::Full);
             if (!brls::Application::mainLoop())
                 break;
+
+            // OLED burn-in guard: after five minutes without a button/touch,
+            // cover the UI with a drifting black saver. Any input dismisses it
+            // (including D-pad and touch) and resets the idle clock. Open state
+            // is derived from the activity stack so a dismiss cannot desync a
+            // bool and stack another saver on the next idle period.
+            brls::ControllerState pad {};
+            std::vector<brls::RawTouchState> touches;
+            auto* input = brls::Application::getPlatform()->getInputManager();
+            input->updateUnifiedControllerState(&pad);
+            input->updateTouchStates(&touches);
+            bool touched = false;
+            for (const auto& touch : touches) {
+                if (touch.pressed) {
+                    touched = true;
+                    break;
+                }
+            }
+            const bool saverOpen = pipensx::ui::burnInSaverIsTop();
+            if (pipensx::ui::controllerHasButtonDown(pad) || touched) {
+                lastInputMs = now_ms();
+                if (saverOpen)
+                    brls::Application::popActivity(
+                        brls::TransitionAnimation::NONE);
+            } else if (!saverOpen &&
+                       now_ms() - lastInputMs >= pipensx::ui::kBurnInIdleMs) {
+                brls::Application::pushActivity(
+                    new pipensx::ui::BurnInSaverActivity(),
+                    brls::TransitionAnimation::NONE);
+                lastInputMs = now_ms();
+            }
+
             if (firstFrame) {
                 startupStage("main loop running");
                 if (updatePendingConfirmation) {
