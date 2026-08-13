@@ -1,5 +1,6 @@
 #include "app/app_settings.hpp"
 #include "app/catalog_service.hpp"
+#include "app/companion_settings.hpp"
 #include "app/download_manager.hpp"
 #include "app/game_metadata_service.hpp"
 #include "app/installed_title_service.hpp"
@@ -540,6 +541,8 @@ int main(int argc, char** argv) {
         WebServer webServer(manager, "romfs:/web", PIPENSX_VERSION);
         webServer.setPin(settings.get().webServerPin);
         webServer.setStreamSelection(settings.get().streamSelection);
+        webServer.updateSettingsSnapshot(
+            pipensx::companionSettingsJson(settings.get()));
         webServer.updateCatalog(catalog.sharedEntries());
         // Every later adopt() (launch refresh, settings refresh, catalog tab)
         // lands on the UI thread, so this callback keeps the companion's
@@ -708,6 +711,29 @@ int main(int argc, char** argv) {
                     brls::TransitionAnimation::NONE);
                 lastInputMs = now_ms();
             }
+
+            // Companion Settings tab: apply at most one queued remote update
+            // per frame. AppSettings/DownloadManager are UI-thread objects,
+            // so this can't happen on the server thread itself - see
+            // WebServer::pumpSettingsPatch.
+            webServer.pumpSettingsPatch(
+                [&settings, &manager, &webServer](
+                    const std::string& requestJson, std::string& resultJson,
+                    std::string& error) {
+                    pipensx::AppSettingsData values = settings.get();
+                    if (!pipensx::applyCompanionSettingsPatch(
+                            values, requestJson, error))
+                        return false;
+                    std::string updateError;
+                    if (!settings.update(values, updateError)) {
+                        error = updateError;
+                        return false;
+                    }
+                    pipensx::applyCompanionSettingsRuntime(values, manager);
+                    resultJson = pipensx::companionSettingsJson(values);
+                    webServer.updateSettingsSnapshot(resultJson);
+                    return true;
+                });
 
             if (firstFrame) {
                 startupStage("main loop running");

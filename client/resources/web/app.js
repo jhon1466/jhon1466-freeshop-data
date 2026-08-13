@@ -99,7 +99,7 @@ function openModal(html) {
 }
 
 /* ---------- tabs ---------- */
-const tabs = ["downloads", "catalog", "add", "files"];
+const tabs = ["downloads", "catalog", "add", "files", "settings"];
 function currentTab() {
   const h = location.hash.replace("#", "");
   return tabs.includes(h) ? h : "downloads";
@@ -121,6 +121,7 @@ function showTab() {
   moveTabIndicator();
   if (active === "catalog") loadCatalog();
   if (active === "files" && !filesPath) loadFiles("sdmc:/");
+  if (active === "settings") loadSettings();
 }
 window.addEventListener("hashchange", showTab);
 window.addEventListener("resize", moveTabIndicator);
@@ -707,6 +708,80 @@ $("files-upload-input").addEventListener("change", async () => {
   } finally {
     progress.hidden = true;
     $("files-upload-btn").disabled = false;
+  }
+});
+
+/* ---------- settings ---------- */
+// Secrets (torboxApiKey/torrserverUrl/proxyUrl) never come back from GET -
+// only whether one is set. The field stays blank either way; a blank field
+// on save means "leave it alone" when one was already set, not "clear it" -
+// settingsWasSet tracks that per field so saveSettings can tell the two
+// apart (an empty proxy field only means something when there was nothing
+// to preserve).
+let settingsWasSet = { torboxApiKey: false, torrserverUrl: false, proxyUrl: false };
+
+async function loadSettings() {
+  try {
+    const resp = await api("/api/settings");
+    if (!resp.ok) {
+      toast("no se pudieron cargar los ajustes", true);
+      return;
+    }
+    const s = await resp.json();
+    $("set-torrenting").checked = !!s.torrentingEnabled;
+    $("set-provider").value = s.debridProvider || "torbox";
+    $("set-location").value = s.installLocation || "sdcard";
+    $("set-max-downloads").value = s.maxActiveDownloads || 1;
+    settingsWasSet = {
+      torboxApiKey: !!s.torboxApiKeySet,
+      torrserverUrl: !!s.torrserverUrlSet,
+      proxyUrl: !!s.proxyUrlSet,
+    };
+    $("set-torbox-key").value = "";
+    $("set-torrserver-url").value = "";
+    $("set-proxy-url").value = "";
+    $("set-torbox-key-hint").textContent =
+      settingsWasSet.torboxApiKey ? "Configurada. Dejá vacío para no cambiarla." : "No configurada.";
+    $("set-torrserver-url-hint").textContent =
+      settingsWasSet.torrserverUrl ? "Configurada. Dejá vacío para no cambiarla." : "No configurada.";
+    $("set-proxy-url").placeholder = settingsWasSet.proxyUrl
+      ? "Configurado - dejá vacío para no cambiarlo" : "Vacío = directo";
+  } catch {
+    toast("error de red", true);
+  }
+}
+
+$("settings-save-btn").addEventListener("click", async () => {
+  const btn = $("settings-save-btn");
+  const patch = {
+    torrentingEnabled: $("set-torrenting").checked,
+    debridProvider: $("set-provider").value,
+    installLocation: $("set-location").value,
+    maxActiveDownloads: Number($("set-max-downloads").value) || 1,
+  };
+  // Secrets: only send a field that changed - a typed value, or an empty
+  // box when there was nothing saved to preserve in the first place.
+  const torboxKey = $("set-torbox-key").value;
+  if (torboxKey || !settingsWasSet.torboxApiKey) patch.torboxApiKey = torboxKey;
+  const torrserverUrl = $("set-torrserver-url").value;
+  if (torrserverUrl || !settingsWasSet.torrserverUrl) patch.torrserverUrl = torrserverUrl;
+  const proxyUrl = $("set-proxy-url").value;
+  if (proxyUrl || !settingsWasSet.proxyUrl) patch.proxyUrl = proxyUrl;
+
+  btn.disabled = true;
+  try {
+    const resp = await postJson("/api/settings", patch);
+    const body = await resp.json().catch(() => ({}));
+    if (resp.ok) {
+      toast("Ajustes guardados");
+      loadSettings();
+    } else {
+      toast(body.error || "no se pudo guardar", true);
+    }
+  } catch {
+    toast("error de red", true);
+  } finally {
+    btn.disabled = false;
   }
 });
 

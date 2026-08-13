@@ -40,6 +40,10 @@
     <svg viewBox="0 0 24 24" class="tab-icon"><path d="M3.5 7.5a1.5 1.5 0 0 1 1.5-1.5h4.5l2 2h7.5a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5v-10Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
     <span>Archivos</span>
   </a>
+  <a href="#settings" data-tab="settings" class="tab">
+    <svg viewBox="0 0 24 24" class="tab-icon"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M19.4 13.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V19.5a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H4.5a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H10a1.7 1.7 0 0 0 1-1.55V4.5a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87V10a1.7 1.7 0 0 0 1.55 1h.09a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+    <span>Ajustes</span>
+  </a>
   <span class="tab-indicator" id="tab-indicator" aria-hidden="true"></span>
 </nav>
 
@@ -114,6 +118,58 @@
       <svg viewBox="0 0 24 24" class="empty-icon"><path d="M3.5 7.5a1.5 1.5 0 0 1 1.5-1.5h4.5l2 2h7.5a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5v-10Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
       <p class="empty-title">Carpeta vacía</p>
     </div>
+  </section>
+
+  <section id="view-settings" class="view" hidden>
+    <div class="card form-card">
+      <h2><svg viewBox="0 0 24 24" class="card-icon"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>Fuente de descargas</h2>
+      <div class="field">
+        <label class="field-check">
+          <input id="set-torrenting" type="checkbox">
+          <span>Usar torrents directos en vez de debrid</span>
+        </label>
+      </div>
+      <div class="field">
+        <span class="field-label">Proveedor de debrid</span>
+        <select id="set-provider">
+          <option value="torbox">TorBox</option>
+          <option value="torrserver">TorrServer</option>
+        </select>
+      </div>
+      <div class="field">
+        <span class="field-label">API key de TorBox</span>
+        <input id="set-torbox-key" type="password" placeholder="Sin configurar" autocomplete="off">
+        <p id="set-torbox-key-hint" class="field-hint"></p>
+      </div>
+      <div class="field">
+        <span class="field-label">URL de TorrServer</span>
+        <input id="set-torrserver-url" type="text" placeholder="http://192.168.1.10:8090" autocomplete="off">
+        <p id="set-torrserver-url-hint" class="field-hint"></p>
+      </div>
+    </div>
+    <div class="card form-card">
+      <h2><svg viewBox="0 0 24 24" class="card-icon"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Instalación</h2>
+      <div class="field">
+        <span class="field-label">Destino de instalación</span>
+        <select id="set-location">
+          <option value="sdcard">Tarjeta SD</option>
+          <option value="system">Memoria del sistema</option>
+        </select>
+      </div>
+      <div class="field">
+        <span class="field-label">Descargas activas al mismo tiempo</span>
+        <input id="set-max-downloads" type="number" min="1" max="4" step="1">
+      </div>
+    </div>
+    <div class="card form-card">
+      <h2><svg viewBox="0 0 24 24" class="card-icon"><path d="M9 15 15 9m-6 8.5L4.5 22 2 19.5 6.5 15m10-10L21 .5 23.5 3 19 7.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>Proxy saliente</h2>
+      <div class="field">
+        <span class="field-label">URL del proxy</span>
+        <input id="set-proxy-url" type="text" placeholder="Vacío = directo" autocomplete="off">
+        <p class="field-hint">scheme://host:puerto - http, https, socks4, socks5 o socks5h.</p>
+      </div>
+    </div>
+    <button id="settings-save-btn" class="btn btn-primary btn-block">Guardar ajustes</button>
   </section>
 </main>
 

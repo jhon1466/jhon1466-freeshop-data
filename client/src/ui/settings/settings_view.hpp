@@ -15,6 +15,7 @@
 
 #include "app/app_settings.hpp"
 #include "app/catalog_service.hpp"
+#include "app/companion_settings.hpp"
 #include "app/download_manager.hpp"
 #include "app/game_metadata_service.hpp"
 #include "app/installed_title_service.hpp"
@@ -418,11 +419,16 @@ private:
 
     bool persist(const AppSettingsData& values, const char* tag) {
         std::string error;
-        if (settings_->update(values, error))
-            return true;
-        diagnostic_error("settings", tag, "error=%s", error.c_str());
-        brls::Application::notify(error);
-        return false;
+        if (!settings_->update(values, error)) {
+            diagnostic_error("settings", tag, "error=%s", error.c_str());
+            brls::Application::notify(error);
+            return false;
+        }
+        // Keeps GET /api/settings on the web companion in sync with edits
+        // made from the console keyboard too, not just its own PATCH.
+        if (webServer_)
+            webServer_->updateSettingsSnapshot(companionSettingsJson(values));
+        return true;
     }
 
     void recordRefreshTime(bool catalog, bool metadata, bool mods = false) {

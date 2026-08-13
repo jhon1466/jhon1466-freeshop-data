@@ -1,6 +1,9 @@
 #pragma once
 
+#include <atomic>
+#include <condition_variable>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -57,6 +60,24 @@ public:
     // instead of deep-copying the ~10 MB catalogue into the server.
     void updateCatalog(std::shared_ptr<const std::vector<CatalogEntry>> entries);
 
+    // Remote settings for the web companion Settings tab. AppSettings has no
+    // internal synchronization (UI-thread only by design - see the class
+    // comment above), so this cannot touch it from the server thread the way
+    // updateCatalog() touches CatalogEntry snapshots. Instead: the POST
+    // handler stakes a pending request and blocks (bounded) on a condition
+    // variable; the UI thread's periodic pumpSettingsPatch() call picks it
+    // up, applies it via AppSettings + DownloadManager on its own thread, and
+    // posts the result back to wake the waiting request.
+    using SettingsPatchFn = std::function<bool(const std::string& requestJson,
+                                               std::string& resultJson,
+                                               std::string& error)>;
+    // UI-thread push (startup + after every AppSettings::update()): refreshes
+    // the snapshot GET /api/settings serves.
+    void updateSettingsSnapshot(std::string json);
+    // UI-thread poll, once per main-loop tick. Applies at most one queued
+    // request per call via `apply`; no-op when nothing is queued.
+    void pumpSettingsPatch(const SettingsPatchFn& apply);
+
 private:
     HttpResponse route(const HttpRequest& req);
     HttpResponse routeApi(const HttpRequest& req);
@@ -72,6 +93,8 @@ private:
     HttpResponse handleExplorerDownload(const HttpRequest& req);
     HttpResponse handleExplorerUpload(const HttpRequest& req);
     HttpUploadDecision decideExplorerUpload(const HttpRequest& req);
+    HttpResponse handleSettingsGet(const HttpRequest& req);
+    HttpResponse handleSettingsUpdate(const HttpRequest& req);
     bool authorized(const HttpRequest& req) const;
     // False when the request names an origin other than the host it reached.
     static bool sameOrigin(const HttpRequest& req);
@@ -107,6 +130,17 @@ private:
     // frame every second.
     std::string lastStateJson_;
     uint64_t lastSseSentMs_ = 0;
+
+    std::atomic<bool> stopping_{false};
+    std::mutex settingsMutex_;
+    std::condition_variable settingsCv_;
+    std::string settingsSnapshotJson_ = "{}";
+    bool settingsRequestPending_ = false;
+    bool settingsRequestDone_ = false;
+    bool settingsRequestOk_ = false;
+    std::string settingsRequestJson_;
+    std::string settingsResultJson_;
+    std::string settingsRequestError_;
 };
 
 // gzip (RFC 1952) compression for Content-Encoding — note bug_report's

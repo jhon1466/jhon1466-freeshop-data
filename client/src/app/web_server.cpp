@@ -184,8 +184,36 @@ bool WebServer::start(uint16_t port) {
 void WebServer::stop() { http_.stop(); }
 
 void WebServer::shutdown() {
+    stopping_.store(true);
+    settingsCv_.notify_all();
     http_.stop();
     addQueue_.shutdown();
+}
+
+void WebServer::updateSettingsSnapshot(std::string json) {
+    std::lock_guard<std::mutex> lock(settingsMutex_);
+    settingsSnapshotJson_ = std::move(json);
+}
+
+void WebServer::pumpSettingsPatch(const SettingsPatchFn& apply) {
+    std::string requestJson;
+    {
+        std::lock_guard<std::mutex> lock(settingsMutex_);
+        if (!settingsRequestPending_ || settingsRequestDone_)
+            return;
+        requestJson = settingsRequestJson_;
+    }
+    std::string resultJson;
+    std::string error;
+    const bool ok = apply(requestJson, resultJson, error);
+    {
+        std::lock_guard<std::mutex> lock(settingsMutex_);
+        settingsRequestOk_ = ok;
+        settingsResultJson_ = std::move(resultJson);
+        settingsRequestError_ = std::move(error);
+        settingsRequestDone_ = true;
+    }
+    settingsCv_.notify_all();
 }
 
 void WebServer::setPin(std::string pin) {
@@ -389,6 +417,10 @@ HttpResponse WebServer::routeApi(const HttpRequest& req) {
         }
         if (parts[0] == "catalog" && parts.size() == 1)
             return handleCatalog(req);
+        if (parts[0] == "settings" && parts.size() == 1) {
+            if (!authorized(req)) return jsonError(401, "pin");
+            return handleSettingsGet(req);
+        }
         if (parts[0] == "storage" && parts.size() == 1) {
             StorageSpaceSnapshot snap =
                 queryStorageSpace(manager_.downloadRoot());
@@ -430,6 +462,8 @@ HttpResponse WebServer::routeApi(const HttpRequest& req) {
     }
     if (parts[0] == "explorer" && parts.size() == 2 && parts[1] == "upload")
         return handleExplorerUpload(req);
+    if (parts[0] == "settings" && parts.size() == 1)
+        return handleSettingsUpdate(req);
     return jsonError(404, "not found");
 }
 
@@ -731,6 +765,42 @@ HttpResponse WebServer::handleExplorerUpload(const HttpRequest& req) {
     Json j;
     j["path"] = finalPath;
     return HttpResponse::text(200, dumpJson(j));
+}
+
+HttpResponse WebServer::handleSettingsGet(const HttpRequest&) {
+    std::lock_guard<std::mutex> lock(settingsMutex_);
+    return HttpResponse::text(200, settingsSnapshotJson_);
+}
+
+HttpResponse WebServer::handleSettingsUpdate(const HttpRequest& req) {
+    {
+        std::lock_guard<std::mutex> lock(settingsMutex_);
+        if (settingsRequestPending_)
+            return jsonError(429, "a settings update is already in progress");
+        settingsRequestPending_ = true;
+        settingsRequestDone_ = false;
+        settingsRequestJson_ = req.body;
+    }
+
+    std::unique_lock<std::mutex> waitLock(settingsMutex_);
+    // Bounded: the UI thread applies this on its next main-loop tick, so a
+    // few seconds is generous — the cap just keeps a stalled/quit-mid-request
+    // console from leaving the HTTP thread blocked forever.
+    const bool ready = settingsCv_.wait_for(
+        waitLock, std::chrono::seconds(5),
+        [this] { return settingsRequestDone_ || stopping_.load(); });
+    if (!ready || !settingsRequestDone_) {
+        settingsRequestPending_ = false;
+        return jsonError(ready ? 503 : 504,
+                         ready ? "server is shutting down"
+                               : "timed out applying the settings update");
+    }
+    HttpResponse resp = settingsRequestOk_
+        ? HttpResponse::text(200, settingsResultJson_)
+        : jsonError(400, settingsRequestError_);
+    settingsRequestPending_ = false;
+    settingsRequestDone_ = false;
+    return resp;
 }
 
 }  // namespace pipensx
