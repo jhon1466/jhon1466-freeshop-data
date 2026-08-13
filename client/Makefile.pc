@@ -114,6 +114,12 @@ src/app/torbox_provider.o: src/app/torbox_provider.cpp
 src/app/torrserver_provider.o: src/app/torrserver_provider.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
+src/app/realdebrid_client.o: src/app/realdebrid_client.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
+src/app/realdebrid_provider.o: src/app/realdebrid_provider.cpp
+	$(CXX) $(CXXFLAGS) -c -o $@ $<
+
 src/app/debrid_transfer.o: src/app/debrid_transfer.cpp
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
@@ -151,6 +157,7 @@ $(MANAGER_TEST_TARGET): tests/test_manager.o src/app/download_manager.o \
 		src/app/install_pacer.o \
 		src/app/debrid_transfer.o src/app/torbox_client.o \
 		src/app/torbox_provider.o src/app/torrserver_provider.o \
+		src/app/realdebrid_client.o src/app/realdebrid_provider.o \
 		src/install/package_stream.o src/install/install_journal.o \
 		src/install/install_backend_pc.o \
 		$(filter-out src/main_pc.o,$(OBJS)) $(UTP_OBJS)
@@ -206,6 +213,7 @@ $(WEB_SERVER_TEST_TARGET): tests/test_web_server.cpp \
 		src/app/install_pacer.o \
 		src/app/debrid_transfer.o src/app/torbox_client.o \
 		src/app/torbox_provider.o src/app/torrserver_provider.o \
+		src/app/realdebrid_client.o src/app/realdebrid_provider.o \
 		src/install/package_stream.o src/install/install_journal.o \
 		src/install/install_backend_pc.o \
 		$(filter-out src/main_pc.o,$(OBJS)) $(UTP_OBJS)
@@ -329,6 +337,7 @@ $(BATCH_INSTALL_TEST_TARGET): tests/test_batch_install.cpp \
 		src/app/install_pacer.o \
 		src/app/torbox_client.o src/app/torbox_provider.o \
 		src/app/torrserver_provider.o \
+		src/app/realdebrid_client.o src/app/realdebrid_provider.o \
 		src/install/package_stream.o src/install/install_journal.o \
 		src/install/install_backend_pc.o \
 		$(filter-out src/main_pc.o,$(OBJS)) $(UTP_OBJS)
@@ -434,6 +443,7 @@ tools/webserver: tools/web_server_main.cpp \
 		src/app/install_pacer.o \
 		src/app/debrid_transfer.o src/app/torbox_client.o \
 		src/app/torbox_provider.o src/app/torrserver_provider.o \
+		src/app/realdebrid_client.o src/app/realdebrid_provider.o \
 		src/install/package_stream.o src/install/install_journal.o \
 		src/install/install_backend_pc.o \
 		$(filter-out src/main_pc.o,$(OBJS)) $(UTP_OBJS)
@@ -448,6 +458,7 @@ clean:
 		src/app/torbox_client.o src/app/torbox_pairing_server.o \
 		src/app/debrid_transfer.o src/app/torrserver_provider.o \
 		src/app/torbox_provider.o \
+		src/app/realdebrid_client.o src/app/realdebrid_provider.o \
 		src/app/catalog_service.o src/app/snapshot_zstd.o \
 		src/app/catalog_presentation.o src/app/game_metadata_service.o \
 		src/app/magnet_resolver.o \

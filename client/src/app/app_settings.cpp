@@ -163,12 +163,14 @@ bool parseSettings(const std::string& text, AppSettingsData& values,
         std::string provider = "torbox";
         if (!readString(root, "debrid_provider", provider, error))
             return false;
-        // "realdebrid" was a provider we no longer ship; it lands on the
-        // default rather than on a kind that cannot fetch anything.
         values.debridProvider = provider == "torrserver"
             ? DebridProviderKind::TorrServer
+            : provider == "realdebrid"
+            ? DebridProviderKind::RealDebrid
             : DebridProviderKind::TorBox;
     }
+    if (!readString(root, "realdebrid_api_key", values.realdebridApiKey, error))
+        return false;
     if (root.contains("first_run_completed")) {
         if (!readBool(root, "first_run_completed",
                       values.firstRunCompleted, error))
@@ -256,9 +258,13 @@ std::string serializeSettings(const AppSettingsData& values) {
     root["torrenting_enabled"] = values.torrentingEnabled;
     root["torbox_api_key"] = values.torboxApiKey;
     root["torrserver_url"] = values.torrserverUrl;
+    root["realdebrid_api_key"] = values.realdebridApiKey;
     root["debrid_provider"] =
         values.debridProvider == DebridProviderKind::TorrServer
-            ? "torrserver" : "torbox";
+            ? "torrserver"
+        : values.debridProvider == DebridProviderKind::RealDebrid
+            ? "realdebrid"
+            : "torbox";
     root["first_run_completed"] = values.firstRunCompleted;
     root["proxy_url"] = values.proxyUrl;
     root["burn_in_idle_sec"] = values.burnInIdleSec;
@@ -400,6 +406,7 @@ bool AppSettingsData::operator==(const AppSettingsData& other) const {
            torrentingEnabled == other.torrentingEnabled &&
            torboxApiKey == other.torboxApiKey &&
            torrserverUrl == other.torrserverUrl &&
+           realdebridApiKey == other.realdebridApiKey &&
            debridProvider == other.debridProvider &&
            firstRunCompleted == other.firstRunCompleted &&
            proxyUrl == other.proxyUrl &&

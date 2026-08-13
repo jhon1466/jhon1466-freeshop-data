@@ -718,7 +718,9 @@ $("files-upload-input").addEventListener("change", async () => {
 // settingsWasSet tracks that per field so saveSettings can tell the two
 // apart (an empty proxy field only means something when there was nothing
 // to preserve).
-let settingsWasSet = { torboxApiKey: false, torrserverUrl: false, proxyUrl: false };
+let settingsWasSet = {
+  torboxApiKey: false, torrserverUrl: false, realdebridApiKey: false, proxyUrl: false,
+};
 
 async function loadSettings() {
   try {
@@ -735,15 +737,19 @@ async function loadSettings() {
     settingsWasSet = {
       torboxApiKey: !!s.torboxApiKeySet,
       torrserverUrl: !!s.torrserverUrlSet,
+      realdebridApiKey: !!s.realdebridApiKeySet,
       proxyUrl: !!s.proxyUrlSet,
     };
     $("set-torbox-key").value = "";
     $("set-torrserver-url").value = "";
+    $("set-realdebrid-key").value = "";
     $("set-proxy-url").value = "";
     $("set-torbox-key-hint").textContent =
       settingsWasSet.torboxApiKey ? "Configurada. Dejá vacío para no cambiarla." : "No configurada.";
     $("set-torrserver-url-hint").textContent =
       settingsWasSet.torrserverUrl ? "Configurada. Dejá vacío para no cambiarla." : "No configurada.";
+    $("set-realdebrid-key-hint").textContent =
+      settingsWasSet.realdebridApiKey ? "Configurada. Dejá vacío para no cambiarla." : "No configurada.";
     $("set-proxy-url").placeholder = settingsWasSet.proxyUrl
       ? "Configurado - dejá vacío para no cambiarlo" : "Vacío = directo";
   } catch {
@@ -765,6 +771,8 @@ $("settings-save-btn").addEventListener("click", async () => {
   if (torboxKey || !settingsWasSet.torboxApiKey) patch.torboxApiKey = torboxKey;
   const torrserverUrl = $("set-torrserver-url").value;
   if (torrserverUrl || !settingsWasSet.torrserverUrl) patch.torrserverUrl = torrserverUrl;
+  const realdebridKey = $("set-realdebrid-key").value;
+  if (realdebridKey || !settingsWasSet.realdebridApiKey) patch.realdebridApiKey = realdebridKey;
   const proxyUrl = $("set-proxy-url").value;
   if (proxyUrl || !settingsWasSet.proxyUrl) patch.proxyUrl = proxyUrl;
 

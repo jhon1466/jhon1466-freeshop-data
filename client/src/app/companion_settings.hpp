@@ -10,9 +10,9 @@ namespace pipensx {
 // Whitelist JSON for the web companion Settings tab: lets a phone or PC edit
 // the handful of AppSettings fields that are painful to type with the
 // Switch's on-screen keyboard (API keys, a proxy URL) instead of the console
-// keyboard. Secrets (torboxApiKey/torrserverUrl/proxyUrl, which can carry
-// embedded credentials) are reported as a "set" boolean, never their value -
-// this JSON goes out over plain LAN HTTP.
+// keyboard. Secrets (torboxApiKey/torrserverUrl/realdebridApiKey/proxyUrl,
+// which can carry embedded credentials) are reported as a "set" boolean,
+// never their value - this JSON goes out over plain LAN HTTP.
 std::string companionSettingsJson(const AppSettingsData& values);
 
 // Partial update of the companion whitelist. Unknown top-level keys fail
@@ -35,6 +35,7 @@ inline void applyCompanionSettingsRuntime(const AppSettingsData& values,
                                  : install::InstallStorageTarget::SdCard);
     manager.setTorboxApiKey(values.torboxApiKey);
     manager.setTorrserverUrl(values.torrserverUrl);
+    manager.setRealdebridApiKey(values.realdebridApiKey);
     applyProxySetting(values.proxyUrl);
 }
 

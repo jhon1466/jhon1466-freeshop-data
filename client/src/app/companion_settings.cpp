@@ -10,7 +10,11 @@ namespace {
 using Json = nlohmann::json;
 
 const char* debridProviderName(DebridProviderKind kind) {
-    return kind == DebridProviderKind::TorrServer ? "torrserver" : "torbox";
+    if (kind == DebridProviderKind::TorrServer)
+        return "torrserver";
+    if (kind == DebridProviderKind::RealDebrid)
+        return "realdebrid";
+    return "torbox";
 }
 
 bool parseDebridProvider(const std::string& text, DebridProviderKind& out) {
@@ -20,6 +24,10 @@ bool parseDebridProvider(const std::string& text, DebridProviderKind& out) {
     }
     if (text == "torrserver") {
         out = DebridProviderKind::TorrServer;
+        return true;
+    }
+    if (text == "realdebrid") {
+        out = DebridProviderKind::RealDebrid;
         return true;
     }
     return false;
@@ -54,6 +62,7 @@ std::string companionSettingsJson(const AppSettingsData& values) {
     // the key itself.
     j["torboxApiKeySet"] = !values.torboxApiKey.empty();
     j["torrserverUrlSet"] = !values.torrserverUrl.empty();
+    j["realdebridApiKeySet"] = !values.realdebridApiKey.empty();
     j["proxyUrlSet"] = !values.proxyUrl.empty();
     return j.dump(-1, ' ', false, Json::error_handler_t::replace);
 }
@@ -77,7 +86,7 @@ bool applyCompanionSettingsPatch(AppSettingsData& values,
     static const char* kKnownKeys[] = {
         "debridProvider",   "torrentingEnabled", "installLocation",
         "maxActiveDownloads", "torboxApiKey",    "torrserverUrl",
-        "proxyUrl",
+        "realdebridApiKey", "proxyUrl",
     };
     for (auto it = body.begin(); it != body.end(); ++it) {
         bool known = false;
@@ -93,7 +102,8 @@ bool applyCompanionSettingsPatch(AppSettingsData& values,
         if (!body["debridProvider"].is_string() ||
             !parseDebridProvider(body["debridProvider"].get<std::string>(),
                                  values.debridProvider)) {
-            error = "debridProvider must be \"torbox\" or \"torrserver\".";
+            error = "debridProvider must be \"torbox\", \"torrserver\" or "
+                    "\"realdebrid\".";
             return false;
         }
     }
@@ -134,6 +144,13 @@ bool applyCompanionSettingsPatch(AppSettingsData& values,
         }
         values.torrserverUrl = TorrserverProvider::normalizeBaseUrl(
             body["torrserverUrl"].get<std::string>());
+    }
+    if (body.contains("realdebridApiKey")) {
+        if (!body["realdebridApiKey"].is_string()) {
+            error = "realdebridApiKey must be a string.";
+            return false;
+        }
+        values.realdebridApiKey = body["realdebridApiKey"].get<std::string>();
     }
     if (body.contains("proxyUrl")) {
         if (!body["proxyUrl"].is_string()) {
