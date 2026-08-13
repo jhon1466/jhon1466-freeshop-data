@@ -17,6 +17,7 @@
 #include "app/download_manager.hpp"
 #include "app/favorites_service.hpp"
 #include "app/game_metadata_service.hpp"
+#include "app/game_update_install.hpp"
 #include "app/install_space.hpp"
 #include "app/installed_title_service.hpp"
 #include "app/magnet_resolver.hpp"
@@ -24,6 +25,7 @@
 #include "app/nx_file_types.hpp"
 #include "ui/catalog/catalog_helpers.hpp"
 #include "ui/common/async_image.hpp"
+#include "ui/common/busy_pulse.hpp"
 #include "ui/common/storage_meter.hpp"
 #include "ui/common/ui_helpers.hpp"
 #include "ui/detail/screenshot_viewer.hpp"
@@ -120,6 +122,8 @@ public:
         alive_->store(false);
         cancelled_->store(true);
         timer_.stop();
+        stopBusyPulse(primary_);
+        stopBusyPulse(statusLabel_);
         if (onChange_)
             onChange_();  // refresh the row badge on the way back
         // O12: deferred a frame — the activity is mid-teardown here and
@@ -376,6 +380,14 @@ private:
     void buildFactsTable(brls::Box* right) {
         auto* table = new brls::Box(brls::Axis::COLUMN);
         table->setMarginTop(8);
+        addFactRow(table, tr("pipensx/detail/fact_install_state"),
+                   installed_ && installed_->contains(titleId_)
+                       ? tr("pipensx/detail/install_state_installed")
+                       : tr("pipensx/detail/install_state_not_installed"));
+        addFactRow(table, tr("pipensx/detail/fact_installed_version"),
+                   formatTitleVersion(installedVersionForTitle()));
+        addFactRow(table, tr("pipensx/detail/fact_available_version"),
+                   formatTitleVersion(latestVersionForEntry()));
         addFactRow(table, tr("pipensx/detail/fact_developer"),
                    presentation_.developer);
         addFactRow(table, tr("pipensx/detail/fact_publisher"),
@@ -401,6 +413,29 @@ private:
         if (count == 0)
             return tr("pipensx/detail/mods_available");
         return tr("pipensx/detail/mods_count", count);
+    }
+
+    // InstalledTitle::version / GameMetadata::latestVersion are both the raw
+    // ncm decimal title-version string ("v" + N is this fork's existing
+    // display convention - see InstalledCell's subtitle in installed_view.hpp).
+    static std::string formatTitleVersion(const std::string& version) {
+        return version.empty() ? std::string() : "v" + version;
+    }
+
+    std::string installedVersionForTitle() const {
+        if (!installed_ || !installed_->contains(titleId_))
+            return {};
+        for (const InstalledTitle& title : installed_->titles()) {
+            if (catalogLower(title.titleId) == catalogLower(titleId_))
+                return title.version;
+        }
+        return {};
+    }
+
+    std::string latestVersionForEntry() const {
+        const GameMetadata* metadata =
+            metadata_->findByInfoHash(entry_.infoHash);
+        return metadata ? metadata->latestVersion : std::string();
     }
 
     void addFactRow(brls::Box* table, const std::string& name,
@@ -624,12 +659,33 @@ private:
             secondary_->setState(brls::ButtonState::ENABLED);
             if (!operationMessage_.empty())
                 setTextIfChanged(statusLabel_, operationMessage_);
-            else if (installed_ && installed_->contains(titleId_))
-                setTextIfChanged(statusLabel_,
-                                 tr("pipensx/detail/installed_hint"));
-            else
+            else if (installed_ && installed_->contains(titleId_)) {
+                const std::string installedV = installedVersionForTitle();
+                const std::string latestV = latestVersionForEntry();
+                if (!latestV.empty() && installedV != latestV)
+                    setTextIfChanged(
+                        statusLabel_,
+                        tr("pipensx/detail/update_available_hint",
+                           formatTitleVersion(latestV)));
+                else
+                    setTextIfChanged(statusLabel_,
+                                     tr("pipensx/detail/installed_hint"));
+            } else
                 setTextIfChanged(statusLabel_,
                                  tr("pipensx/detail/install_hint"));
+        }
+    }
+
+    // Pulse Install + status while magnet/debrid resolve is in flight, so the
+    // page doesn't read as frozen during the (sometimes multi-second) wait.
+    void setBusy(bool busy) {
+        busy_ = busy;
+        if (busy) {
+            startBusyPulse(primary_);
+            startBusyPulse(statusLabel_);
+        } else {
+            stopBusyPulse(primary_);
+            stopBusyPulse(statusLabel_);
         }
     }
 
@@ -674,7 +730,7 @@ private:
             startDebridInstall(TransferMode::StreamInstall, forcePicker);
             return;
         }
-        busy_ = true;
+        setBusy(true);
         operationMessage_.clear();
         cancelled_->store(false);
         primary_->setState(brls::ButtonState::DISABLED);
@@ -740,7 +796,7 @@ private:
                     ::unlink(tmp.c_str());
                     return;
                 }
-                busy_ = false;
+                setBusy(false);
                 std::string hash = catalogLower(entry_.infoHash);
                 if (!ok) {
                     std::string reason = classifyResolveFailure(err);
@@ -764,7 +820,7 @@ private:
     void startDebridInstall(TransferMode mode, bool forcePicker = false) {
         if (busy_ || !ensureDebridLinked(settings_, manager_))
             return;
-        busy_ = true;
+        setBusy(true);
         cancelled_->store(false);
         primary_->setState(brls::ButtonState::DISABLED);
         secondary_->setState(brls::ButtonState::DISABLED);
@@ -816,12 +872,12 @@ private:
                     if (!debridId.empty())
                         removeDebridTransferAsync(providerKind, key, debridId);
                     if (alive->load()) {
-                        busy_ = false;
+                        setBusy(false);
                         refreshButtons();
                     }
                     return;
                 }
-                busy_ = false;
+                setBusy(false);
                 if (!ok) {
                     if (!debridId.empty())
                         removeDebridTransferAsync(providerKind, key, debridId);
@@ -865,12 +921,72 @@ private:
                     return;
                 }
                 if (mode == TransferMode::StreamInstall && !info.files.empty()) {
-                    import.fileSelection.reserve(info.files.size());
+                    TorrentPreview preview;
+                    preview.name = import.name;
+                    preview.totalBytes = import.totalBytes;
+                    preview.fileCount = static_cast<uint32_t>(info.files.size());
                     for (const DebridFile& file : info.files) {
                         const bool package = isPackageName(file.path);
-                        import.fileSelection.push_back(static_cast<uint8_t>(
-                            package ? FileAction::Install : FileAction::Skip));
-                        import.packageCount += package ? 1 : 0;
+                        preview.files.push_back({file.path, file.bytes, package,
+                                                 isCompressedName(file.path),
+                                                 isCartridgeName(file.path)});
+                        preview.packageCount += package ? 1 : 0;
+                        preview.cartridgeCount += isCartridgeName(file.path) ? 1 : 0;
+                    }
+
+                    const bool titleInstalled =
+                        installed_ && installed_->contains(titleId_);
+                    const uint32_t extras =
+                        preview.fileCount - preview.packageCount;
+                    bool smartMatched = false;
+                    if (titleInstalled && extras > 0) {
+                        std::vector<uint8_t> smartMask = selectUpdateFiles(
+                            preview, latestVersionForEntry(), titleId_);
+                        smartMatched = std::any_of(
+                            smartMask.begin(), smartMask.end(),
+                            [](uint8_t action) {
+                                return action == static_cast<uint8_t>(
+                                    FileAction::Install);
+                            });
+                        if (smartMatched) {
+                            import.fileSelection = std::move(smartMask);
+                            import.packageCount = 0;
+                            for (uint8_t action : import.fileSelection) {
+                                if (action ==
+                                    static_cast<uint8_t>(FileAction::Install))
+                                    ++import.packageCount;
+                            }
+                        }
+                    }
+                    if (!smartMatched) {
+                        if (titleInstalled && extras > 0) {
+                            // Nothing in this release matches the installed
+                            // version - let the user pick instead of silently
+                            // skipping it all.
+                            operationMessage_ =
+                                tr("pipensx/detail/smart_open_options");
+                            refreshButtons();
+                            brls::Application::notify(operationMessage_);
+                            StreamSelection selection =
+                                settings_->get().streamSelection;
+                            brls::Application::pushActivity(
+                                new TorrentSelectionActivity(
+                                    manager_, "", std::move(preview),
+                                    TransferMode::StreamInstall, selection, {},
+                                    import,
+                                    [providerKind, key, debridId] {
+                                        removeDebridTransferAsync(
+                                            providerKind, key, debridId);
+                                    }));
+                            return;
+                        }
+                        import.fileSelection.reserve(info.files.size());
+                        for (const DebridFile& file : info.files) {
+                            const bool package = isPackageName(file.path);
+                            import.fileSelection.push_back(static_cast<uint8_t>(
+                                package ? FileAction::Install : FileAction::Skip));
+                            import.packageCount += package ? 1 : 0;
+                        }
                     }
                 }
                 std::string id;
@@ -941,14 +1057,43 @@ private:
         }
 
         // Packages present. Install them silently. On a mixed release (anything
-        // that is not an install package) auto-select packages only; on a clean
-        // package-only release an empty mask means "all files".
+        // that is not an install package) and this title already installed,
+        // prefer the version-matched update package — the same selection
+        // "Instalados" uses for its own update-install flow — over the naive
+        // "every package" mask; a clean package-only release keeps an empty
+        // mask ("all files").
         uint32_t extras = preview.fileCount - preview.packageCount;
         std::vector<uint8_t> mask;
         if (extras > 0) {
-            mask.reserve(preview.files.size());
-            for (const auto& file : preview.files)
-                mask.push_back(file.package ? 1 : 0);
+            const bool titleInstalled =
+                installed_ && installed_->contains(titleId_);
+            bool smartMatched = false;
+            if (titleInstalled) {
+                std::vector<uint8_t> smartMask = selectUpdateFiles(
+                    preview, latestVersionForEntry(), titleId_);
+                smartMatched = std::any_of(
+                    smartMask.begin(), smartMask.end(), [](uint8_t action) {
+                        return action ==
+                               static_cast<uint8_t>(FileAction::Install);
+                    });
+                if (smartMatched)
+                    mask = std::move(smartMask);
+            }
+            if (!smartMatched) {
+                if (titleInstalled) {
+                    // Nothing in this release matches the installed version -
+                    // let the user pick instead of silently skipping it all.
+                    operationMessage_ = tr("pipensx/detail/smart_open_options");
+                    refreshButtons();
+                    brls::Application::notify(operationMessage_);
+                    openSelection(path, std::move(preview),
+                                 std::move(initialPeers));
+                    return;
+                }
+                mask.reserve(preview.files.size());
+                for (const auto& file : preview.files)
+                    mask.push_back(file.package ? 1 : 0);
+            }
         }
 
         std::string id;
