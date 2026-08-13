@@ -555,6 +555,7 @@
     "no_key": "No se ingresó nada.",
     "validating": "Verificando…",
     "rejected": "No se pudo confirmar eso.",
+    "ssl_cert_hint": "No se pudo verificar el certificado del servidor. Revisá que la fecha y hora de la consola sean correctas e intentá de nuevo.",
     "linked_notify": "Fuente de descarga configurada.",
     "unlinked_notify": "Fuente de descarga borrada.",
     "needs_account": "La fuente de descarga todavía no está configurada. ¿Configurarla ahora?",

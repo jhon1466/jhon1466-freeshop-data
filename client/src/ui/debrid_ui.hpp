@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -11,6 +12,7 @@
 
 #include "app/app_settings.hpp"
 #include "app/bug_report.hpp"
+#include "app/curl_https.hpp"
 #include "app/download_manager.hpp"
 #include "app/torbox_pairing_server.hpp"
 #include "app/torbox_provider.hpp"
@@ -37,6 +39,19 @@ inline std::unique_ptr<DebridProvider> makeDebridProvider(
 
 inline const char* debridProviderName(DebridProviderKind kind) {
     return kind == DebridProviderKind::TorrServer ? "TorrServer" : "TorBox";
+}
+
+// User-facing validate failure: SSL cert problems get an explicit clock hint
+// (CAINFO may still fail when the console date is wrong).
+inline std::string formatDebridValidateError(const std::string& error) {
+    if (isSslCertificateErrorMessage(error))
+        return tr("pipensx/debrid/ssl_cert_hint");
+    if (error.empty())
+        return tr("pipensx/debrid/rejected");
+    constexpr size_t kMax = 160;
+    if (error.size() <= kMax)
+        return error;
+    return error.substr(0, kMax - 1) + "…";
 }
 
 inline std::string debridPairingUrl(const std::string& ip) {
@@ -90,7 +105,10 @@ public:
             server_ = std::make_unique<TorboxPairingServer>(
                 kTorboxPairingPort,
                 [provider](const std::string& key, std::string& error) {
-                    return makeDebridProvider(provider, key)->validate(error);
+                    if (makeDebridProvider(provider, key)->validate(error))
+                        return true;
+                    error = formatDebridValidateError(error);
+                    return false;
                 },
                 provider == DebridProviderKind::TorrServer
                     ? "Pega la dirección de tu TorrServer, por ejemplo "
@@ -164,6 +182,7 @@ public:
 
     ~DebridLinkView() override {
         alive_->store(false);
+        validationGeneration_->fetch_add(1);
         stopPairing();
     }
 
@@ -238,35 +257,42 @@ private:
         std::string key = first == std::string::npos
             ? std::string() : text.substr(first, last - first + 1);
         if (key.empty()) {
+            validationGeneration_->fetch_add(1);
             summary_->setCheck(tr("pipensx/debrid/no_key"),
                                theme::textSecondary());
             return;
         }
         summary_->setCheck(tr("pipensx/debrid/validating"), theme::accent());
         auto alive = alive_;
+        auto generation = validationGeneration_;
+        const uint64_t attempt = generation->fetch_add(1) + 1;
         const DebridProviderKind provider = provider_;
-        brls::async([this, alive, provider, key] {
+        brls::async([this, alive, generation, attempt, provider, key] {
             std::string error;
             const bool ok = runGuarded(
                 [&](std::string& err) {
                     return makeDebridProvider(provider, key)->validate(err);
                 },
                 error);
-            brls::sync([this, alive, ok, key] {
-                if (!alive->load())
+            if (!ok)
+                error = formatDebridValidateError(error);
+            brls::sync([this, alive, generation, attempt, ok, key,
+                        error = std::move(error)] {
+                if (!alive->load() || generation->load() != attempt)
                     return;
                 if (ok) {
                     setCheckSuccess();
                     saveKey(key);
                 } else {
-                    summary_->setCheck(tr("pipensx/debrid/rejected"),
-                                       theme::error());
+                    summary_->setCheck(error, theme::error());
                 }
             });
         });
     }
 
     bool saveKey(const std::string& typed) {
+        if (typed.empty())
+            validationGeneration_->fetch_add(1);
         const std::string key =
             provider_ == DebridProviderKind::TorrServer
                 ? TorrserverProvider::normalizeBaseUrl(typed) : typed;
@@ -297,6 +323,8 @@ private:
     DownloadManager* manager_;
     DebridProviderKind provider_;
     std::shared_ptr<std::atomic<bool>> alive_;
+    std::shared_ptr<std::atomic<uint64_t>> validationGeneration_ =
+        std::make_shared<std::atomic<uint64_t>>(0);
     std::unique_ptr<TorboxPairingServer> server_;
     brls::RepeatingTimer timer_;
     SetupSummaryPanel* summary_ = nullptr;
