@@ -28,6 +28,13 @@ public:
 
     bool refresh(std::string& error);
     bool contains(const std::string& titleId) const;
+    // Uninstalls the application (nsDeleteApplicationCompletely) and
+    // refreshes titles() afterward. `refreshError` carries a soft failure
+    // from that follow-up refresh (uninstall itself still succeeded); the
+    // 2-arg overload folds it into `error` for simpler call sites.
+    bool uninstall(const std::string& titleId, std::string& error,
+                   std::string& refreshError);
+    bool uninstall(const std::string& titleId, std::string& error);
 
     std::vector<InstalledTitle> titles() const;
     uint64_t generation() const;

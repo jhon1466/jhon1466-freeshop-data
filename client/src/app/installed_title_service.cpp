@@ -11,6 +11,7 @@ extern "C" {
 #include <cctype>
 #include <cerrno>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <memory>
@@ -40,6 +41,19 @@ std::string upperAscii(std::string value) {
                        return static_cast<char>(std::toupper(c));
                    });
     return value;
+}
+
+// titleId is the 16-hex-char string formatTitleId() produces; rejects
+// anything else rather than feeding a partial/garbage id to ns.
+bool parseTitleId(const std::string& titleId, uint64_t& applicationId) {
+    if (titleId.size() != 16)
+        return false;
+    for (char c : titleId) {
+        if (!std::isxdigit(static_cast<unsigned char>(c)))
+            return false;
+    }
+    applicationId = std::strtoull(titleId.c_str(), nullptr, 16);
+    return true;
 }
 
 bool writeIconIfMissing(const std::string& path, const uint8_t* bytes,
@@ -84,6 +98,47 @@ std::string InstalledTitleService::formatTitleId(uint64_t applicationId) {
     std::snprintf(text, sizeof(text), "%016llX",
                   static_cast<unsigned long long>(applicationId));
     return text;
+}
+
+bool InstalledTitleService::uninstall(const std::string& titleId,
+                                      std::string& error) {
+    std::string refreshError;
+    if (!uninstall(titleId, error, refreshError))
+        return false;
+    if (!refreshError.empty()) {
+        error = std::move(refreshError);
+        return false;
+    }
+    return true;
+}
+
+bool InstalledTitleService::uninstall(const std::string& titleId,
+                                      std::string& error,
+                                      std::string& refreshError) {
+    error.clear();
+    refreshError.clear();
+    uint64_t applicationId = 0;
+    if (!parseTitleId(titleId, applicationId)) {
+        error = "Title id invalido.";
+        return false;
+    }
+    {
+        std::lock_guard<std::mutex> refreshLock(refreshMutex_);
+        const Result rc = nsDeleteApplicationCompletely(applicationId);
+        if (R_FAILED(rc)) {
+            error = resultText("No se pudo desinstalar la aplicacion", rc);
+            diagnostic_error("installed", titleId.c_str(),
+                             "event=uninstall result=0x%08x", rc);
+            return false;
+        }
+    }
+    log_msg("[installed] uninstalled %s\n", titleId.c_str());
+    telemetry_log("installed", titleId.c_str(), "event=uninstall");
+    if (!refresh(refreshError))
+        diagnostic_error("installed", titleId.c_str(),
+                         "event=uninstall_refresh error=%s",
+                         refreshError.c_str());
+    return true;
 }
 
 bool InstalledTitleService::contains(const std::string& titleId) const {

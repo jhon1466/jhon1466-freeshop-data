@@ -27,6 +27,7 @@ class InstalledCell : public brls::RecyclerCell {
 public:
     using CheckOne = std::function<void(const std::string&, const std::string&)>;
     using InstallOne = std::function<void(const std::string&)>;
+    using UninstallOne = std::function<void(InstalledTitle)>;
 
     InstalledCell() {
         setFocusable(true);
@@ -95,10 +96,18 @@ public:
             return true;
         });
         addGestureRecognizer(new brls::TapGestureRecognizer(this));
+
+        registerAction(tr("pipensx/installed/uninstall_action"),
+                       brls::BUTTON_X, [this](brls::View*) {
+            if (!titleId_.empty() && onUninstallOne_)
+                onUninstallOne_(storedTitle_);
+            return true;
+        });
     }
 
     void setTitle(const InstalledTitle& title,
                   GameMetadataService* metadata) {
+        storedTitle_ = title;
         title_->setText(title.name);
         titleId_ = title.titleId;
         publisher_ = title.publisher;
@@ -110,9 +119,10 @@ public:
     }
 
     void setResult(const GameUpdateResult* result, CheckOne onCheckOne,
-                   InstallOne onInstallOne) {
+                   InstallOne onInstallOne, UninstallOne onUninstallOne) {
         onCheckOne_ = std::move(onCheckOne);
         onInstallOne_ = std::move(onInstallOne);
+        onUninstallOne_ = std::move(onUninstallOne);
         const GameUpdateState state =
             result ? result->state : GameUpdateState::NotChecked;
         currentState_ = state;
@@ -177,6 +187,7 @@ private:
     brls::Label* title_ = nullptr;
     brls::Label* subtitle_ = nullptr;
     brls::Label* chip_ = nullptr;
+    InstalledTitle storedTitle_;
     std::string currentIconPath_;
     std::shared_ptr<ImageRequestState> imageState_ =
         std::make_shared<ImageRequestState>();
@@ -187,6 +198,7 @@ private:
     GameUpdateState currentState_ = GameUpdateState::NotChecked;
     CheckOne onCheckOne_;
     InstallOne onInstallOne_;
+    UninstallOne onUninstallOne_;
 };
 
 class InstalledDataSource : public brls::RecyclerDataSource {
@@ -205,6 +217,9 @@ public:
     void setInstallOne(InstalledCell::InstallOne onInstallOne) {
         onInstallOne_ = std::move(onInstallOne);
     }
+    void setUninstallOne(InstalledCell::UninstallOne onUninstallOne) {
+        onUninstallOne_ = std::move(onUninstallOne);
+    }
 
     int numberOfRows(brls::RecyclerFrame*, int) override {
         return static_cast<int>(titles_.size());
@@ -222,7 +237,7 @@ public:
             if (it != results_->end())
                 result = &it->second;
         }
-        cell->setResult(result, onCheckOne_, onInstallOne_);
+        cell->setResult(result, onCheckOne_, onInstallOne_, onUninstallOne_);
         return cell;
     }
 
@@ -232,6 +247,7 @@ private:
     const GameUpdateResults* results_ = nullptr;
     InstalledCell::CheckOne onCheckOne_;
     InstalledCell::InstallOne onInstallOne_;
+    InstalledCell::UninstallOne onUninstallOne_;
 };
 
 class InstalledView : public brls::Box {
@@ -275,6 +291,8 @@ public:
             });
         dataSource_->setInstallOne(
             [this](const std::string& titleId) { installUpdate(titleId); });
+        dataSource_->setUninstallOne(
+            [this](InstalledTitle title) { confirmUninstall(std::move(title)); });
         reload();
         recheckTimer_.setCallback([this] { pollUpdateRecheck(); });
         // Entering the tab re-checks every installed title so verdicts are
@@ -353,7 +371,7 @@ private:
 
     // A-тап по строке "Update available": скачать и установить апдейт.
     void installUpdate(const std::string& titleId) {
-        if (updateInFlight_)
+        if (refreshing_ || updateInFlight_ || uninstallInFlight_)
             return;
         std::vector<const GameMetadata*> entries;
         if (!metadata_ || !metadata_->findByTitleId(titleId, entries)) {
@@ -372,6 +390,56 @@ private:
         for (const GameMetadata* entry : entries)
             bundles.push_back(*entry);
         chooseBundle(std::move(bundles), 0);
+    }
+
+    void confirmUninstall(InstalledTitle title) {
+        if (refreshing_ || updateInFlight_ || uninstallInFlight_)
+            return;
+        if (hasActiveStreamInstall()) {
+            brls::Application::notify(tr("pipensx/installed/busy"));
+            return;
+        }
+        auto* dialog = new brls::Dialog(
+            tr("pipensx/installed/uninstall_confirm", title.name));
+        dialog->addButton(tr("pipensx/installed/uninstall_action"),
+                          [this, title = std::move(title)] {
+            beginUninstall(title);
+        });
+        dialog->addButton(tr("pipensx/common/cancel"), [] {});
+        dialog->open();
+    }
+
+    void beginUninstall(const InstalledTitle& title) {
+        if (uninstallInFlight_)
+            return;
+        uninstallInFlight_ = true;
+        status_->setText(tr("pipensx/installed/uninstalling", title.name));
+        auto alive = alive_;
+        InstalledTitleService* installed = installed_;
+        const std::string titleId = title.titleId;
+        brls::async([this, alive, installed, titleId] {
+            std::string error;
+            std::string refreshError;
+            const bool ok = installed->uninstall(titleId, error, refreshError);
+            brls::sync([this, alive, ok, error, refreshError] {
+                if (!alive->load())
+                    return;
+                uninstallInFlight_ = false;
+                if (!ok) {
+                    status_->setText(error);
+                    brls::Application::notify(error);
+                    return;
+                }
+                brls::Application::notify(
+                    tr("pipensx/installed/uninstall_done"));
+                if (!refreshError.empty()) {
+                    status_->setText(refreshError);
+                    brls::Application::notify(refreshError);
+                    return;
+                }
+                checkAllTitles();
+            });
+        });
     }
 
     // brls::Dialog's third button claims a full-width top slot, so paging
@@ -745,6 +813,7 @@ private:
     GameMetadataService* metadata_ = nullptr;
     AppSettings* settings_;
     CatalogService* catalog_ = nullptr;
+    bool checkOnEntry_ = true;
     brls::Label* status_ = nullptr;
     EmptyStateView* emptyState_ = nullptr;
     brls::RecyclerFrame* recycler_ = nullptr;
@@ -757,9 +826,9 @@ private:
     std::atomic<uint32_t> updateTempSerial_{0};
     brls::RepeatingTimer recheckTimer_;
     std::string pendingRecheckTaskId_;
-    bool checkOnEntry_ = true;
     bool refreshing_ = false;
     bool updateInFlight_ = false;
+    bool uninstallInFlight_ = false;
     brls::ActionIdentifier updateCancelAction_ = ACTION_NONE;
 };
 
