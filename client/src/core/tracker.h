@@ -25,6 +25,23 @@ uint32_t tracker_announce(const metainfo_t *mi,
                           void          *cancel_user);
 
 /*
+ * Same as tracker_announce, but lets the caller control whether this
+ * announce carries BEP-3's event=started (only the very first announce of a
+ * torrent session should — repeating it on every re-announce is not
+ * compliant and some trackers treat it oddly).
+ */
+uint32_t tracker_announce_with_event(const metainfo_t *mi,
+                                     const uint8_t *peer_id,
+                                     uint16_t       listen_port,
+                                     int64_t        downloaded,
+                                     int64_t        left,
+                                     uint8_t       *compact_out,
+                                     uint32_t       max_peers,
+                                     int started_event,
+                                     tracker_cancel_cb cancel,
+                                     void          *cancel_user);
+
+/*
  * Announce a bare info hash to one tracker. This is used while resolving a
  * magnet, before a metainfo dictionary exists.
  */
