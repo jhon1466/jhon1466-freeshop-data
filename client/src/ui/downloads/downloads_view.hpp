@@ -159,8 +159,9 @@ public:
                     startRefreshing(true);
                 });
         }
-        add(tr("pipensx/common/remove"),
-                [this, taskId] { openRemoveDialog(taskId); });
+        if (task.status != DownloadStatus::Removing)
+            add(tr("pipensx/common/remove"),
+                    [this, taskId] { openRemoveDialog(taskId); });
 
         // The Dropdown pops itself right after firing the callback, so defer
         // the action a frame — otherwise a pushActivity here would land under
