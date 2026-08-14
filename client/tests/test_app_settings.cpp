@@ -18,6 +18,8 @@ using pipensx::InstallLocation;
 using pipensx::dailyRefreshDue;
 using pipensx::isLocalToday;
 using pipensx::isValidProxyUrl;
+using pipensx::isValidCatalogSourceUrl;
+using pipensx::effectiveCatalogSourceUrl;
 using pipensx::applyProxySetting;
 
 namespace {
@@ -86,6 +88,8 @@ void testUpdatePersistsEveryPublicSetting() {
     changed.torrentingEnabled = true;
     changed.torboxApiKey = "0a1b2c3d-4e5f-6789-abcd-ef0123456789";
     changed.torrserverUrl = "http://192.168.1.10:8090";
+    changed.realdebridApiKey = "RD1234567890abcdef";
+    changed.catalogSourceUrl = "https://cdn.example.com/repo/switch_games.json";
     changed.debridProvider = DebridProviderKind::TorrServer;
     changed.firstRunCompleted = true;
     assert(settings.update(changed, error));
@@ -352,6 +356,35 @@ void testInvalidProxyUrlIsCleared() {
     assert(settings.get().proxyUrl.empty());
 }
 
+void testInvalidCatalogSourceUrlIsCleared() {
+    cleanup();
+    {
+        std::ofstream output(SettingsPath);
+        output << R"({"version":3,"catalog_source_url":"ftp://nope/catalog.json"})";
+    }
+    AppSettings settings(SettingsPath, LegacyPath);
+    std::string error;
+    assert(settings.load(error));
+    assert(settings.get().catalogSourceUrl.empty());
+}
+
+void testCatalogSourceUrlValidation() {
+    assert(isValidCatalogSourceUrl(""));
+    assert(isValidCatalogSourceUrl(
+        "https://cdn.example.com/repo/catalog.json"));
+    assert(!isValidCatalogSourceUrl(
+        "http://cdn.example.com/repo/catalog.json"));
+    assert(!isValidCatalogSourceUrl("https://"));
+    assert(!isValidCatalogSourceUrl(
+        "https://user:pass@cdn.example.com/repo/catalog.json"));
+    assert(!isValidCatalogSourceUrl(std::string(513, 'a')));
+    assert(effectiveCatalogSourceUrl("") ==
+           "https://raw.githubusercontent.com/jhon1466/switch-games/"
+           "refs/heads/main/switch_games.json");
+    assert(effectiveCatalogSourceUrl("https://cdn.example.com/x.json") ==
+           "https://cdn.example.com/x.json");
+}
+
 void testProxySettingReachesEnvironment() {
     applyProxySetting("socks5://192.168.1.2:10808");
     const char* value = std::getenv("ALL_PROXY");
@@ -381,6 +414,8 @@ int main() {
     testVersionThreeHonoursTorrentingOff();
     testProxyUrlValidation();
     testInvalidProxyUrlIsCleared();
+    testInvalidCatalogSourceUrlIsCleared();
+    testCatalogSourceUrlValidation();
     testProxySettingReachesEnvironment();
     testDailyRefreshDue();
     testIsLocalToday();

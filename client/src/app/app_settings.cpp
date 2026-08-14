@@ -180,6 +180,11 @@ bool parseSettings(const std::string& text, AppSettingsData& values,
         return false;
     if (!isValidProxyUrl(values.proxyUrl))
         values.proxyUrl.clear();
+    if (!readString(root, "catalog_source_url", values.catalogSourceUrl,
+                    error))
+        return false;
+    if (!isValidCatalogSourceUrl(values.catalogSourceUrl))
+        values.catalogSourceUrl.clear();
     uint64_t burnInIdle = values.burnInIdleSec;
     if (!readUnsigned(root, "burn_in_idle_sec", burnInIdle, error))
         return false;
@@ -267,6 +272,7 @@ std::string serializeSettings(const AppSettingsData& values) {
             : "torbox";
     root["first_run_completed"] = values.firstRunCompleted;
     root["proxy_url"] = values.proxyUrl;
+    root["catalog_source_url"] = values.catalogSourceUrl;
     root["burn_in_idle_sec"] = values.burnInIdleSec;
     root["burn_in_show_clock"] = values.burnInShowClock;
     return root.dump(2) + "\n";
@@ -311,6 +317,28 @@ std::string generateWebPin() {
     char pin[7];
     std::snprintf(pin, sizeof(pin), "%06u", value);
     return pin;
+}
+
+bool isValidCatalogSourceUrl(const std::string& value) {
+    if (value.empty())
+        return true;
+    if (value.size() > 512)
+        return false;
+    if (value.compare(0, 8, "https://") != 0)
+        return false;
+    if (value.find('@') != std::string::npos)
+        return false;
+    const size_t path = value.find('/', 8);
+    if (path == std::string::npos || path + 1 >= value.size())
+        return false;
+    return true;
+}
+
+std::string effectiveCatalogSourceUrl(const std::string& custom) {
+    if (!custom.empty())
+        return custom;
+    return "https://raw.githubusercontent.com/jhon1466/switch-games/"
+           "refs/heads/main/switch_games.json";
 }
 
 bool isValidProxyUrl(const std::string& value) {
@@ -387,6 +415,7 @@ bool AppSettingsData::operator==(const AppSettingsData& other) const {
     return language == other.language &&
            themeMode == other.themeMode &&
            catalogFilter == other.catalogFilter &&
+           catalogSourceUrl == other.catalogSourceUrl &&
            refreshCatalogOnLaunch == other.refreshCatalogOnLaunch &&
            lastCatalogRefreshMs == other.lastCatalogRefreshMs &&
            lastCatalogRefreshWallSec == other.lastCatalogRefreshWallSec &&

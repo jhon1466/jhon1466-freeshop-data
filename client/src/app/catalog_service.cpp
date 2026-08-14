@@ -22,6 +22,16 @@ extern "C" {
 #include <unistd.h>
 
 namespace pipensx {
+
+// The built-in catalogue source: FreeShop's own jhon1466/switch-games repo
+// (the scraper.py in this project's repo root publishes to it), same shape
+// as upstream pipensx's Langegen/switch-games. Settings can override it with
+// any other HTTPS source (AppSettingsData::catalogSourceUrl); this stays the
+// default and the fallback trust anchor.
+const char kDefaultCatalogSourceUrl[] =
+    "https://raw.githubusercontent.com/jhon1466/switch-games/"
+    "refs/heads/main/switch_games.json";
+
 namespace {
 
 // jhon1466/switch-games' switch_games.json is ~27 MB uncompressed (larger
@@ -30,16 +40,6 @@ namespace {
 constexpr size_t kMaxCatalogBytes = 48 * 1024 * 1024;
 constexpr size_t kMaxCatalogEntries = 20000;
 constexpr size_t kMaxInfoDictBytes = 8 * 1024 * 1024;
-
-/* The live catalogue source: FreeShop's own jhon1466/switch-games repo
-   (the scraper.py in this project's repo root publishes to it) publishes a
-   single switch_games.json on GitHub's raw host, same shape as upstream
-   pipensx's Langegen/switch-games. Fetched on demand by the refresh button
-   and (when the catalogue is empty or the launch toggle is on) in the
-   background at startup. Must satisfy isTrustedSource(). */
-constexpr const char* kCatalogSourceUrl =
-    "https://raw.githubusercontent.com/jhon1466/switch-games/"
-    "refs/heads/main/switch_games.json";
 
 int base64Value(char c) {
     if (c >= 'A' && c <= 'Z') return c - 'A';
@@ -138,7 +138,8 @@ bool readFile(const std::string& path, std::string& data,
     return true;
 }
 
-bool httpGet(const std::string& url, std::string& body, std::string& error) {
+bool httpGet(const std::string& url, std::string& body, std::string& error,
+            const std::string& sourceUrl) {
     body.clear();
     CURL* curl = curl_easy_init();
     if (!curl) {
@@ -186,7 +187,7 @@ bool httpGet(const std::string& url, std::string& body, std::string& error) {
                     ".";
         return false;
     }
-    if (!CatalogService::isTrustedSource(effectiveUrl)) {
+    if (!CatalogService::isTrustedSource(effectiveUrl, sourceUrl)) {
         error = "La descarga del catálogo redirigió a un servidor no confiable.";
         return false;
     }
@@ -350,6 +351,32 @@ uint64_t readFlexibleSize(const nlohmann::json& item, const char* key) {
     if (item[key].is_string())
         return parseSizeToBytes(item[key].get_ref<const std::string&>());
     return readUnsigned(item, key);
+}
+
+} // namespace
+
+std::string defaultCatalogSourceUrl() {
+    return kDefaultCatalogSourceUrl;
+}
+
+namespace {
+
+// Everything up to and including the last '/': what a custom source's
+// redirects are allowed to stay within (its own directory), the same shape
+// the built-in source's allowlist already trusts by repo prefix.
+std::string catalogSourceTrustPrefix(const std::string& url) {
+    const size_t slash = url.rfind('/');
+    if (slash == std::string::npos || slash < 8)
+        return url;
+    return url.substr(0, slash + 1);
+}
+
+std::string catalogSourceLabel(const std::string& sourceUrl) {
+    if (sourceUrl == kDefaultCatalogSourceUrl)
+        return "FreeShop switch-games";
+    if (sourceUrl.size() > 8 && sourceUrl.compare(0, 8, "https://") == 0)
+        return sourceUrl.substr(8);
+    return sourceUrl;
 }
 
 } // namespace
@@ -523,33 +550,41 @@ bool CatalogService::load(std::string& error) {
     return true;
 }
 
-bool CatalogService::isTrustedSource(const std::string& url) {
-    // Host (with path prefix) allowed to serve catalog bytes. Only
-    // FreeShop's own jhon1466/switch-games repo on GitHub's raw host (see
-    // kCatalogSourceUrl above); every network fetch is gated on this so a
-    // redirect or MITM to another host is refused before any parse.
-    static const char* const kPrefixes[] = {
-        "https://raw.githubusercontent.com/jhon1466/switch-games/",
-    };
-    for (const char* prefix : kPrefixes)
-        if (url.rfind(prefix, 0) == 0)
-            return true;
-    return false;
+bool CatalogService::isTrustedSource(const std::string& url,
+                                     const std::string& sourceUrl) {
+    if (sourceUrl == kDefaultCatalogSourceUrl) {
+        // Host (with path prefix) allowed to serve catalog bytes. Only
+        // FreeShop's own jhon1466/switch-games repo on GitHub's raw host;
+        // every network fetch is gated on this so a redirect or MITM to
+        // another host is refused before any parse.
+        static const char* const kPrefixes[] = {
+            "https://raw.githubusercontent.com/jhon1466/switch-games/",
+        };
+        for (const char* prefix : kPrefixes)
+            if (url.rfind(prefix, 0) == 0)
+                return true;
+        return false;
+    }
+    // A user-supplied source only trusts redirects that stay inside its own
+    // directory - a custom CDN can still 301 within itself, but not send the
+    // client anywhere else.
+    const std::string prefix = catalogSourceTrustPrefix(sourceUrl);
+    return !prefix.empty() && url.rfind(prefix, 0) == 0;
 }
 
 bool CatalogService::fetchLatest(std::vector<CatalogEntry>& parsed,
-                                 std::string& error) {
-    // Single source: the Langegen switch_games.json on GitHub's raw host. Runs
-    // on a worker thread: network fetch + parse + cache write only, so it never
-    // touches entries_. The cached catalogue in memory survives a failure —
-    // the caller keeps showing it on error.
+                                 std::string& error,
+                                 const std::string& sourceUrl) {
+    // Runs on a worker thread: network fetch + parse + cache write only, so
+    // it never touches entries_. The cached catalogue in memory survives a
+    // failure — the caller keeps showing it on error.
     parsed.clear();
-    if (!isTrustedSource(kCatalogSourceUrl)) {
+    if (!isTrustedSource(sourceUrl, sourceUrl)) {
         error = "La URL del catálogo no está en la lista de hosts confiables.";
         return false;
     }
     std::string catalogBody;
-    if (!httpGet(kCatalogSourceUrl, catalogBody, error))
+    if (!httpGet(sourceUrl, catalogBody, error, sourceUrl))
         return false;
     if (!parseJson(catalogBody, parsed, error))
         return false;
@@ -577,14 +612,16 @@ const CatalogEntry* CatalogService::findByInfoHash(
     return nullptr;
 }
 
-void CatalogService::adopt(std::vector<CatalogEntry> parsed) {
+void CatalogService::adopt(std::vector<CatalogEntry> parsed,
+                           const std::string& sourceUrl) {
     // UI thread only: entries() is read unsynchronised by the render thread, so
     // this swap must never happen on the fetch worker (data race → UAF).
     // Observers holding the previous shared snapshot keep it alive until they
     // pick up the new one.
     entries_ = std::make_shared<const std::vector<CatalogEntry>>(
         std::move(parsed));
-    sourceLabel_ = "Langegen switch-games";
+    sourceLabel_ = catalogSourceLabel(
+        sourceUrl.empty() ? kDefaultCatalogSourceUrl : sourceUrl);
     snapshotEpochSec_ = static_cast<int64_t>(time(nullptr));
     log_msg("[catalog] refreshed %zu entries from %s\n", entries_->size(),
             sourceLabel_.c_str());
