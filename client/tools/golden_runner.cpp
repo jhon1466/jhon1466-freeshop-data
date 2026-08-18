@@ -630,15 +630,21 @@ int main(int argc, char** argv) {
         // Whole shell, same wiring as src/main_switch.cpp: covers the sidebar
         // and the storage footer docked at its bottom.
         auto* tabs = new MainFrame();
-        tabs->addNavTab(tr("pipensx/nav/catalog"), NavIconType::Catalog, [&] {
+        tabs->addNavTab(tr("pipensx/nav/games"), NavIconType::Catalog, [&] {
             return new CatalogView(&manager, &catalog, &metadata, &installed,
                                    &settings, [] {}, &mods, &favorites);
         });
+        tabs->addNavTab(tr("pipensx/nav/ports"), NavIconType::Ports, [&] {
+            return new CatalogView(&manager, &catalog, &metadata, &installed,
+                                   &settings, [] {}, &mods, &favorites,
+                                   pipensx::CatalogSection::Ports);
+        });
+        tabs->addSeparator();
         tabs->addNavTab(tr("pipensx/nav/downloads"), NavIconType::Downloads,
                         [&] {
             return new MainView(&manager, &catalog, &metadata, &settings);
         });
-        tabs->addNavTab(tr("pipensx/nav/installed"), NavIconType::Installed,
+        tabs->addNavTab(tr("pipensx/nav/updates"), NavIconType::Updates,
                         [&] {
             // checkOnEntry=false: the installed-populated screens pin a
             // planted fixture state, an auto-check would overwrite it.

@@ -121,18 +121,30 @@ public:
           gameUpdates_(gameUpdates), favorites_(favorites), webServer_(webServer) {
         auto* tabs = new pipensx::ui::MainFrame();
         using pipensx::ui::NavIconType;
-        tabs->addNavTab(tr("pipensx/nav/catalog"), NavIconType::Catalog,
+        using pipensx::CatalogSection;
+        // Games, Ports, separator, Downloads, ... — Downloads is sidebar index 3.
+        tabs->addNavTab(tr("pipensx/nav/games"), NavIconType::Catalog,
                         [manager, catalog, metadata, installed,
                          settings, favorites, tabs] {
             return new CatalogView(manager, catalog, metadata, installed,
-                                   settings, [tabs] { tabs->focusTab(1); },
-                                   favorites);
+                                   settings, [tabs] { tabs->focusTab(3); },
+                                   favorites, CatalogSection::Games, {},
+                                   nullptr);
         });
+        tabs->addNavTab(tr("pipensx/nav/ports"), NavIconType::Ports,
+                        [manager, catalog, metadata, installed,
+                         settings, favorites, tabs] {
+            return new CatalogView(manager, catalog, metadata, installed,
+                                   settings, [tabs] { tabs->focusTab(3); },
+                                   favorites, CatalogSection::Ports,
+                                   [tabs] { tabs->focusTab(0); });
+        });
+        tabs->addSeparator();
         tabs->addNavTab(tr("pipensx/nav/downloads"), NavIconType::Downloads,
                         [manager, catalog, metadata, settings] {
             return new MainView(manager, catalog, metadata, settings);
         });
-        tabs->addNavTab(tr("pipensx/nav/installed"), NavIconType::Installed,
+        tabs->addNavTab(tr("pipensx/nav/updates"), NavIconType::Updates,
                         [installed, manager, metadata, settings, catalog, gameUpdates] {
             return new InstalledView(installed, manager, metadata, settings,
                                      catalog, gameUpdates);

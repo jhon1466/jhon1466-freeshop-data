@@ -100,6 +100,17 @@ bool activeUser(AccountUid& uid, std::string& error) {
     rc = accountGetLastOpenedUser(&uid);
     if (R_SUCCEEDED(rc) && accountUidIsValid(&uid))
         return true;
+    // Homebrew has no preselected or last-opened user, so those two always
+    // fail on a real console even when profiles exist. Fall back to the first
+    // profile accountListAllUsers returns (the same call listUserProfiles()
+    // uses) so backup/restore work without an explicit pick.
+    AccountUid uids[16];
+    s32 actualTotal = 0;
+    rc = accountListAllUsers(uids, 16, &actualTotal);
+    if (R_SUCCEEDED(rc) && actualTotal > 0 && accountUidIsValid(&uids[0])) {
+        uid = uids[0];
+        return true;
+    }
     error = "No hay ningún perfil de cuenta disponible.";
     return false;
 }

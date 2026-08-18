@@ -297,6 +297,12 @@ public:
             filterAll_->setVisibility(brls::Visibility::GONE);
             filterGames_->setVisibility(brls::Visibility::GONE);
         }
+        // Sections live in the sidebar: on the Ports tab the All/Games pair
+        // is meaningless (the section filter already split them), so hide it.
+        if (section_ == CatalogSection::Ports) {
+            filterAll_->setVisibility(brls::Visibility::GONE);
+            filterGames_->setVisibility(brls::Visibility::GONE);
+        }
         // Session-only view filter, unlike the All/Games pair above: an
         // independent toggle, and a relaunch always shows the full catalog.
         filterFavorites_ = makeChip("★", [this] {
@@ -754,6 +760,7 @@ private:
         std::string needle = lowerAscii(query_);
         const bool searching = !needle.empty();
         const bool matchedGamesOnly = !searching && settings_ &&
+            section_ == CatalogSection::Games &&
             settings_->get().catalogFilter == CatalogFilter::Games;
         const bool favoritesOnly = favoritesOnly_ && favorites_;
         for (const CatalogEntry& entry : catalog_->entries()) {
@@ -764,6 +771,8 @@ private:
             const GameMetadata* meta =
                 metadata_ ? metadata_->findByInfoHash(entry.infoHash) : nullptr;
             if (matchedGamesOnly && !catalogEntryHasMatchedTitle(meta))
+                continue;
+            if (!catalogEntryInSection(entry, meta, section_))
                 continue;
             bool matches = !searching ||
                 lowerAscii(entry.title).find(needle) != std::string::npos ||
