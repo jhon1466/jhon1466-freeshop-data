@@ -89,6 +89,35 @@ target_include_directories(pipensx_zstd PUBLIC
 # PC golden build fails to link. No effect on the aarch64 Switch build.
 target_compile_definitions(pipensx_zstd PRIVATE ZSTD_MULTITHREAD=0 ZSTD_DISABLE_ASM)
 
+# Public-domain 7z ANSI-C decoder (LZMA SDK) for port archive extraction.
+file(GLOB LZMA_7Z_SOURCES CONFIGURE_DEPENDS
+    vendor/lzma/7zAlloc.c
+    vendor/lzma/7zArcIn.c
+    vendor/lzma/7zBuf.c
+    vendor/lzma/7zBuf2.c
+    vendor/lzma/7zCrc.c
+    vendor/lzma/7zCrcOpt.c
+    vendor/lzma/7zDec.c
+    vendor/lzma/7zFile.c
+    vendor/lzma/7zStream.c
+    vendor/lzma/Bcj2.c
+    vendor/lzma/Bra.c
+    vendor/lzma/Bra86.c
+    vendor/lzma/BraIA64.c
+    vendor/lzma/CpuArch.c
+    vendor/lzma/Delta.c
+    vendor/lzma/LzmaDec.c
+    vendor/lzma/Lzma2Dec.c
+    vendor/lzma/Ppmd7.c
+    vendor/lzma/Ppmd7Dec.c
+)
+add_library(pipensx_lzma STATIC ${LZMA_7Z_SOURCES})
+target_include_directories(pipensx_lzma PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/vendor/lzma
+)
+target_compile_definitions(pipensx_lzma PRIVATE Z7_EXTRACT_ONLY Z7_PPMD_SUPPORT)
+target_compile_options(pipensx_lzma PRIVATE -ffunction-sections -fdata-sections)
+
 # Vendored libutp (BitTorrent reference μTP/BEP-29). C++ with an extern "C"
 # API (utp.h), linked into the C core for the TCP→μTP dial fallback. Same
 # vendoring posture as pipensx_zstd and vendor/dht. POSIX selects the BSD
@@ -143,6 +172,9 @@ set(APP_SERVICE_SOURCES
     src/app/catalog_presentation.cpp
     src/app/snapshot_zstd.cpp
     src/app/download_manager.cpp
+    src/app/task_files.cpp
+    src/app/switch_deploy.cpp
+    src/app/port_archive.cpp
     src/app/install_pacer.cpp
     src/app/web_seed_source.cpp
     src/app/request_gate.cpp
@@ -152,7 +184,7 @@ set(APP_SERVICE_SOURCES
     src/app/game_update_install.cpp
     src/app/game_update_service.cpp
     src/app/installed_title_service.cpp
-    src/app/mod_index_service.cpp
+    src/app/nacp_language.cpp
     src/app/install_space.cpp
     src/app/file_explorer_service.cpp
     src/app/save_data_service.cpp
@@ -169,6 +201,7 @@ set(APP_SERVICE_SOURCES
     src/app/realdebrid_client.cpp
     src/app/realdebrid_provider.cpp
     src/app/debrid_transfer.cpp
+    src/app/storage_manager.cpp
     src/install/install_journal.cpp
     src/install/package_stream.cpp
 )
@@ -184,6 +217,7 @@ set(UI_SOURCES
     src/ui/saves/save_detail_activity.cpp
     src/ui/settings/about_view.cpp
     src/ui/settings/bug_report_view.cpp
+    src/ui/settings/storage_manager.hpp
 )
 
 if (NOT PIPENSX_GOLDEN)
@@ -303,6 +337,7 @@ target_compile_options(pipensx PRIVATE
 target_link_libraries(pipensx PRIVATE
     borealis
     pipensx_zstd
+    pipensx_lzma
     pipensx_utp
     curl
     mbedtls
@@ -572,6 +607,7 @@ target_compile_options(golden_runner PRIVATE
 target_link_libraries(golden_runner PRIVATE
     borealis
     pipensx_zstd
+    pipensx_lzma
     pipensx_utp
     CURL::libcurl
     ZLIB::ZLIB

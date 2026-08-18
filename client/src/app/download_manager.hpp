@@ -52,6 +52,15 @@ enum class DownloadStatus {
     Removing,
 };
 
+// User-facing download health for an active transfer. NotActive when the
+// task is not downloading. Stall uses the same 3s window as ETA.
+enum class TorrentHealth {
+    NotActive,
+    Poor,
+    Slow,
+    Excellent,
+};
+
 enum class TaskSource { Torrent, Debrid };
 
 enum class TransferMode {
@@ -131,6 +140,7 @@ inline std::pair<uint64_t, uint64_t> downloadProgressBytes(
 struct TorrentPreview {
     std::string name;
     std::string infoHash;
+    bool multi = false;
     uint64_t totalBytes = 0;
     uint32_t fileCount = 0;
     uint32_t trackerCount = 0;
@@ -161,6 +171,29 @@ struct DebridImport {
 
 class DownloadManager {
 public:
+    class ExternalDeployLease {
+    public:
+        ExternalDeployLease() = default;
+        ExternalDeployLease(ExternalDeployLease&& other) noexcept;
+        ExternalDeployLease& operator=(ExternalDeployLease&& other) noexcept;
+        ~ExternalDeployLease();
+
+        ExternalDeployLease(const ExternalDeployLease&) = delete;
+        ExternalDeployLease& operator=(const ExternalDeployLease&) = delete;
+
+        const DownloadTask& task() const { return task_; }
+        explicit operator bool() const { return owner_ != nullptr; }
+
+    private:
+        friend class DownloadManager;
+        ExternalDeployLease(DownloadManager* owner, DownloadTask task)
+            : owner_(owner), task_(std::move(task)) {}
+        void release();
+
+        DownloadManager* owner_ = nullptr;
+        DownloadTask task_;
+    };
+
     explicit DownloadManager(std::string rootPath, bool startWorker = true);
     ~DownloadManager();
 
@@ -209,6 +242,8 @@ public:
     // single install token is held, a stream-install task at the front can
     // still be passed by download-only tasks behind it.
     bool moveToFront(const std::string& taskId, std::string& error);
+    // Move a queued task up or down by one position.
+    bool moveTask(const std::string& taskId, bool moveUp, std::string& error);
 
     // How many torrents may download concurrently (clamped to
     // [kMinActiveDownloads, kMaxActiveDownloads]).
@@ -222,12 +257,36 @@ public:
         installTarget_.store(target, std::memory_order_relaxed);
     }
 
+    install::InstallStorageTarget installTarget() const {
+        return installTarget_.load(std::memory_order_relaxed);
+    }
+
     bool hasActiveTransfer() const;
     // Existence check without the full deep copy snapshot() makes.
     bool hasTask(const std::string& id) const;
     std::vector<DownloadTask> snapshot() const;
+    std::optional<DownloadTask> snapshot(const std::string& id) const;
+    // UI pollers: same as snapshot() without fileSelection / initialPeers /
+    // resumeBitfield. Those vectors are KBs each and never drawn.
+    std::vector<DownloadTask> snapshotUi() const;
+    std::optional<DownloadTask> snapshotUi(const std::string& id) const;
+    // Lease a completed task so /switch copy can move its files while the
+    // manager keeps the row in place. The lease releases on destruction or
+    // explicit release(), unblocking pause/remove/move for that task.
+    std::optional<ExternalDeployLease> beginExternalDeploy(
+        const std::string& taskId, std::string& error);
+    bool externalDeployActive() const;
+    std::string externalDeployTaskId() const;
     bool save(std::string& error) const;
     void shutdown();
+    // Pause every task pause() would accept except Committing (a NAND commit
+    // in flight is left alone). One lock, one state write.
+    void pauseAll();
+    // Requeue every Paused and Error task. One lock, one state write.
+    void resumeAll();
+    // Drop Completed/Installed tasks. deleteData matches per-row remove.
+    // One lock and one state write; debrid account cleanup runs after unlock.
+    bool clearCompleted(bool deleteData, std::string& error);
 
     const std::string& rootPath() const { return rootPath_; }
     const std::string& downloadRoot() const { return downloadRoot_; }
@@ -274,8 +333,12 @@ private:
     bool saveLocked(std::string& error) const;
     DownloadTask* findLocked(const std::string& id);
     const DownloadTask* findLocked(const std::string& id) const;
+    void endExternalDeploy(const std::string& taskId);
     bool removeLocked(const std::string& id, bool deleteData,
-                      std::string& error);
+                      std::string& error, bool persist = true);
+    // Returns true if the task is currently being handled by an external
+    // deploy (Copy to /switch) and should not be touched by batch ops.
+    bool externallyLeasedLocked(const std::string& taskId) const;
     // Fires a detached thread, so it must not touch *this: the manager can be
     // torn down while a provider call is still in flight.
     static void removeFromDebridAsync(DebridProviderKind provider,
@@ -308,6 +371,7 @@ private:
     // Single install token: only one stream-install task may write to NCM
     // at a time; download-only tasks pass token-blocked stream tasks.
     bool installTokenHeld_ = false;   // guarded by mutex_
+    std::string externalDeployTaskId_; // guarded by mutex_
     uint32_t slotBitmap_ = 0;         // guarded by mutex_
     std::atomic<bool> stopping_{false};
     std::atomic<install::InstallStorageTarget> installTarget_{
@@ -324,7 +388,11 @@ void updateTaskDownloadProgress(DownloadTask& task, uint64_t completedBytes,
                                 uint64_t nowMs);
 uint64_t currentInstallSpeed(const DownloadTask& task, uint64_t nowMs);
 std::optional<uint64_t> taskEtaSeconds(const DownloadTask& task,
-                                       uint64_t nowMs);
+                                        uint64_t nowMs);
+
+// User-facing download health for an active transfer. NotActive when the
+// task is not downloading. Stall uses the same 3s window as ETA.
+TorrentHealth torrentHealth(const DownloadTask& task, uint64_t nowMs);
 
 // The scheduler's claim rule, exposed for tests: a Queued task may start
 // unless it is a stream install while another one holds the install token.

@@ -103,11 +103,35 @@ public:
     // built in the constructor isn't part of the tree yet at that point
     // (see TorrentSelectionActivity for the same pattern).
     void onContentAvailable() override {
-        registerAction(tr("pipensx/saves/backup_now"), brls::BUTTON_Y,
+        registerAction(tr("pipensx/saves/backup_now"), brls::ControllerButton::BUTTON_Y,
                        [this](brls::View*) {
-            makeBackup();
+            selectUserProfile();
             return true;
         });
+    }
+
+    void selectUserProfile() {
+        std::string error;
+        std::vector<UserProfile> users;
+        if (!listUserProfiles(users, error)) {
+            brls::Application::notify(error);
+            return;
+        }
+        if (users.empty()) {
+            brls::Application::notify(tr("pipensx/saves/no_profiles"));
+            return;
+        }
+        
+        auto* dialog = new brls::Dialog(tr("pipensx/saves/select_profile"));
+        for (const auto& user : users) {
+            std::string label = user.name.empty() ? tr("pipensx/saves/unknown_profile") : user.name;
+            dialog->addButton(label, [this, uid = user.uid] {
+                selectedUid_ = uid;
+                makeBackup();
+            });
+        }
+        dialog->addButton(tr("pipensx/common/cancel"), [] {});
+        dialog->open();
     }
 
     const std::vector<SaveBackupInfo>& backups() const { return backups_; }
@@ -130,18 +154,34 @@ public:
 private:
     void reload() {
         std::string error;
-        listSaveBackups(title_.titleId, backups_, error);
-        statusLabel_->setText(backups_.empty()
-                                  ? tr("pipensx/saves/no_backups")
-                                  : tr("pipensx/saves/backup_count",
-                                       backups_.size()));
+        listSaveBackups(title_.titleId, title_.name, backups_, error);
+        
+        std::string statusText = backups_.empty()
+            ? tr("pipensx/saves/no_backups")
+            : tr("pipensx/saves/backup_count", backups_.size());
+        
+        // Show selected profile
+        if (!selectedUid_.isZero()) {
+            std::vector<UserProfile> users;
+            std::string error;
+            listUserProfiles(users, error);
+            for (const auto& user : users) {
+                if (user.uid == selectedUid_) {
+                    std::string userName = user.name.empty() ? tr("pipensx/saves/unknown_profile") : user.name;
+                    statusText += tr("pipensx/saves/user_suffix", userName);
+                    break;
+                }
+            }
+        }
+        
+        statusLabel_->setText(statusText);
         recycler_->reloadData();
     }
 
     void setBusy(bool busy, const std::string& message) {
         busy_ = busy;
         recycler_->setFocusable(!busy);
-        if (busy)
+if (busy)
             statusLabel_->setText(message);
     }
 
@@ -154,18 +194,13 @@ private:
         const std::string titleId = title_.titleId;
         const std::string gameName = title_.name;
         log_msg("[saves] makeBackup: scheduling async work\n");
-        // brls::async(), not a raw std::thread: this runs on borealis's own
-        // pre-started thread pool instead of spawning a new OS thread from
-        // deep inside the button-press call stack (Application::mainLoop ->
-        // input handling -> action dispatch -> this lambda) - the same
-        // pattern every other background job in this app already uses.
         brls::async([this, alive, applicationId, titleId, gameName] {
             std::string path;
             std::string error;
             const bool ok = runGuarded(
                 [&](std::string& err) {
                     return backupSaveData(applicationId, titleId, gameName,
-                                          path, err);
+                                          path, err, selectedUid_);
                 },
                 error);
             log_msg("[saves] makeBackup: worker done ok=%d, scheduling sync\n",
@@ -213,7 +248,7 @@ private:
             const bool ok = runGuarded(
                 [&](std::string& err) {
                     return restoreSaveData(applicationId, titleId, gameName,
-                                           path, err);
+                                           path, err, selectedUid_);
                 },
                 error);
             brls::sync([this, alive, ok, error] {
@@ -245,6 +280,7 @@ private:
     brls::RecyclerFrame* recycler_ = nullptr;
     brls::AppletFrame* frame_ = nullptr;
     std::shared_ptr<std::atomic<bool>> alive_;
+    AccountUserId selectedUid_;
 
     friend class SaveBackupDataSource;
 };

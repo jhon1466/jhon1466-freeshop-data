@@ -34,8 +34,8 @@ extern "C" {
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "app/mod_index_service.hpp"
 #include "ui/catalog/catalog_view.hpp"
+#include "app/game_update_service.hpp"
 #include "ui/common/burn_in_saver.hpp"
 #include "ui/common/ui_helpers.hpp"
 #include "ui/common/web_qr.hpp"
@@ -58,9 +58,9 @@ using pipensx::AppSettings;
 using pipensx::CatalogService;
 using pipensx::DownloadManager;
 using pipensx::GameMetadataService;
+using pipensx::GameUpdateService;
 using pipensx::InstalledTitleService;
 using pipensx::FavoritesService;
-using pipensx::ModIndexService;
 using pipensx::SwitchPerformanceController;
 using pipensx::UpdateCheckResult;
 using pipensx::UpdateService;
@@ -98,10 +98,14 @@ struct ThreadJoiner {
 };
 
 const std::string& borealisLocaleFor(const std::string& language) {
-    if (language == "es")
+    if (language == "es" || language == "es-419")
         return brls::LOCALE_ES;
     if (language == "en-US")
         return brls::LOCALE_EN_US;
+    if (language == "fr")
+        return brls::LOCALE_FR;
+    if (language == "zh-CN")
+        return brls::LOCALE_ZH_CN;
     return brls::LOCALE_AUTO;
 }
 
@@ -110,28 +114,28 @@ public:
     MainActivity(DownloadManager* manager, CatalogService* catalog,
                  GameMetadataService* metadata,
                  InstalledTitleService* installed, AppSettings* settings,
-                 UpdateService* updater, ModIndexService* mods,
+                 UpdateService* updater, GameUpdateService* gameUpdates,
                  FavoritesService* favorites, WebServer* webServer)
         : manager_(manager), catalog_(catalog), metadata_(metadata),
           installed_(installed), settings_(settings), updater_(updater),
-          mods_(mods), favorites_(favorites), webServer_(webServer) {
+          gameUpdates_(gameUpdates), favorites_(favorites), webServer_(webServer) {
         auto* tabs = new pipensx::ui::MainFrame();
         using pipensx::ui::NavIconType;
         tabs->addNavTab(tr("pipensx/nav/catalog"), NavIconType::Catalog,
                         [manager, catalog, metadata, installed,
-                         settings, mods, favorites, tabs] {
+                         settings, favorites, tabs] {
             return new CatalogView(manager, catalog, metadata, installed,
                                    settings, [tabs] { tabs->focusTab(1); },
-                                   mods, favorites);
+                                   favorites);
         });
         tabs->addNavTab(tr("pipensx/nav/downloads"), NavIconType::Downloads,
                         [manager, catalog, metadata, settings] {
             return new MainView(manager, catalog, metadata, settings);
         });
         tabs->addNavTab(tr("pipensx/nav/installed"), NavIconType::Installed,
-                        [installed, manager, metadata, settings, catalog] {
+                        [installed, manager, metadata, settings, catalog, gameUpdates] {
             return new InstalledView(installed, manager, metadata, settings,
-                                     catalog);
+                                     catalog, gameUpdates);
         });
         tabs->addNavTab(tr("pipensx/nav/explorer"), NavIconType::Explorer,
                         [settings] {
@@ -147,9 +151,9 @@ public:
         });
         tabs->addNavTab(tr("pipensx/nav/settings"), NavIconType::Settings,
                         [settings, manager, catalog, metadata,
-                         installed, updater, mods, webServer] {
+                         installed, updater, webServer] {
             return new SettingsView(settings, manager, catalog, metadata,
-                                    installed, updater, mods, webServer);
+                                    installed, updater, webServer);
         });
         tabs->addNavTab(tr("pipensx/nav/help"), NavIconType::Help,
                         [manager, catalog, metadata, installed] {
@@ -234,7 +238,7 @@ private:
     InstalledTitleService* installed_;
     AppSettings* settings_;
     UpdateService* updater_;
-    ModIndexService* mods_;
+    GameUpdateService* gameUpdates_;
     FavoritesService* favorites_;
     WebServer* webServer_;
     brls::AppletFrame* frame_;
@@ -486,11 +490,7 @@ int main(int argc, char** argv) {
             log_msg("[catalog] initial load failed: %s\n",
                     catalogError.c_str());
 
-        startupStage("ModIndexService construction");
-        ModIndexService mods("sdmc:/switch/freeshop-client");
-        std::string modsError;
-        if (!mods.load(modsError))
-            log_msg("[mods] initial load skipped: %s\n", modsError.c_str());
+
 
         startupStage("FavoritesService construction");
         FavoritesService favorites("sdmc:/switch/freeshop-client");
@@ -536,6 +536,12 @@ int main(int argc, char** argv) {
                 ? GameMetadataService::ImageNetwork::Throttled
                 : GameMetadataService::ImageNetwork::Full);
 
+        startupStage("GameUpdateService construction");
+        GameUpdateService gameUpdates(&metadata, "sdmc:/switch/freeshop-client");
+        std::string gameUpdatesError;
+        if (!gameUpdates.load(gameUpdatesError))
+            log_msg("[gameUpdates] initial load skipped: %s\n", gameUpdatesError.c_str());
+
         UpdateService updater(updateTargetPath);
 
         startupStage("WebServer construction");
@@ -579,7 +585,7 @@ int main(int argc, char** argv) {
         startupStage("MainActivity construction");
         auto* activity = new MainActivity(&manager, &catalog, &metadata,
                                           &installed, &settings, &updater,
-                                          &mods, &favorites, &webServer);
+                                          &gameUpdates, &favorites, &webServer);
 
         startupStage("push MainActivity");
         brls::Application::pushActivity(activity);

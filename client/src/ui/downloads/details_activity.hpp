@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <string>
 
@@ -8,10 +9,12 @@
 #include "app/catalog_service.hpp"
 #include "app/download_manager.hpp"
 #include "app/game_metadata_service.hpp"
+#include "app/switch_deploy.hpp"
 #include "ui/common/async_image.hpp"
 #include "ui/common/progress_bar.hpp"
 #include "ui/common/speed_graph.hpp"
 #include "ui/common/ui_helpers.hpp"
+#include "ui/downloads/task_files_activity.hpp"
 #include "ui/i18n.hpp"
 #include "ui/theme.hpp"
 
@@ -25,9 +28,11 @@ class DetailsActivity : public brls::Activity {
 public:
     DetailsActivity(std::string taskId, DownloadManager* manager,
                     CatalogService* catalog = nullptr,
-                    GameMetadataService* metadata = nullptr)
+                    GameMetadataService* metadata = nullptr,
+                    SwitchDeployService* deploy = nullptr)
         : taskId_(std::move(taskId)), manager_(manager), catalog_(catalog),
-          metadata_(metadata) {
+          metadata_(metadata), deploy_(deploy),
+          alive_(std::make_shared<std::atomic<bool>>(true)) {
         auto* content = new brls::Box(brls::Axis::COLUMN);
         content->setPadding(24, 40, 24, 40);
         content->setAlignItems(brls::AlignItems::STRETCH);
@@ -124,6 +129,42 @@ public:
         speedGraph_ = new SpeedGraphView();
         content->addView(speedGraph_);
 
+        // Files + Copy to /switch: shown only when the completed task has a
+        // port layout worth offering (see refreshDeploy / updateButtons).
+        filesSection_ = new brls::Box(brls::Axis::COLUMN);
+        filesSection_->setVisibility(brls::Visibility::GONE);
+        addDivider(filesSection_);
+        addSectionLabel(filesSection_, tr("pipensx/files/card"));
+        filesSummary_ = addLine(filesSection_, theme::kFontSmall);
+        filesSummary_->setTextColor(theme::textSecondary());
+        deployPhase_ = addLine(filesSection_, theme::kFontBody);
+        deployPhase_->setTextColor(theme::textSecondary());
+        deployProgress_ = new ProgressBar();
+        deployProgress_->setHeight(14);
+        deployProgress_->setMarginBottom(10);
+        filesSection_->addView(deployProgress_);
+        deployStatus_ = addLine(filesSection_, theme::kFontSmall);
+        deployStatus_->setSingleLine(false);
+        deployStatus_->setTextColor(theme::textSecondary());
+        auto* fileActions = new brls::Box(brls::Axis::ROW);
+        fileActions->setMarginTop(8);
+        filesButton_ = addActionButton(fileActions, tr("pipensx/files/open"),
+                                       &brls::BUTTONSTYLE_DEFAULT);
+        copyButton_ = addActionButton(fileActions, tr("pipensx/deploy/copy"),
+                                      &brls::BUTTONSTYLE_PRIMARY);
+        filesSection_->addView(fileActions);
+        filesButton_->registerClickAction([this](brls::View*) {
+            if (deploy_)
+                brls::Application::pushActivity(
+                    new TaskFilesActivity(taskId_, deploy_));
+            return true;
+        });
+        copyButton_->registerClickAction([this](brls::View*) {
+            onCopyToSwitch();
+            return true;
+        });
+        content->addView(filesSection_);
+
         error_ = addLine(content, theme::kFontSmall);
         error_->setMarginTop(18);
         error_->setTextColor(theme::error());
@@ -140,12 +181,14 @@ public:
 
     void onContentAvailable() override {
         refresh();
+        loadDeployAvailability();
         timer_.setCallback([this] { refresh(); });
         timer_.start(500);
         brls::Application::giveFocus(pauseButton_);
     }
 
     ~DetailsActivity() override {
+        alive_->store(false);
         timer_.stop();
     }
 
@@ -244,11 +287,12 @@ private:
     }
 
     const DownloadTask* currentTask() {
-        cache_ = manager_->snapshot();
-        for (const auto& task : cache_)
-            if (task.id == taskId_)
-                return &task;
-        return nullptr;
+        cache_.clear();
+        auto task = manager_->snapshotUi(taskId_);
+        if (!task)
+            return nullptr;
+        cache_.push_back(std::move(*task));
+        return &cache_.front();
     }
 
     void onPauseResume() {
@@ -261,6 +305,192 @@ private:
         else
             manager_->pause(taskId_);
         refresh();
+    }
+
+    void setSwitchFilesVisible(bool visible) {
+        const auto v = visible ? brls::Visibility::VISIBLE
+                               : brls::Visibility::GONE;
+        filesSection_->setVisibility(v);
+        if (visible)
+            deployProgress_->setVisibility(brls::Visibility::VISIBLE);
+    }
+
+    void loadDeployAvailability() {
+        if (!deploy_ || availabilityLoaded_ || availabilityLoading_)
+            return;
+        const auto task = manager_->snapshotUi(taskId_);
+        if (!task || !taskReadyForSwitchDeploy(*task))
+            return;
+        availabilityLoading_ = true;
+        filesSummary_->setText(tr("pipensx/files/loading"));
+        auto alive = alive_;
+        const std::string taskId = taskId_;
+        SwitchDeployService* deploy = deploy_;
+        brls::async([this, alive, taskId, deploy] {
+            SwitchDeployInspection inspection = deploy->inspect(taskId);
+            brls::sync([this, alive,
+                        inspection = std::move(inspection)]() mutable {
+                if (!alive->load())
+                    return;
+                availabilityLoading_ = false;
+                availabilityLoaded_ = true;
+                filesSummary_->setText(tr(
+                    "pipensx/files/summary", inspection.inventory.files.size(),
+                    formatBytes(inspection.inventory.presentBytes)));
+                copyAvailable_ = switchDeployOffersCopy(inspection.problem);
+                if (!copyAvailable_) {
+                    setTextIfChanged(deployPhase_, "");
+                    setTextIfChanged(deployStatus_, "");
+                    deployProgress_->setProgress(0.0f);
+                }
+                refresh();
+            });
+        });
+    }
+
+    void loadReceiptState() {
+        if (!deploy_ || receiptChecked_ || receiptLoading_)
+            return;
+        receiptLoading_ = true;
+        const uint64_t generation = deploy_->snapshot().generation;
+        auto alive = alive_;
+        const std::string taskId = taskId_;
+        SwitchDeployService* deploy = deploy_;
+        brls::async([this, alive, taskId, deploy, generation] {
+            const SwitchDeployReceiptState state = deploy->receiptState(taskId);
+            brls::sync([this, alive, deploy, generation, state] {
+                if (!alive->load())
+                    return;
+                receiptLoading_ = false;
+                if (deploy->snapshot().generation != generation)
+                    return;
+                receiptState_ = state;
+                receiptChecked_ = true;
+                refresh();
+            });
+        });
+    }
+
+    void showReceiptState() {
+        if (!receiptChecked_) {
+            loadReceiptState();
+            setTextIfChanged(deployPhase_, tr("pipensx/deploy/preparing"));
+            setTextIfChanged(deployStatus_, "");
+        } else if (receiptState_ == SwitchDeployReceiptState::Valid) {
+            deployProgress_->setProgress(1.0f);
+            setTextIfChanged(deployPhase_, tr("pipensx/deploy/receipt_valid"));
+            setTextIfChanged(deployStatus_, "");
+        } else if (receiptState_ == SwitchDeployReceiptState::Modified) {
+            deployProgress_->setProgress(0.0f);
+            setTextIfChanged(deployPhase_,
+                             tr("pipensx/deploy/receipt_modified"));
+            setTextIfChanged(deployStatus_, "");
+        }
+    }
+
+    void onCopyToSwitch() {
+        if (!deploy_)
+            return;
+        const SwitchDeploySnapshot state = deploy_->snapshot();
+        if (state.active()) {
+            if (state.taskId == taskId_) {
+                deploy_->cancel();
+                brls::Application::notify(
+                    tr("pipensx/deploy/cancel_requested"));
+            } else {
+                brls::Application::notify(tr("pipensx/deploy/problem_busy"));
+            }
+            return;
+        }
+        auto alive = alive_;
+        const std::string taskId = taskId_;
+        SwitchDeployService* deploy = deploy_;
+        copyButton_->setState(brls::ButtonState::DISABLED);
+        setTextIfChanged(deployPhase_, tr("pipensx/deploy/preparing"));
+        setTextIfChanged(deployStatus_, "");
+        brls::async([this, alive, taskId, deploy] {
+            SwitchDeployInspection inspection = deploy->inspect(taskId);
+            brls::sync([this, alive,
+                        inspection = std::move(inspection)]() mutable {
+                if (!alive->load())
+                    return;
+                copyButton_->setState(brls::ButtonState::ENABLED);
+                if (!switchDeployOffersCopy(inspection.problem)) {
+                    copyAvailable_ = false;
+                    setTextIfChanged(deployPhase_, "");
+                    setTextIfChanged(deployStatus_, "");
+                    setSwitchFilesVisible(false);
+                    return;
+                }
+                brls::Application::pushActivity(
+                    new SwitchDeployPreviewActivity(std::move(inspection),
+                                                    deploy_));
+            });
+        });
+    }
+
+    void refreshDeploy(const DownloadTask& task) {
+        if (!deploy_) {
+            setSwitchFilesVisible(false);
+            return;
+        }
+        const SwitchDeploySnapshot state = deploy_->snapshot();
+        if (state.taskId == taskId_ && state.active()) {
+            receiptChecked_ = false;
+            setSwitchFilesVisible(true);
+            const float fraction = state.totalBytes
+                ? static_cast<float>(state.bytesCopied) /
+                      static_cast<float>(state.totalBytes)
+                : 0.0f;
+            deployProgress_->setProgress(fraction);
+            setTextIfChanged(copyButton_, tr("pipensx/deploy/cancel"));
+            const char* phaseKey =
+                state.phase == SwitchDeployPhase::Preparing
+                    ? "pipensx/deploy/phase_preparing"
+                    : state.phase == SwitchDeployPhase::Extracting
+                          ? "pipensx/deploy/phase_extracting"
+                          : "pipensx/deploy/phase_copying";
+            setTextIfChanged(deployPhase_, tr(phaseKey));
+            deployPhase_->setTextColor(theme::accent());
+            setTextIfChanged(
+                deployStatus_,
+                tr("pipensx/deploy/progress",
+                   percentOf(fraction), state.filesCopied, state.totalFiles,
+                   formatBytes(state.bytesCopied),
+                   formatBytes(state.totalBytes), state.currentPath));
+            deployStatus_->setTextColor(theme::accent());
+            return;
+        }
+        setTextIfChanged(copyButton_, tr("pipensx/deploy/copy"));
+        deployPhase_->setTextColor(theme::textSecondary());
+        deployStatus_->setTextColor(theme::textSecondary());
+        if (state.taskId == taskId_) {
+            if (state.phase == SwitchDeployPhase::Completed) {
+                if (state.detail.empty())
+                    showReceiptState();
+                else {
+                    setTextIfChanged(
+                        deployPhase_,
+                        tr("pipensx/deploy/completed_warning", state.detail));
+                    setTextIfChanged(deployStatus_, "");
+                }
+            } else if (state.phase == SwitchDeployPhase::Failed) {
+                setTextIfChanged(deployPhase_,
+                                 deployProblemText(state.problem,
+                                                   state.detail));
+                deployPhase_->setTextColor(theme::error());
+                setTextIfChanged(deployStatus_, "");
+            } else if (state.phase == SwitchDeployPhase::Cancelled) {
+                setTextIfChanged(deployPhase_,
+                                 tr("pipensx/deploy/cancelled"));
+                setTextIfChanged(deployStatus_, "");
+            }
+        } else if (availabilityLoaded_ && copyAvailable_) {
+            showReceiptState();
+        }
+        if (taskReadyForSwitchDeploy(task) && !availabilityLoaded_ &&
+            !availabilityLoading_)
+            loadDeployAvailability();
     }
 
     void refresh() {
@@ -296,8 +526,9 @@ private:
 
         bool installing = task->status == DownloadStatus::Installing ||
                           task->status == DownloadStatus::Committing;
-        float progress = installing ? installProgressOf(*task)
-                                    : progressOf(*task);
+        float progress = task->mode == TransferMode::StreamInstall
+            ? streamInstallProgressOf(*task)
+            : (installing ? installProgressOf(*task) : progressOf(*task));
         progressBar_->setProgress(progress);
         // Installing phases: the bar and the byte line track the same
         // per-package install numbers. Downloading/other: the byte line
@@ -366,10 +597,15 @@ private:
                              ? std::string()
                              : tr("pipensx/downloads/error_line", task->error));
 
+        refreshDeploy(*task);
+
         updateButtons(*task);
     }
 
     void updateButtons(const DownloadTask& task) {
+        const SwitchDeploySnapshot deploy = deploy_ ? deploy_->snapshot()
+                                                     : SwitchDeploySnapshot{};
+        const bool leased = deploy.active() && deploy.taskId == taskId_;
         bool paused = task.status == DownloadStatus::Paused ||
                             task.status == DownloadStatus::Error;
         bool active = task.status == DownloadStatus::Queued ||
@@ -381,15 +617,40 @@ private:
                       task.status == DownloadStatus::Verifying;
         setTextIfChanged(pauseButton_, paused ? tr("pipensx/common/resume")
                                               : tr("pipensx/common/pause"));
-        setButtonAvailable(pauseButton_, paused || active);
+        setButtonAvailable(pauseButton_, !leased && (paused || active));
 
         bool canVerify = task.status == DownloadStatus::Paused ||
                          task.status == DownloadStatus::Error ||
                          task.status == DownloadStatus::Completed ||
                          task.status == DownloadStatus::Installed;
-        setButtonAvailable(verifyButton_, canVerify);
+        setButtonAvailable(verifyButton_, !leased && canVerify);
         setButtonAvailable(removeButton_,
-                           task.status != DownloadStatus::Removing);
+                           !leased && task.status != DownloadStatus::Removing);
+        const bool busyElsewhere = deploy.active() && deploy.taskId != taskId_;
+        const bool packageBusy =
+            !leased &&
+            (task.status == DownloadStatus::Installing ||
+             task.status == DownloadStatus::Committing);
+        const bool showSwitchFiles = deploy_ != nullptr &&
+            ((deploy.active() && deploy.taskId == taskId_) || copyAvailable_);
+        setSwitchFilesVisible(showSwitchFiles);
+        setButtonAvailable(filesButton_, showSwitchFiles);
+        const bool copyEnabled = showSwitchFiles &&
+            ((deploy.active() && deploy.taskId == taskId_) ||
+             (copyAvailable_ && !busyElsewhere && !packageBusy));
+        setButtonAvailable(copyButton_, copyEnabled);
+        if (deploy_ && !leased && !copyAvailable_ && availabilityLoaded_ &&
+            !availabilityLoading_) {
+            setTextIfChanged(copyButton_, tr("pipensx/deploy/copy"));
+        } else if (busyElsewhere) {
+            setTextIfChanged(copyButton_, tr("pipensx/deploy/problem_busy"));
+        } else if (packageBusy) {
+            setTextIfChanged(copyButton_, tr("pipensx/deploy/problem_busy"));
+        } else if (leased) {
+            setTextIfChanged(copyButton_, tr("pipensx/deploy/cancel"));
+        } else {
+            setTextIfChanged(copyButton_, tr("pipensx/deploy/copy"));
+        }
     }
 
     static void setButtonAvailable(brls::Button* button, bool available) {
@@ -444,6 +705,8 @@ private:
     DownloadManager* manager_;
     CatalogService* catalog_;
     GameMetadataService* metadata_;
+    SwitchDeployService* deploy_;
+    std::shared_ptr<std::atomic<bool>> alive_;
     std::string frameTitle_;
     brls::AppletFrame* frame_;
     brls::Box* thumb_;
@@ -466,10 +729,23 @@ private:
     brls::Label* installSpeed_;
     brls::Box* installSpeedItem_;
     SpeedGraphView* speedGraph_;
+    brls::Box* filesSection_;
+    brls::Label* filesSummary_;
+    brls::Label* deployPhase_;
+    brls::Label* deployStatus_;
+    ProgressBar* deployProgress_;
+    brls::Button* filesButton_;
+    brls::Button* copyButton_;
     brls::Label* peers_;
     brls::Label* pieces_;
     brls::Label* error_;
     brls::RepeatingTimer timer_;
+    bool availabilityLoaded_ = false;
+    bool availabilityLoading_ = false;
+    bool copyAvailable_ = false;
+    bool receiptChecked_ = false;
+    bool receiptLoading_ = false;
+    SwitchDeployReceiptState receiptState_ = SwitchDeployReceiptState::None;
     std::vector<DownloadTask> cache_;
     std::vector<uint64_t> downloadSpeedSamples_;
     std::vector<uint64_t> installSpeedSamples_;

@@ -49,7 +49,6 @@ struct AppSettingsData {
     // monotonic now_ms() for the refresh-on-launch gate.
     uint64_t lastCatalogRefreshWallSec = 0;
     uint64_t lastMetadataRefreshMs = 0;
-    uint64_t lastModsRefreshMs = 0;
     StreamSelection streamSelection = StreamSelection::AllFiles;
     InstallLocation installLocation = InstallLocation::SdCard;
     bool showCompletedDownloads = true;
@@ -116,7 +115,7 @@ struct AppSettingsData {
 // Supported values for AppSettingsData::language, in the order the Settings
 // selector lists them. Anything else is rejected at parse time, so a hand-edited
 // settings.json cannot leave the app pointing at a locale we do not ship.
-inline constexpr const char* kLanguageValues[] = {"auto", "en-US", "es"};
+inline constexpr const char* kLanguageValues[] = {"auto", "en-US", "es", "zh-CN", "fr"};
 
 // Supported values for AppSettingsData::themeMode, in the order the
 // Settings selector lists them.

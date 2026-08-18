@@ -271,7 +271,7 @@ std::string WebServer::buildStateJson() {
     Json state;
     Json tasks = Json::array();
     uint64_t now = nowMs();
-    for (const DownloadTask& t : manager_.snapshot()) {
+    for (const DownloadTask& t : manager_.snapshotUi()) {
         Json j;
         j["id"] = t.id;
         j["name"] = t.name;

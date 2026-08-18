@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <future>
 #include <memory>
 #include <optional>
 #include <string>
@@ -111,22 +112,39 @@ public:
         const std::string pairingUrl = debridPairingUrl(ip);
         bool pairingAvailable = fixture && fixture->pairingAvailable &&
                                 !pairingUrl.empty();
-        if (!fixture && !pairingUrl.empty()) {
+if (!fixture && !pairingUrl.empty()) {
             server_ = std::make_unique<TorboxPairingServer>(
                 kTorboxPairingPort,
                 [provider](const std::string& key, std::string& error) {
-                    if (makeDebridProvider(provider, key)->validate(error))
-                        return true;
-                    error = formatDebridValidateError(error);
-                    return false;
+                    auto done = std::make_shared<
+                        std::promise<std::pair<bool, std::string>>>();
+                    auto future = done->get_future();
+                    brls::async([provider, key, done] {
+                        std::string err;
+                        bool ok = false;
+                        try {
+                            ok = makeDebridProvider(provider, key)
+                                     ->validate(err);
+                        } catch (const std::exception& e) {
+                            err = e.what();
+                        } catch (...) {
+                            err = "Validation failed.";
+                        }
+                        if (!ok)
+                            err = formatDebridValidateError(err);
+                        done->set_value({ok, std::move(err)});
+                    });
+                    const auto result = future.get();
+                    error = result.second;
+                    return result.first;
                 },
                 provider == DebridProviderKind::TorrServer
                     ? "Pega la dirección de tu TorrServer, por ejemplo "
                       "http://192.168.1.10:8090."
-                : provider == DebridProviderKind::RealDebrid
-                    ? "Pega tu clave de API de Real-Debrid. La encuentras en "
-                      "real-debrid.com/apitoken."
-                    : kTorboxPairingHint);
+                    : provider == DebridProviderKind::RealDebrid
+                        ? "Pega tu clave de API de Real-Debrid. La encuentras en "
+                          "real-debrid.com/apitoken."
+                        : kTorboxPairingHint);
             std::string error;
             pairingAvailable = server_->start(error);
             if (pairingAvailable) {
@@ -263,7 +281,16 @@ private:
                 : tr("pipensx/debrid/keyboard_prompt",
                      debridProviderName(provider_));
         brls::Application::getImeManager()->openForText(
-            [this](std::string text) { validate(std::move(text)); }, prompt, "",
+            [this](std::string text) {
+                // SwitchImeManager calls this before swkbdClose(). Starting
+                // curl while the keyboard applet is still up takes the
+                // process down with std::terminate and no exception.
+                brls::sync([this, text = std::move(text)]() mutable {
+                    if (!alive_->load())
+                        return;
+                    validate(std::move(text));
+                });
+            }, prompt, "",
             128, activeKey(), brls::KEYBOARD_DISABLE_NONE);
     }
 

@@ -27,6 +27,11 @@ typedef struct {
      * the mark is delivered to the sink. 0 = plain sink behaviour.
      */
     uint64_t ready_bytes;
+    /*
+     * Test hook: skip the >4 GiB probe and store as a DBI split folder
+     * (applies only to files above the FAT32 ceiling). 0 in production.
+     */
+    int force_split;
 } storage_file_config_t;
 
 /*
@@ -37,6 +42,10 @@ typedef struct {
 storage_t *storage_open(const metainfo_t *mi, const char *outdir);
 storage_t *storage_open_ex(const metainfo_t *mi, const char *outdir,
                            const storage_file_config_t *configs);
+
+/* Locate an existing on-disk torrent file, including the long-path fallback. */
+int storage_locate_file_path(const metainfo_t *mi, const char *outdir,
+                             uint32_t file_index, char *out, size_t out_size);
 
 /*
  * Write data at the absolute torrent byte offset.
@@ -61,6 +70,13 @@ int storage_range_readable(storage_t *s, int64_t offset, size_t len);
  * consumed (ready_bytes) prefix of SINK files.
  */
 int storage_range_skipped(storage_t *s, int64_t offset, size_t len);
+
+/*
+ * Called when the torrent completes (all pieces verified): marks every
+ * finished split folder with the concatenation attribute so HOS reads it
+ * as one file (Switch only; no-op elsewhere). Idempotent.
+ */
+void storage_finalize(storage_t *s);
 
 const char *storage_error(storage_t *s);
 

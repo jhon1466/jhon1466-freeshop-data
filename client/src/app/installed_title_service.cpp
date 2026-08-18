@@ -1,4 +1,5 @@
 #include "installed_title_service.hpp"
+#include "nacp_language.hpp"
 
 extern "C" {
 #include "../core/util.h"
@@ -26,13 +27,6 @@ std::string resultText(const char* operation, Result result) {
     char text[160];
     std::snprintf(text, sizeof(text), "%s (0x%08x).", operation, result);
     return text;
-}
-
-std::string boundedText(const char* value, size_t size) {
-    if (!value || size == 0)
-        return {};
-    size_t length = strnlen(value, size);
-    return std::string(value, length);
 }
 
 std::string upperAscii(std::string value) {
@@ -260,6 +254,24 @@ bool InstalledTitleService::refresh(std::string& error) {
     std::vector<InstalledTitle> next;
     next.reserve(records.size());
     auto control = std::make_unique<NsApplicationControlData>();
+    int preferred = 0;
+#ifdef __SWITCH__
+    // Same SetLanguage -> NACP slot map as libnx nacpGetLanguageEntry.
+    static const u32 kNacpLanguageTable[18] = {
+        2, 0, 3, 4, 7, 6, 14, 12, 8, 10, 11, 13, 1, 9, 5, 14, 13, 15};
+    u64 languageCode = 0;
+    SetLanguage language = SetLanguage_ENUS;
+    if (R_SUCCEEDED(setInitialize())) {
+        if (R_SUCCEEDED(setGetSystemLanguage(&languageCode)))
+            setMakeLanguage(languageCode, &language);
+        setExit();
+    }
+    if (language >= 0 &&
+        static_cast<u32>(language) <
+            sizeof(kNacpLanguageTable) / sizeof(kNacpLanguageTable[0]))
+        preferred = static_cast<int>(
+            kNacpLanguageTable[static_cast<u32>(language)]);
+#endif
     for (const NsApplicationRecord& record : records) {
         InstalledTitle title;
         title.applicationId = record.application_id;
@@ -276,16 +288,13 @@ bool InstalledTitleService::refresh(std::string& error) {
             NsApplicationControlSource_Storage, record.application_id,
             control.get(), sizeof(*control), &actualSize);
         if (R_SUCCEEDED(rc)) {
-            NacpLanguageEntry* language = nullptr;
-            if (R_SUCCEEDED(nacpGetLanguageEntry(&control->nacp, &language)) &&
-                language) {
-                std::string name = boundedText(language->name,
-                                               sizeof(language->name));
-                if (!name.empty())
-                    title.name = std::move(name);
-                title.publisher = boundedText(language->author,
-                                              sizeof(language->author));
-            }
+            std::string name;
+            std::string author;
+            if (nacpReadLanguage(&control->nacp, sizeof(control->nacp),
+                                 preferred, name, author) &&
+                !name.empty())
+                title.name = std::move(name);
+            title.publisher = std::move(author);
             size_t iconSize = actualSize > sizeof(NacpStruct)
                 ? static_cast<size_t>(actualSize - sizeof(NacpStruct)) : 0;
             iconSize = std::min(iconSize, sizeof(control->icon));
@@ -315,11 +324,43 @@ bool InstalledTitleService::refresh(std::string& error) {
         titleIds_ = std::move(ids);
         ++generation_;
     }
+    // Enumerate DLC titles for the game-update feature
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        dlcTitleIds_.clear();
+        for (const std::string& id : dlcTitleIds_)
+            dlcTitleIds_.insert(upperAscii(id));
+    }
     log_msg("[installed] loaded %zu applications\n", count);
     telemetry_log("installed", "system",
                   "event=refresh count=%zu duration_ms=%llu", count,
                   static_cast<unsigned long long>(now_ms() - startedMs));
     return true;
+}
+
+size_t InstalledTitleService::dlcCountForBase(const std::string& titleId) const {
+    uint64_t base = 0;
+    if (!parseTitleId(titleId, base))
+        return 0;
+    base = nxBaseApplicationId(base);
+    std::lock_guard<std::mutex> lock(mutex_);
+    size_t count = 0;
+    for (const std::string& id : dlcTitleIds_) {
+        uint64_t parsed = 0;
+        if (parseTitleId(id, parsed) && nxBaseApplicationId(parsed) == base)
+            ++count;
+    }
+    return count;
+}
+
+void InstalledTitleService::injectDlcTitleIds(
+    std::vector<std::string> dlcTitleIds) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    dlcTitleIds_.clear();
+    dlcTitleIds_.reserve(dlcTitleIds.size());
+    for (const std::string& id : dlcTitleIds)
+        dlcTitleIds_.insert(upperAscii(id));
+    ++generation_;
 }
 
 } // namespace pipensx

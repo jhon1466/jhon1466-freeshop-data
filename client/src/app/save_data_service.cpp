@@ -18,6 +18,8 @@ extern "C" {
 #include <switch.h>
 #endif
 
+using namespace pipensx;
+
 namespace pipensx {
 
 std::string saveBackupsRoot() {
@@ -26,7 +28,20 @@ std::string saveBackupsRoot() {
 
 #ifdef __SWITCH__
 
-namespace {
+// Internal helpers
+
+std::string sanitizeForPathSegment(const std::string& name);
+
+// Per-title backup root: "<Game Name> [<titleId>]" so the folder is readable
+// at a glance. Falls back to a bare titleId folder when no name is known.
+std::string saveDataTitleRoot(const std::string& titleId,
+                              const std::string& gameName) {
+    const std::string name = sanitizeForPathSegment(gameName);
+    if (!name.empty())
+        return explorerJoinPath(saveBackupsRoot(),
+                                name + " [" + titleId + "]");
+    return explorerJoinPath(saveBackupsRoot(), titleId);
+}
 
 std::atomic<int> gMountSerial{0};
 
@@ -87,6 +102,52 @@ bool activeUser(AccountUid& uid, std::string& error) {
         return true;
     error = "No hay ningún perfil de cuenta disponible.";
     return false;
+}
+
+// List all user profiles on the console
+bool listUserProfiles(std::vector<UserProfile>& users, std::string& error) {
+    users.clear();
+    
+    AccountUid uids[16];
+    s32 actualTotal = 0;
+    Result rc = accountListAllUsers(uids, 16, &actualTotal);
+    if (R_FAILED(rc)) {
+        error = "No se pudo obtener la lista de usuarios.";
+        return false;
+    }
+    
+    for (s32 i = 0; i < actualTotal; i++) {
+        AccountUid uid = uids[i];
+        AccountProfile profile;
+        Result rc = accountGetProfile(&profile, uids[i]);
+        if (R_FAILED(rc)) {
+            continue; // Skip this user if we can't get their profile
+        }
+        
+        AccountProfileBase profileBase;
+        rc = accountProfileGet(&profile, nullptr, &profileBase);
+        if (R_FAILED(rc)) {
+            continue;
+        }
+        
+        UserProfile user;
+        // AccountUid is a struct with two u64 fields - keep both, a single
+        // u64 cannot hold the full 128-bit id.
+        user.uid.high = uid.uid[0];
+        user.uid.low = uid.uid[1];
+        
+        // Extract nickname from profile base
+        char name[0x20] = {0};
+        strncpy(name, profileBase.nickname, sizeof(name) - 1);
+        user.name = name;
+        
+        // For image path, we'd need to load the user icon - skip for now
+        user.imagePath = "";
+        
+        users.push_back(std::move(user));
+    }
+    
+    return !users.empty();
 }
 
 std::string timestampLabel() {
@@ -153,8 +214,6 @@ bool copyTreeContents(const std::string& srcRoot, const std::string& destDir,
     return true;
 }
 
-} // namespace
-
 bool saveDataAccountAvailable() {
     AccountUid uid;
     std::string error;
@@ -163,7 +222,7 @@ bool saveDataAccountAvailable() {
 
 bool backupSaveData(uint64_t applicationId, const std::string& titleId,
                     const std::string& gameName, std::string& outPath,
-                    std::string& error) {
+                    std::string& error, const AccountUserId& userUid) {
     // Per-line flushing for the duration of the backup only: this function has
     // several early returns, so scope it to an RAII guard rather than trying to
     // clear the flag on each one.
@@ -174,13 +233,20 @@ bool backupSaveData(uint64_t applicationId, const std::string& titleId,
     log_msg("[saves] backup begin title=%s app=%016llx\n", titleId.c_str(),
             (unsigned long long)applicationId);
     AccountUid uid;
-    if (!activeUser(uid, error)) {
+    if (userUid.isZero() && !activeUser(uid, error)) {
         log_msg("[saves] backup: no active account: %s\n", error.c_str());
         return false;
+    } else if (!userUid.isZero()) {
+        // Keep the full 128-bit id - both u64s matter, fsdev requires the
+        // exact account uid that owns the save data.
+        uid.uid[0] = userUid.high;
+        uid.uid[1] = userUid.low;
     }
+    log_msg("[saves] backup uid=[0x%016llx, 0x%016llx]\n",
+            (unsigned long long)uid.uid[0], (unsigned long long)uid.uid[1]);
 
     const std::string titleRoot =
-        explorerJoinPath(saveBackupsRoot(), titleId);
+        saveDataTitleRoot(titleId, gameName);
     const std::string sanitizedName = sanitizeForPathSegment(gameName);
     const std::string backupLabel = sanitizedName.empty()
         ? timestampLabel()
@@ -195,12 +261,16 @@ bool backupSaveData(uint64_t applicationId, const std::string& titleId,
 
     const std::string mountName =
         "savebk" + std::to_string(gMountSerial.fetch_add(1));
-    log_msg("[saves] backup mounting %s (read-only)\n", mountName.c_str());
+    log_msg("[saves] backup mounting %s (read-only) app=0x%016llx\n",
+            mountName.c_str(), (unsigned long long)applicationId);
     const Result rc =
         fsdevMountSaveDataReadOnly(mountName.c_str(), applicationId, uid);
     if (R_FAILED(rc)) {
-        error = "No se pudieron abrir los datos de guardado de este título.";
         log_msg("[saves] backup: mount failed rc=0x%08x\n", rc);
+        std::string cleanupError;
+        deleteEntry(destDir, cleanupError);
+        error = "No se pudieron abrir los datos de guardado de este título.\n"
+                "Es posible que este juego aún no tenga datos de guardado.";
         return false;
     }
     log_msg("[saves] backup mounted, copying tree\n");
@@ -221,17 +291,22 @@ bool backupSaveData(uint64_t applicationId, const std::string& titleId,
     return true;
 }
 
-bool listSaveBackups(const std::string& titleId,
+bool listSaveBackups(const std::string& titleId, const std::string& gameName,
                      std::vector<SaveBackupInfo>& backups, std::string& error) {
     backups.clear();
-    const std::string titleRoot =
-        explorerJoinPath(saveBackupsRoot(), titleId);
+    // Prefer the readable "<name> [<titleId>]" folder; fall back to the
+    // legacy bare-titleId layout so old backups still show up.
+    std::string titleRoot = saveDataTitleRoot(titleId, gameName);
     std::vector<ExplorerEntry> entries;
     if (!listDirectory(titleRoot, entries, error)) {
-        // No backups yet is not a failure - the folder simply does not
-        // exist until the first one is made.
         error.clear();
-        return true;
+        titleRoot = explorerJoinPath(saveBackupsRoot(), titleId);
+        if (!listDirectory(titleRoot, entries, error)) {
+            // No backups yet is not a failure - the folder simply does not
+            // exist until the first one is made.
+            error.clear();
+            return true;
+        }
     }
     for (const ExplorerEntry& entry : entries) {
         if (!entry.directory)
@@ -254,26 +329,31 @@ bool deleteSaveBackup(const std::string& backupPath, std::string& error) {
 }
 
 bool restoreSaveData(uint64_t applicationId, const std::string& titleId,
-                     const std::string& gameName,
-                     const std::string& backupPath, std::string& error) {
+                      const std::string& gameName,
+                      const std::string& backupPath, std::string& error,
+                      const AccountUserId& userUid) {
     // A restore that cannot even protect the save it is about to overwrite
     // does not proceed - the live save is never touched in that case.
     std::string safetyPath;
     std::string safetyError;
-    if (!backupSaveData(applicationId, titleId, gameName, safetyPath,
-                        safetyError)) {
+    if (!pipensx::backupSaveData(applicationId, titleId, gameName, safetyPath,
+                        safetyError, userUid)) {
         error = "No se pudo hacer una copia de seguridad antes de restaurar, así que no "
                 "se cambió nada: " + safetyError;
         return false;
     }
 
-    AccountUid uid;
-    if (!activeUser(uid, error))
+    AccountUid uidVar;
+    if (userUid.isZero() && !activeUser(uidVar, error))
         return false;
+    else if (!userUid.isZero()) {
+        uidVar.uid[0] = userUid.high;
+        uidVar.uid[1] = userUid.low;
+    }
 
     const std::string mountName =
         "saverw" + std::to_string(gMountSerial.fetch_add(1));
-    const Result rc = fsdevMountSaveData(mountName.c_str(), applicationId, uid);
+    const Result rc = fsdevMountSaveData(mountName.c_str(), applicationId, uidVar);
     if (R_FAILED(rc)) {
         error = "No se pudieron abrir los datos de guardado de este título.";
         return false;
@@ -317,14 +397,14 @@ bool restoreSaveData(uint64_t applicationId, const std::string& titleId,
 
 bool saveDataAccountAvailable() { return false; }
 
-bool backupSaveData(uint64_t, const std::string&, std::string&,
-                    std::string& error) {
+bool backupSaveData(uint64_t, const std::string&, const std::string&,
+                    std::string&, std::string& error, const AccountUserId&) {
     error = "El acceso a los datos de guardado solo está disponible en la consola.";
     return false;
 }
 
-bool listSaveBackups(const std::string&, std::vector<SaveBackupInfo>&,
-                     std::string&) {
+bool listSaveBackups(const std::string&, const std::string&,
+                     std::vector<SaveBackupInfo>&, std::string&) {
     return true;
 }
 
@@ -334,11 +414,12 @@ bool deleteSaveBackup(const std::string&, std::string& error) {
 }
 
 bool restoreSaveData(uint64_t, const std::string&, const std::string&,
-                     std::string& error) {
+                     const std::string&, std::string& error,
+                     const AccountUserId&) {
     error = "El acceso a los datos de guardado solo está disponible en la consola.";
     return false;
 }
 
-#endif
+#endif  // !__SWITCH__
 
 }  // namespace pipensx

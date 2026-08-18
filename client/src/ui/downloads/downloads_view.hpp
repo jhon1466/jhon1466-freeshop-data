@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <string>
@@ -11,6 +12,7 @@
 #include "app/catalog_service.hpp"
 #include "app/download_manager.hpp"
 #include "app/game_metadata_service.hpp"
+#include "app/switch_deploy.hpp"
 #include "ui/common/message_cells.hpp"
 #include "ui/common/ui_helpers.hpp"
 #include "ui/i18n.hpp"
@@ -26,7 +28,8 @@ class DownloadDataSource : public brls::RecyclerDataSource {
 public:
     explicit DownloadDataSource(MainView* owner) : owner_(owner) {}
 
-    void setTasks(std::vector<DownloadTask> tasks);
+    void setTasks(std::vector<DownloadTask> tasks,
+                  std::string activeDeployTask = {});
     const DownloadTask* taskAt(brls::IndexPath index) const;
     std::string taskIdAt(brls::IndexPath index) const;
     brls::IndexPath indexForTask(const std::string& taskId) const;
@@ -49,9 +52,10 @@ private:
 class MainView : public brls::Box {
 public:
     MainView(DownloadManager* manager, CatalogService* catalog,
-             GameMetadataService* metadata, AppSettings* settings)
+             GameMetadataService* metadata, AppSettings* settings,
+             SwitchDeployService* deploy = nullptr)
         : brls::Box(brls::Axis::COLUMN), manager_(manager), catalog_(catalog),
-          metadata_(metadata), settings_(settings) {
+          metadata_(metadata), settings_(settings), deploy_(deploy) {
         recycler_ = new brls::RecyclerFrame();
         recycler_->setGrow(1);
         recycler_->setPadding(6, 32, 6, 32);
@@ -78,12 +82,14 @@ public:
     }
 
     ~MainView() override {
+        alive_->store(false);
         timer_.stop();
     }
 
     void openDetails(const std::string& taskId) {
         brls::Application::pushActivity(
-            new DetailsActivity(taskId, manager_, catalog_, metadata_));
+            new DetailsActivity(taskId, manager_, catalog_, metadata_,
+                                deploy_));
     }
 
     void openFilePicker() {
@@ -94,17 +100,37 @@ public:
     // O7: per-row context menu on A. Replaces the old blind Y/X hotkeys — the
     // items are labelled and only the ones valid for the current status appear.
     void openRowMenu(const std::string& taskId) {
-        DownloadTask task;
-        bool found = false;
-        for (const auto& candidate : manager_->snapshot())
-            if (candidate.id == taskId) {
-                task = candidate;
-                found = true;
-                break;
-            }
+        auto found = manager_->snapshotUi(taskId);
         if (!found)
             return;
+        DownloadTask task = std::move(*found);
+        const SwitchDeploySnapshot deployState = deploy_ ? deploy_->snapshot()
+                                                         : SwitchDeploySnapshot{};
+        const bool leased = deployState.active() && deployState.taskId == taskId;
+        const bool needInspect =
+            !leased && (task.status == DownloadStatus::Completed ||
+                        task.status == DownloadStatus::Installed) &&
+            deploy_ && taskReadyForSwitchDeploy(task);
+        if (needInspect) {
+            SwitchDeployService* deploy = deploy_;
+            auto alive = alive_;
+            brls::async([this, alive, task = std::move(task), taskId, deploy,
+                         leased]() mutable {
+                SwitchDeployInspection inspection = deploy->inspect(taskId);
+                brls::sync([this, alive, task = std::move(task), taskId, leased,
+                            inspection = std::move(inspection)]() mutable {
+                    if (!alive->load())
+                        return;
+                    showRowMenu(taskId, task, leased, &inspection);
+                });
+            });
+            return;
+        }
+        showRowMenu(taskId, task, leased, nullptr);
+    }
 
+    void showRowMenu(const std::string& taskId, const DownloadTask& task,
+                     bool leased, const SwitchDeployInspection* inspection) {
         std::vector<std::string> labels;
         auto runners =
             std::make_shared<std::vector<std::function<void()>>>();
@@ -114,6 +140,8 @@ public:
         };
 
         add(tr("pipensx/common/details"), [this, taskId] { openDetails(taskId); });
+        if (leased)
+            add(tr("pipensx/deploy/cancel"), [this] { deploy_->cancel(); });
 
         bool active = task.status == DownloadStatus::Queued ||
                       task.status == DownloadStatus::Checking ||
@@ -133,7 +161,17 @@ public:
                 manager_->resume(taskId);
                 startRefreshing(true);
             });
-        if (task.status == DownloadStatus::Completed)
+        if (inspection && switchDeployOffersCopy(inspection->problem)) {
+            add(tr("pipensx/deploy/copy"),
+                [this, inspection = *inspection]() mutable {
+                if (!deploy_)
+                    return;
+                brls::Application::pushActivity(
+                    new SwitchDeployPreviewActivity(std::move(inspection),
+                                                    deploy_));
+            });
+        }
+        if (!leased && task.status == DownloadStatus::Completed)
             add(tr("pipensx/common/verify"), [this, taskId] {
                 manager_->verify(taskId);
                 startRefreshing(true);
@@ -141,25 +179,42 @@ public:
         // Queue reordering: only offered when it would change something —
         // the task must be queued and not already the next one up.
         if (task.status == DownloadStatus::Queued) {
-            std::string firstQueued;
-            for (const auto& candidate : manager_->snapshot()) {
-                if (candidate.status == DownloadStatus::Queued) {
-                    firstQueued = candidate.id;
+            std::vector<std::string> queuedIds;
+            for (const auto& candidate : manager_->snapshotUi())
+                if (candidate.status == DownloadStatus::Queued)
+                    queuedIds.push_back(candidate.id);
+            size_t pos = 0;
+            bool foundQueued = false;
+            for (size_t i = 0; i < queuedIds.size(); ++i)
+                if (queuedIds[i] == taskId) {
+                    pos = i;
+                    foundQueued = true;
                     break;
                 }
+            if (foundQueued) {
+                if (pos > 0)
+                    add(tr("pipensx/downloads/move_up"), [this, taskId] {
+                        std::string error;
+                        if (!manager_->moveTask(taskId, true, error) &&
+                            !error.empty()) {
+                            brls::Application::notify(tr(
+                                "pipensx/downloads/move_to_top_failed", error));
+                        }
+                        startRefreshing(true);
+                    });
+                if (pos + 1 < queuedIds.size())
+                    add(tr("pipensx/downloads/move_down"), [this, taskId] {
+                        std::string error;
+                        if (!manager_->moveTask(taskId, false, error) &&
+                            !error.empty()) {
+                            brls::Application::notify(tr(
+                                "pipensx/downloads/move_to_top_failed", error));
+                        }
+                        startRefreshing(true);
+                    });
             }
-            if (firstQueued != taskId)
-                add(tr("pipensx/downloads/move_to_top"), [this, taskId] {
-                    std::string error;
-                    if (!manager_->moveToFront(taskId, error) &&
-                        !error.empty()) {
-                        brls::Application::notify(
-                            tr("pipensx/downloads/move_to_top_failed", error));
-                    }
-                    startRefreshing(true);
-                });
         }
-        if (task.status != DownloadStatus::Removing)
+        if (!leased && task.status != DownloadStatus::Removing)
             add(tr("pipensx/common/remove"),
                     [this, taskId] { openRemoveDialog(taskId); });
 
@@ -188,11 +243,16 @@ public:
                 startRefreshing(true);
         });
         dialog->addButton(tr("pipensx/downloads/remove_delete"), [this, taskId] {
-            std::string error;
-            if (!manager_->remove(taskId, true, error))
-                brls::Application::notify(error);
-            else
-                startRefreshing(true);
+            DownloadManager* manager = manager_;
+            brls::async([manager, taskId] {
+                std::string error;
+                const bool ok = manager->remove(taskId, true, error);
+                brls::sync([ok, error] {
+                    if (!ok)
+                        brls::Application::notify(error);
+                });
+            });
+            startRefreshing(true);
         });
         dialog->addButton(tr("pipensx/common/cancel"), [] {});
         dialog->open();
@@ -210,6 +270,9 @@ public:
 
     GameMetadataService* metadataService() const { return metadata_; }
     CatalogService* catalogService() const { return catalog_; }
+    const SwitchDeploySnapshot& deploySnapshot() const {
+        return deploySnapshot_;
+    }
 
 private:
     bool containsFocus(brls::View* focused) const {
@@ -233,19 +296,25 @@ private:
     }
 
     void refresh() {
-        auto next = manager_->snapshot();
+        auto next = manager_->snapshotUi();
+        const SwitchDeploySnapshot deployState = deploy_ ? deploy_->snapshot()
+                                                         : SwitchDeploySnapshot{};
+        const std::string activeDeployTask = deployState.active()
+            ? deployState.taskId : std::string();
         if (settings_ && !settings_->get().showCompletedDownloads) {
             next.erase(std::remove_if(next.begin(), next.end(),
-                [](const DownloadTask& task) {
-                    return task.status == DownloadStatus::Completed ||
-                           task.status == DownloadStatus::Installed;
+                [&activeDeployTask](const DownloadTask& task) {
+                    return task.id != activeDeployTask &&
+                           (task.status == DownloadStatus::Completed ||
+                            task.status == DownloadStatus::Installed);
                 }), next.end());
         }
         uint64_t settingsGeneration = settings_ ? settings_->generation() : 0;
         bool settingsChanged = settingsGeneration != settingsGeneration_;
         bool structureChanged = !initialized_ || settingsChanged ||
-                                next.size() != tasks_.size();
-        bool progressChanged = false;
+                                next.size() != tasks_.size() ||
+                                activeDeployTask != activeDeployTask_;
+        bool progressChanged = deployState.generation != deployGeneration_;
         if (!structureChanged) {
             // Scan every task: bailing out on the first progress delta used to
             // hide a later task's status change, so a section reshuffle went
@@ -266,9 +335,7 @@ private:
                     next[i].peers != tasks_[i].peers ||
                     next[i].packagesInstalled != tasks_[i].packagesInstalled ||
                     next[i].installedBytes != tasks_[i].installedBytes ||
-                    next[i].currentPackage != tasks_[i].currentPackage ||
-                    next[i].status == DownloadStatus::Downloading ||
-                    next[i].status == DownloadStatus::Installing;
+                    next[i].currentPackage != tasks_[i].currentPackage;
             }
         }
         if (!structureChanged && !progressChanged)
@@ -278,15 +345,30 @@ private:
         // focused row and re-home focus — once per tick that reads as a blink.
         if (!structureChanged) {
             tasks_ = std::move(next);
-            dataSource_->setTasks(tasks_);
+            deploySnapshot_ = deployState;
+            deployGeneration_ = deployState.generation;
+            dataSource_->setTasks(tasks_, activeDeployTask);
             for (auto* cell : visibleCells<DownloadCell>(recycler_))
                 if (const DownloadTask* task =
                         dataSource_->taskAt(cell->getIndexPath()))
-                    cell->setTask(*task, metadata_, catalog_);
+                    cell->setTask(*task, metadata_, &deploySnapshot_,
+                                  catalog_);
             return;
         }
         brls::View* focused = brls::Application::getCurrentFocus();
         bool ownsFocus = containsFocus(focused);
+        // Overlay (deploy offer dialog, details, …) pushed our cell onto
+        // focusStack. reloadData() would free it and crash on dismiss/Accept.
+        if (activityStackHasOverlay() && !ownsFocus) {
+            tasks_ = std::move(next);
+            deploySnapshot_ = deployState;
+            deployGeneration_ = deployState.generation;
+            activeDeployTask_ = activeDeployTask;
+            settingsGeneration_ = settingsGeneration;
+            initialized_ = true;
+            dataSource_->setTasks(tasks_, activeDeployTask);
+            return;
+        }
         auto* focusedCell = ownsFocus
             ? dynamic_cast<brls::RecyclerCell*>(focused)
             : nullptr;
@@ -295,9 +377,12 @@ private:
             focusedTaskId =
                 dataSource_->taskIdAt(focusedCell->getIndexPath());
         tasks_ = std::move(next);
+        deploySnapshot_ = deployState;
+        deployGeneration_ = deployState.generation;
+        activeDeployTask_ = activeDeployTask;
         settingsGeneration_ = settingsGeneration;
         initialized_ = true;
-        dataSource_->setTasks(tasks_);
+        dataSource_->setTasks(tasks_, activeDeployTask);
         recycler_->setDefaultCellFocus(
             dataSource_->indexForTask(focusedTaskId));
         recycler_->reloadData();
@@ -320,10 +405,50 @@ private:
         }
     }
 
+    void pauseAll() {
+        manager_->pauseAll();
+        startRefreshing(true);
+    }
+
+    void resumeAll() {
+        manager_->resumeAll();
+        startRefreshing(true);
+    }
+
+    void clearCompleted() {
+        bool any = false;
+        for (const DownloadTask& task : manager_->snapshotUi())
+            if (task.status == DownloadStatus::Completed ||
+                task.status == DownloadStatus::Installed) {
+                any = true;
+                break;
+            }
+        if (!any) {
+            brls::Application::notify(
+                tr("pipensx/downloads/clear_completed_none"));
+            return;
+        }
+        auto* dialog =
+            new brls::Dialog(tr("pipensx/downloads/clear_completed_question"));
+        auto run = [this](bool deleteData) {
+            std::string error;
+            if (!manager_->clearCompleted(deleteData, error) && !error.empty())
+                brls::Application::notify(error);
+            startRefreshing(true);
+        };
+        dialog->addButton(tr("pipensx/downloads/remove_keep"),
+                          [run] { run(false); });
+        dialog->addButton(tr("pipensx/downloads/remove_delete"),
+                          [run] { run(true); });
+        dialog->addButton(tr("pipensx/common/cancel"), [] {});
+        dialog->open();
+    }
+
     DownloadManager* manager_;
     CatalogService* catalog_;
     GameMetadataService* metadata_;
     AppSettings* settings_;
+    SwitchDeployService* deploy_;
     EmptyStateView* emptyState_ = nullptr;
     brls::RecyclerFrame* recycler_;
     DownloadDataSource* dataSource_;
@@ -332,6 +457,11 @@ private:
     bool initialized_ = false;
     bool fastRefresh_ = false;
     uint64_t settingsGeneration_ = 0;
+    SwitchDeploySnapshot deploySnapshot_;
+    uint64_t deployGeneration_ = 0;
+    std::string activeDeployTask_;
+    std::shared_ptr<std::atomic<bool>> alive_ =
+        std::make_shared<std::atomic<bool>>(true);
 };
 
 }  // namespace pipensx::ui

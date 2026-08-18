@@ -19,7 +19,6 @@
 #include "app/download_manager.hpp"
 #include "app/game_metadata_service.hpp"
 #include "app/installed_title_service.hpp"
-#include "app/mod_index_service.hpp"
 #include "app/update_service.hpp"
 #include "app/web_server.hpp"
 #include "ui/common/ui_helpers.hpp"
@@ -27,7 +26,9 @@
 #include "ui/debrid_ui.hpp"
 #include "ui/i18n.hpp"
 #include "ui/settings/advanced_settings.hpp"
+#include "ui/settings/network_health.hpp"
 #include "ui/settings/settings_cells.hpp"
+#include "ui/settings/storage_manager.hpp"
 #include "ui/theme.hpp"
 
 namespace pipensx::ui {
@@ -37,10 +38,10 @@ public:
     SettingsView(AppSettings* settings, DownloadManager* manager,
                  CatalogService* catalog, GameMetadataService* metadata,
                  InstalledTitleService* installed, UpdateService* updater = nullptr,
-                 ModIndexService* mods = nullptr, WebServer* webServer = nullptr)
+                 WebServer* webServer = nullptr)
         : brls::Box(brls::Axis::COLUMN), settings_(settings), manager_(manager),
           catalog_(catalog), metadata_(metadata), installed_(installed), updater_(updater),
-          mods_(mods), webServer_(webServer),
+          webServer_(webServer),
           alive_(std::make_shared<std::atomic<bool>>(true)) {
         auto* content = new brls::Box(brls::Axis::COLUMN);
         content->setPadding(24, 34, 24, 34);
@@ -50,7 +51,9 @@ public:
         language_->init(tr("pipensx/settings/language"),
             {tr("pipensx/settings/language_auto"),
              tr("pipensx/settings/language_en"),
-             tr("pipensx/settings/language_es")},
+             tr("pipensx/settings/language_es"),
+             tr("pipensx/settings/language_zh"),
+             tr("pipensx/settings/language_fr")},
             languageIndex(settings_->get().language),
             [this](int selected) {
                 AppSettingsData values = settings_->get();
@@ -156,22 +159,6 @@ public:
         content->addView(burnInShowClock_);
 
         addSection(content, tr("pipensx/settings/section_catalog"));
-        catalogFilter_ = new brls::SelectorCell();
-        catalogFilter_->init(tr("pipensx/settings/visible_releases"),
-            {tr("pipensx/settings/filter_all"),
-             tr("pipensx/settings/filter_games")},
-            settings_->get().catalogFilter == CatalogFilter::Games ? 1 : 0,
-            [this](int selected) {
-                AppSettingsData values = settings_->get();
-                CatalogFilter previous = values.catalogFilter;
-                values.catalogFilter = selected == 1
-                    ? CatalogFilter::Games : CatalogFilter::All;
-                if (!persist(values, "catalog_filter"))
-                    catalogFilter_->setSelection(
-                        previous == CatalogFilter::Games ? 1 : 0, true);
-            });
-        content->addView(catalogFilter_);
-
         refreshCatalog_ = new brls::BooleanCell();
         refreshCatalog_->init(tr("pipensx/settings/auto_refresh"),
             settings_->get().refreshCatalogOnLaunch,
@@ -216,6 +203,30 @@ public:
                     webServer_->setStreamSelection(values.streamSelection);
             });
         content->addView(streamSelection_);
+
+        installLocation_ = new brls::SelectorCell();
+        installLocation_->init(tr("pipensx/settings/install_location"),
+            {tr("pipensx/settings/install_sd"),
+             tr("pipensx/settings/install_nand")},
+            settings_->get().installLocation == InstallLocation::SystemMemory
+                ? 1 : 0,
+            [this](int selected) {
+                AppSettingsData values = settings_->get();
+                InstallLocation previous = values.installLocation;
+                values.installLocation = selected == 1
+                    ? InstallLocation::SystemMemory
+                    : InstallLocation::SdCard;
+                if (!persist(values, "install_location")) {
+                    installLocation_->setSelection(
+                        previous == InstallLocation::SystemMemory ? 1 : 0,
+                        true);
+                    return;
+                }
+                if (manager_)
+                    manager_->setInstallTarget(
+                        installTargetFor(values.installLocation));
+            });
+        content->addView(installLocation_);
 
         maxActiveDownloads_ = new brls::SelectorCell();
         maxActiveDownloads_->init(tr("pipensx/settings/max_active_downloads"),
@@ -315,6 +326,20 @@ public:
             "", [this] { editWebPin(); });
         content->addView(webPin_);
         updateWebCells();
+
+        content->addView(actionCell(tr("pipensx/settings/storage"),
+            tr("pipensx/settings/storage_detail"),
+            [this] {
+                brls::Application::pushActivity(
+                    new StorageManagerActivity(manager_, metadata_));
+            }));
+
+        content->addView(actionCell(tr("pipensx/settings/network_health"),
+            tr("pipensx/settings/network_health_detail"),
+            [this] {
+                brls::Application::pushActivity(
+                    new NetworkHealthActivity(manager_, settings_));
+            }));
 
         content->addView(actionCell(tr("pipensx/settings/advanced"),
             tr("pipensx/settings/advanced_detail"),
@@ -448,7 +473,7 @@ private:
         return true;
     }
 
-    void recordRefreshTime(bool catalog, bool metadata, bool mods = false) {
+    void recordRefreshTime(bool catalog, bool metadata) {
         AppSettingsData values = settings_->get();
         const uint64_t now = now_ms();
         if (catalog) {
@@ -458,22 +483,15 @@ private:
         }
         if (metadata)
             values.lastMetadataRefreshMs = now;
-        if (mods)
-            values.lastModsRefreshMs = now;
         persist(values, catalog ? "catalog_refresh_time"
-                                : mods ? "mods_refresh_time"
-                                       : "metadata_refresh_time");
+                                : "metadata_refresh_time");
     }
 
-    // The manual "Update now" action chains all three sources; each refresh
-    // takes an onDone continuation the chain uses to start the next once the
-    // previous has cleared refreshInFlight_. A failure stops the chain.
+    // The manual "Update now" action chains catalog then artwork.
     void updateAllNow() {
         if (refreshInFlight_)
             return;
-        refreshCatalogNow([this] {
-            refreshMetadataNow([this] { refreshModsNow(); });
-        });
+        refreshCatalogNow([this] { refreshMetadataNow(); });
     }
 
     void refreshCatalogNow(std::function<void()> onDone = {}) {
@@ -542,39 +560,6 @@ private:
                 recordRefreshTime(false, true);
                 brls::Application::notify(
                     tr("pipensx/catalog/updated_artwork", metadata_->size()));
-                if (onDone)
-                    onDone();
-            });
-        });
-    }
-
-    void refreshModsNow(std::function<void()> onDone = {}) {
-        if (refreshInFlight_ || !mods_)
-            return;
-        refreshInFlight_ = true;
-        brls::Application::notify(tr("pipensx/settings/updating_mods"));
-        auto alive = alive_;
-        ModIndexService* mods = mods_;
-        brls::async([this, alive, mods, onDone = std::move(onDone)]() mutable {
-            ModIndexSnapshot snapshot;
-            std::string error;
-            bool ok = mods->fetchLatest(snapshot, error);
-            brls::sync([this, alive, ok, snapshot = std::move(snapshot),
-                        error = std::move(error),
-                        onDone = std::move(onDone)]() mutable {
-                if (!alive->load())
-                    return;
-                refreshInFlight_ = false;
-                if (!ok) {
-                    diagnostic_error("mods", "settings_refresh", "error=%s",
-                                     error.c_str());
-                    brls::Application::notify(error);
-                    return;
-                }
-                mods_->adopt(std::move(snapshot));
-                recordRefreshTime(false, false, true);
-                brls::Application::notify(
-                    tr("pipensx/settings/updated_mods", mods_->size()));
                 if (onDone)
                     onDone();
             });
@@ -778,13 +763,17 @@ private:
         theme_->setSelection(themeModeIndex(values.themeMode), true);
         burnInIdle_->setSelection(burnInIdleIndex(values.burnInIdleSec), true);
         burnInShowClock_->setOn(values.burnInShowClock, false);
-        catalogFilter_->setSelection(
-            values.catalogFilter == CatalogFilter::Games ? 1 : 0, true);
         refreshCatalog_->setOn(values.refreshCatalogOnLaunch, false);
         refreshCatalogSourceDetail();
         streamSelection_->setSelection(
             values.streamSelection == StreamSelection::PackagesOnly ? 1 : 0,
             true);
+        installLocation_->setSelection(
+            values.installLocation == InstallLocation::SystemMemory ? 1 : 0,
+            true);
+        if (manager_)
+            manager_->setInstallTarget(
+                installTargetFor(values.installLocation));
         showCompleted_->setOn(values.showCompletedDownloads, false);
         checkForUpdates_->setOn(values.checkForUpdatesOnLaunch, false);
         soundEffects_->setOn(values.soundEffectsEnabled, false);
@@ -806,20 +795,19 @@ private:
     GameMetadataService* metadata_;
     InstalledTitleService* installed_;
     UpdateService* updater_;
-    ModIndexService* mods_;
     WebServer* webServer_;
     std::shared_ptr<std::atomic<bool>> alive_;
     brls::SelectorCell* language_ = nullptr;
     brls::SelectorCell* theme_ = nullptr;
     brls::SelectorCell* burnInIdle_ = nullptr;
     brls::BooleanCell* burnInShowClock_ = nullptr;
-    brls::SelectorCell* catalogFilter_ = nullptr;
     brls::BooleanCell* refreshCatalog_ = nullptr;
     brls::DetailCell* catalogSource_ = nullptr;
     brls::BooleanCell* checkForUpdates_ = nullptr;
     brls::BooleanCell* soundEffects_ = nullptr;
     brls::DetailCell* updateAction_ = nullptr;
     brls::SelectorCell* streamSelection_ = nullptr;
+    brls::SelectorCell* installLocation_ = nullptr;
     brls::SelectorCell* maxActiveDownloads_ = nullptr;
     brls::BooleanCell* showCompleted_ = nullptr;
     brls::BooleanCell* webToggle_ = nullptr;

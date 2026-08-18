@@ -37,7 +37,7 @@
 namespace pipensx::ui {
 
 enum class NavIconType {
-    Catalog, Downloads, Installed, Explorer, Saves, Mtp, Settings, Help, About
+    Catalog, Ports, Downloads, Installed, Updates, Explorer, Saves, Mtp, Settings, Help, About
 };
 
 // Shrinks the stock sidebar so the icon rail + expanded menu both look right.
@@ -82,8 +82,10 @@ public:
         const float gy = y + (height - s) / 2.0f;
         switch (type_) {
             case NavIconType::Catalog:   drawCatalog(vg, gx, gy, s); break;
+            case NavIconType::Ports:     drawPorts(vg, gx, gy, s); break;
             case NavIconType::Downloads: drawDownloads(vg, gx, gy, s); break;
             case NavIconType::Installed: drawInstalled(vg, gx, gy, s); break;
+            case NavIconType::Updates:   drawUpdates(vg, gx, gy, s); break;
             case NavIconType::Explorer:    drawExplorer(vg, gx, gy, s); break;
             case NavIconType::Saves:       drawSaves(vg, gx, gy, s); break;
             case NavIconType::Mtp:         drawMtp(vg, gx, gy, s); break;
@@ -105,6 +107,17 @@ private:
             nvgRoundedRect(vg, px, py, cell, cell, 2.0f);
             nvgStroke(vg);
         }
+    }
+
+    // Game cartridge: body plus a left-edge notch.
+    static void drawPorts(NVGcontext* vg, float gx, float gy, float s) {
+        nvgBeginPath(vg);
+        nvgRoundedRect(vg, gx + 4.0f, gy + 2.0f, s - 8.0f, s - 4.0f, 3.0f);
+        nvgStroke(vg);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, gx + 8.0f, gy + 2.0f);
+        nvgLineTo(vg, gx + 8.0f, gy + s - 2.0f);
+        nvgStroke(vg);
     }
 
     // Down arrow dropping into a tray.
@@ -246,6 +259,25 @@ private:
         nvgStroke(vg);
         nvgBeginPath(vg);
         nvgCircle(vg, cx, gy + 18.5f, 1.4f);
+        nvgFill(vg);
+    }
+
+    // Circular arrow (refresh/update): a loop with an arrowhead at the end.
+    static void drawUpdates(NVGcontext* vg, float gx, float gy, float s) {
+        const float cx = gx + s / 2.0f;
+        const float cy = gy + s / 2.0f;
+        const float r = s / 2.0f - 3.0f;
+        nvgBeginPath(vg);
+        nvgArc(vg, cx, cy, r, -M_PI / 2.0f, M_PI * 3.0f / 2.0f, NVG_CW);
+        nvgStroke(vg);
+        // Arrowhead at the end of the arc.
+        const float ax = cx + r * cosf(M_PI * 3.0f / 2.0f);
+        const float ay = cy + r * sinf(M_PI * 3.0f / 2.0f);
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, ax, ay);
+        nvgLineTo(vg, ax - 4.0f, ay - 3.0f);
+        nvgLineTo(vg, ax - 4.0f, ay + 3.0f);
+        nvgClosePath(vg);
         nvgFill(vg);
     }
 

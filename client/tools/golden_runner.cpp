@@ -570,7 +570,7 @@ int main(int argc, char** argv) {
         const uint8_t skip = static_cast<uint8_t>(pipensx::FileAction::Skip);
         std::vector<uint8_t> updateActions = {install, skip, install};
         updateChooser = new UpdateFileChooserActivity(
-            std::move(preview), std::move(updateActions), {},
+            &manager, std::move(preview), std::move(updateActions), {},
             [&](std::vector<uint8_t> mask, std::vector<uint8_t>) {
                 updateChooserMask = std::move(mask);
             },
@@ -618,10 +618,10 @@ int main(int argc, char** argv) {
             pipensx::StreamSelection::PackagesOnly);
     } else if (screen == "downloads") {
         activity = new GoldenActivity(
-            new MainView(&manager, &metadata, &settings));
+            new MainView(&manager, &catalog, &metadata, &settings));
     } else if (screen == "downloads-back") {
         downloadsBackFrame = new MainFrame();
-        auto* downloadsView = new MainView(&manager, &metadata, &settings);
+        auto* downloadsView = new MainView(&manager, &catalog, &metadata, &settings);
         downloadsBackFrame->addNavTab(
             tr("pipensx/nav/downloads"), NavIconType::Downloads,
             [downloadsView] { return downloadsView; });
@@ -636,7 +636,7 @@ int main(int argc, char** argv) {
         });
         tabs->addNavTab(tr("pipensx/nav/downloads"), NavIconType::Downloads,
                         [&] {
-            return new MainView(&manager, &metadata, &settings);
+            return new MainView(&manager, &catalog, &metadata, &settings);
         });
         tabs->addNavTab(tr("pipensx/nav/installed"), NavIconType::Installed,
                         [&] {
@@ -670,7 +670,7 @@ int main(int argc, char** argv) {
         });
         tabs->addNavTab(tr("pipensx/nav/downloads"), NavIconType::Downloads,
                         [&] {
-            return new MainView(&manager, &metadata, &settings);
+            return new MainView(&manager, &catalog, &metadata, &settings);
         });
         tabs->attachStorageFooter(&manager);
         activity = new GoldenActivity(tabs);
@@ -703,7 +703,7 @@ int main(int argc, char** argv) {
         });
         tabs->addNavTab(tr("pipensx/nav/downloads"), NavIconType::Downloads,
                         [&] {
-            return new MainView(&manager, &metadata, &settings);
+            return new MainView(&manager, &catalog, &metadata, &settings);
         });
         tabs->attachStorageFooter(&manager);
         activity = new GoldenActivity(tabs, /*withExitAction=*/true);

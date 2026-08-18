@@ -44,9 +44,11 @@ public:
         body->setJustifyContent(brls::JustifyContent::CENTER);
         title_ = new brls::Label();
         title_->setSingleLine(true);
+        title_->setAutoAnimate(false);
         title_->setFontSize(18);
         meta_ = new brls::Label();
         meta_->setSingleLine(true);
+        meta_->setAutoAnimate(false);
         meta_->setFontSize(14);
         meta_->setMarginTop(4);
         meta_->setTextColor(theme::textTertiary());
@@ -77,6 +79,16 @@ public:
         title_->setTextColor(theme::textPrimary());
         title_->setText(failure.entry.title);
         meta_->setText(failure.error);
+    }
+
+    void onFocusGained() override {
+        brls::RecyclerCell::onFocusGained();
+        title_->setAnimated(true);
+    }
+
+    void onFocusLost() override {
+        brls::RecyclerCell::onFocusLost();
+        title_->setAnimated(false);
     }
 
 private:
@@ -414,7 +426,10 @@ private:
             selected += item.selected ? 1 : 0;
         const auto estimate = prepared_->selectedSpace();
         storage_ = pipensx::queryStorageSpace(manager_->rootPath());
-        const auto check = pipensx::assessInstallSpace(estimate, storage_);
+        packageStorage_ = pipensx::queryInstallStorageSpace(
+            manager_->installTarget(), manager_->rootPath());
+        const auto check = pipensx::assessTransferSpace(
+            estimate, storage_, packageStorage_);
 
         std::string text = tr("pipensx/batch/ready_selected", selected);
         if (!prepared_->failures().empty())
@@ -430,9 +445,14 @@ private:
             text += "\n" + storage_.error;
         status_->setText(text);
 
-        if (storage_.available)
+        meter_->setHeader(storageMeterHeader(manager_->installTarget()));
+        const StorageSpaceSnapshot& meterStorage =
+            estimate.packageFiles > 0 ? packageStorage_ : storage_;
+        if (meterStorage.available)
             meter_->setEstimate(
-                storage_.totalBytes, storage_.freeBytes, estimate.requiredBytes,
+                meterStorage.totalBytes, meterStorage.freeBytes,
+                estimate.packageFiles > 0 ? estimate.packageBytes
+                                          : estimate.requiredBytes,
                 check.status == InstallSpaceCheckStatus::Insufficient,
                 estimate.certainty == SpaceEstimateCertainty::CompressedUnknown);
         else
@@ -455,7 +475,10 @@ private:
             return;
         }
         storage_ = pipensx::queryStorageSpace(manager_->rootPath());
-        const auto check = pipensx::assessInstallSpace(estimate, storage_);
+        packageStorage_ = pipensx::queryInstallStorageSpace(
+            manager_->installTarget(), manager_->rootPath());
+        const auto check = pipensx::assessTransferSpace(
+            estimate, storage_, packageStorage_);
         if (check.status == InstallSpaceCheckStatus::Insufficient) {
             refreshSummary();
             brls::Application::notify(tr("pipensx/batch/no_space"));
@@ -521,6 +544,7 @@ private:
     std::shared_ptr<DebridProvider> debridProvider_;
     std::shared_ptr<BatchPreparation> prepared_;
     StorageSpaceSnapshot storage_;
+    StorageSpaceSnapshot packageStorage_;
     brls::AppletFrame* frame_ = nullptr;
     brls::Label* status_ = nullptr;
     StorageMeter* meter_ = nullptr;

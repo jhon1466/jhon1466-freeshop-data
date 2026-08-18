@@ -34,9 +34,14 @@ TorboxTransport scriptedTransport(
 }
 
 RangeFetcher memoryFetcher(const std::string& content) {
-    return [content](const std::string&, uint64_t offset,
+    return [content](const std::string&, uint64_t offset, uint64_t endExclusive,
                      const std::function<bool(const uint8_t*, size_t)>& sink,
                      const std::function<bool()>&, std::string& error) {
+        if (endExclusive != 0) {
+            // Range request not supported in test fetcher
+            error = kDebridRangeNotSupported;
+            return false;
+        }
         if (offset > content.size()) {
             error = "range past end";
             return false;
@@ -164,9 +169,10 @@ void testResumeUsesOnDiskOffset() {
     }
     uint64_t seenOffset = UINT64_MAX;
     RangeFetcher fetcher = [&content, &seenOffset](
-        const std::string&, uint64_t offset,
+        const std::string&, uint64_t offset, uint64_t endExclusive,
         const std::function<bool(const uint8_t*, size_t)>& sink,
         const std::function<bool()>&, std::string&) {
+        if (endExclusive != 0) return false;
         seenOffset = offset;
         std::string slice = content.substr(offset);
         return sink(reinterpret_cast<const uint8_t*>(slice.data()),
@@ -281,9 +287,10 @@ void testPartialStreamFailureRetriesWithoutPacerDeadlock() {
     std::string content(nsp.begin(), nsp.end());
     int attempts = 0;
     RangeFetcher fetcher = [&content, &attempts](
-        const std::string&, uint64_t,
+        const std::string&, uint64_t, uint64_t endExclusive,
         const std::function<bool(const uint8_t*, size_t)>& sink,
         const std::function<bool()>&, std::string& error) {
+        if (endExclusive != 0) return false;
         ++attempts;
         const size_t partial = content.size() / 2;
         if (!sink(reinterpret_cast<const uint8_t*>(content.data()), partial))

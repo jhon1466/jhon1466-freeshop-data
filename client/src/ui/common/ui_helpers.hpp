@@ -52,6 +52,20 @@ inline pipensx::install::InstallStorageTarget installTargetFor(InstallLocation v
                : pipensx::install::InstallStorageTarget::SdCard;
 }
 
+inline std::string installDestinationLabel(
+    pipensx::install::InstallStorageTarget target) {
+    return target == pipensx::install::InstallStorageTarget::Nand
+               ? tr("pipensx/settings/install_nand")
+               : tr("pipensx/settings/install_sd");
+}
+
+inline std::string storageMeterHeader(
+    pipensx::install::InstallStorageTarget target) {
+    return target == pipensx::install::InstallStorageTarget::Nand
+               ? tr("pipensx/settings/install_nand")
+               : tr("pipensx/torrent/sd_card");
+}
+
 inline std::atomic<uint32_t> gCatalogTempSerial{0};
 inline constexpr const char* TelemetryFlagPath =
     "sdmc:/switch/freeshop-client/throughput_telemetry.enabled";
@@ -114,7 +128,7 @@ inline SystemSnapshot captureSystemSnapshot(DownloadManager* manager,
                                             GameMetadataService* metadata,
                                             InstalledTitleService* installed) {
     SystemSnapshot snapshot{};
-    for (const DownloadTask& task : manager->snapshot()) {
+    for (const DownloadTask& task : manager->snapshotUi()) {
         if (task.status == DownloadStatus::Error)
             ++snapshot.errors;
         else if (task.status != DownloadStatus::Completed &&
@@ -213,6 +227,13 @@ inline brls::Box* recyclerHost(brls::RecyclerFrame* recycler) {
     return host;
 }
 
+// Dialog / preview / details sit on the activity stack above the root tab.
+// Reloading a recycler while an overlay owns focus frees cells that Borealis
+// still keeps on focusStack — dismiss then UAF in giveFocus/onFocusLost.
+inline bool activityStackHasOverlay() {
+    return brls::Application::getActivitiesStack().size() > 1;
+}
+
 // The cells currently on screen — enough to repaint a row in place instead of
 // paying a full reloadData(), which recycles every cell, snaps the scroll to 0
 // and re-homes focus.
@@ -245,8 +266,12 @@ std::vector<Cell*> visibleCells(brls::RecyclerFrame* recycler) {
 // re-layout plus a nanovg text re-measure — so compare first and skip the
 // no-op sets.
 inline void setTextIfChanged(brls::Label* label, const std::string& text) {
-    if (label && label->getFullText() != text)
+    if (!label)
+        return;
+    if (label->getFullText() != text)
         label->setText(text);
+    label->setVisibility(text.empty() ? brls::Visibility::GONE
+                                      : brls::Visibility::VISIBLE);
 }
 
 inline void setTextIfChanged(brls::Button* button, const std::string& text) {
@@ -297,6 +322,25 @@ inline float installProgressOf(const DownloadTask& task) {
         return 0.0f;
     return std::min(1.0f, static_cast<float>(task.installedBytes) /
                               static_cast<float>(task.installTotalBytes));
+}
+
+// Stream-install bar: per-package install % resets to 0 on each NSP. Combine
+// committed packages with the current package fraction, and never drop below
+// the selection-aware download fraction so the bar does not jump backwards.
+inline float streamInstallProgressOf(const DownloadTask& task) {
+    const float wanted = progressOf(task);
+    if (task.mode != TransferMode::StreamInstall || task.packageCount == 0)
+        return wanted;
+    float packageFrac = 0.0f;
+    if (task.status == DownloadStatus::Installing ||
+        task.status == DownloadStatus::Committing)
+        packageFrac = installProgressOf(task);
+    else if (task.packagesInstalled >= task.packageCount)
+        packageFrac = 1.0f;
+    const float fromPackages =
+        (static_cast<float>(task.packagesInstalled) + packageFrac) /
+        static_cast<float>(task.packageCount);
+    return std::min(1.0f, std::max(wanted, fromPackages));
 }
 
 inline int percentOf(float progress) {
@@ -390,11 +434,15 @@ inline std::string taskStatusText(const DownloadTask& task) {
         case DownloadStatus::Downloading:
         case DownloadStatus::Verifying:
             return withPercent(downloadStatusLabel(task.status),
-                               percentOf(progressOf(task)));
+                               percentOf(task.mode == TransferMode::StreamInstall
+                                             ? streamInstallProgressOf(task)
+                                             : progressOf(task)));
         case DownloadStatus::Installing:
         case DownloadStatus::Committing:
             return withPercent(downloadStatusLabel(task.status),
-                               percentOf(installProgressOf(task)));
+                               percentOf(task.mode == TransferMode::StreamInstall
+                                             ? streamInstallProgressOf(task)
+                                             : installProgressOf(task)));
         case DownloadStatus::Paused:
         case DownloadStatus::Error: {
             const std::string label = downloadStatusLabel(task.status);

@@ -7,6 +7,7 @@
 
 #include "app/catalog_service.hpp"
 #include "app/download_manager.hpp"
+#include "app/switch_deploy.hpp"
 #include "ui/common/async_image.hpp"
 #include "ui/common/progress_bar.hpp"
 #include "ui/common/ui_helpers.hpp"
@@ -55,10 +56,12 @@ public:
         top->setAlignItems(brls::AlignItems::CENTER);
         title_ = new brls::Label();
         title_->setSingleLine(true);
+        title_->setAutoAnimate(false);
         title_->setFontSize(22);
         title_->setGrow(1);
         status_ = new brls::Label();
         status_->setSingleLine(true);
+        status_->setAutoAnimate(false);
         status_->setFontSize(17);
         status_->setTextColor(theme::accent());
         top->addView(title_);
@@ -66,6 +69,7 @@ public:
 
         meta_ = new brls::Label();
         meta_->setSingleLine(true);
+        meta_->setAutoAnimate(false);
         meta_->setFontSize(16);
         meta_->setMarginTop(6);
         meta_->setMarginBottom(9);
@@ -78,19 +82,64 @@ public:
     }
 
     void setTask(const DownloadTask& task, GameMetadataService* service,
+                 const SwitchDeploySnapshot* deploy = nullptr,
                  CatalogService* catalog = nullptr) {
+        const auto wanted = downloadProgressBytes(task);
+        const uint64_t deployGen = deploy ? deploy->generation : 0;
+        const uint64_t deployBytes = deploy && deploy->taskId == task.id
+            ? deploy->bytesCopied : 0;
+        const bool sameTask = paintedId_ == task.id;
+        if (sameTask &&
+            paintedStatus_ == task.status &&
+            paintedCompleted_ == wanted.first &&
+            paintedTotal_ == wanted.second &&
+            paintedSpeed_ == task.speedBytesPerSecond &&
+            paintedInstallSpeed_ == task.installSpeedBytesPerSecond &&
+            paintedPeers_ == task.peers &&
+            paintedPackages_ == task.packagesInstalled &&
+            paintedPackageCount_ == task.packageCount &&
+            paintedInstalled_ == task.installedBytes &&
+            paintedCurrentPackage_ == task.currentPackage &&
+            paintedError_ == task.error &&
+            paintedFetch_ == task.fetchProgress &&
+            paintedDeployGen_ == deployGen &&
+            paintedDeployBytes_ == deployBytes)
+            return;
+
+        paintedId_ = task.id;
+        paintedStatus_ = task.status;
+        paintedCompleted_ = wanted.first;
+        paintedTotal_ = wanted.second;
+        paintedSpeed_ = task.speedBytesPerSecond;
+        paintedInstallSpeed_ = task.installSpeedBytesPerSecond;
+        paintedPeers_ = task.peers;
+        paintedPackages_ = task.packagesInstalled;
+        paintedPackageCount_ = task.packageCount;
+        paintedInstalled_ = task.installedBytes;
+        paintedCurrentPackage_ = task.currentPackage;
+        paintedError_ = task.error;
+        paintedFetch_ = task.fetchProgress;
+        paintedDeployGen_ = deployGen;
+        paintedDeployBytes_ = deployBytes;
+
         setTextIfChanged(title_, task.name);
         setTextIfChanged(placeholder_, placeholderLetter(task.name));
         setTextIfChanged(status_, taskStatusText(task));
         status_->setTextColor(statusColor(task.status));
         const float progress = task.status == DownloadStatus::Fetching
             ? static_cast<float>(task.fetchProgress)
+            : (task.mode == TransferMode::StreamInstall &&
+               (task.status == DownloadStatus::Downloading ||
+                task.status == DownloadStatus::Installing ||
+                task.status == DownloadStatus::Committing ||
+                task.status == DownloadStatus::Checking ||
+                task.status == DownloadStatus::Verifying))
+                ? streamInstallProgressOf(task)
             : (task.status == DownloadStatus::Installing ||
                task.status == DownloadStatus::Committing)
                 ? installProgressOf(task) : progressOf(task);
         progress_->setProgress(progress);
 
-        const auto wanted = downloadProgressBytes(task);
         std::string meta = formatBytes(wanted.first) + " / " +
                            formatBytes(wanted.second);
         if (task.status == DownloadStatus::Installing ||
@@ -109,32 +158,85 @@ public:
             meta = tr("pipensx/downloads/cell_fetching",
                       percentOf(static_cast<float>(task.fetchProgress)));
         } else if (task.status == DownloadStatus::Downloading) {
-            meta += "   " + formatSpeed(task.speedBytesPerSecond) +
-                    tr("pipensx/downloads/cell_peers", task.peers);
+            meta += "   " + formatSpeed(task.speedBytesPerSecond);
+            if (task.source == TaskSource::Torrent)
+                meta += tr("pipensx/downloads/cell_peers", task.peers);
             if (auto eta = taskEtaSeconds(task, now_ms()))
                 meta += tr("pipensx/downloads/cell_eta",
                            formatEtaSeconds(*eta));
         } else if (task.status == DownloadStatus::Queued)
-            meta += tr("pipensx/downloads/cell_waiting");
+            meta += deploy && deploy->active() &&
+                            task.mode == TransferMode::StreamInstall
+                ? tr("pipensx/deploy/waiting_stream")
+                : tr("pipensx/downloads/cell_waiting");
         else if (task.status == DownloadStatus::Error && !task.error.empty())
             meta += "   " + task.error;
+        if (deploy && deploy->taskId == task.id) {
+            if (deploy->active()) {
+                const char* phaseKey =
+                    deploy->phase == SwitchDeployPhase::Preparing
+                        ? "pipensx/deploy/phase_preparing"
+                        : deploy->phase == SwitchDeployPhase::Extracting
+                              ? "pipensx/deploy/phase_extracting"
+                              : "pipensx/deploy/phase_copying";
+                setTextIfChanged(status_, tr(phaseKey));
+                status_->setTextColor(theme::accent());
+                progress_->setProgress(deploy->totalBytes
+                    ? static_cast<float>(deploy->bytesCopied) /
+                          static_cast<float>(deploy->totalBytes)
+                    : 0.0f);
+                meta = tr("pipensx/deploy/cell_progress",
+                          percentOf(deploy->totalBytes
+                                        ? static_cast<float>(deploy->bytesCopied) /
+                                              static_cast<float>(deploy->totalBytes)
+                                        : 0.0f),
+                          deploy->filesCopied, deploy->totalFiles,
+                          formatBytes(deploy->bytesCopied),
+                          formatBytes(deploy->totalBytes));
+                if (!deploy->currentPath.empty())
+                    meta += "   " + deploy->currentPath;
+            } else if (deploy->phase == SwitchDeployPhase::Completed) {
+                setTextIfChanged(status_, tr("pipensx/deploy/completed"));
+                status_->setTextColor(theme::success());
+            } else if (deploy->phase == SwitchDeployPhase::Failed) {
+                setTextIfChanged(status_, tr("pipensx/deploy/failed"));
+                status_->setTextColor(theme::error());
+                if (!deploy->detail.empty())
+                    meta = deploy->detail;
+            } else if (deploy->phase == SwitchDeployPhase::Cancelled) {
+                setTextIfChanged(status_, tr("pipensx/deploy/cancelled"));
+            }
+        }
         setTextIfChanged(meta_, meta);
 
-        // Most torrent-sourced titles have no entry in the (much smaller)
-        // metadata-match index — fall back to the catalog's own poster,
-        // present for every catalog entry regardless of a metadata match.
-        std::string iconUrl;
-        if (service) {
-            const GameMetadata* found = service->findByInfoHash(task.id);
-            if (found)
-                iconUrl = found->iconUrl;
+        if (!sameTask) {
+            // Most torrent-sourced titles have no entry in the (much smaller)
+            // metadata-match index — fall back to the catalog's own poster,
+            // present for every catalog entry regardless of a metadata match.
+            std::string iconUrl;
+            if (service) {
+                const GameMetadata* found = service->findByInfoHash(task.id);
+                if (found)
+                    iconUrl = found->iconUrl;
+            }
+            if (iconUrl.empty() && catalog) {
+                const CatalogEntry* entry = catalog->findByInfoHash(task.id);
+                if (entry)
+                    iconUrl = entry->posterUrl;
+            }
+            setArtworkUrl(image_, service, iconUrl, currentIconUrl_,
+                          imageState_);
         }
-        if (iconUrl.empty() && catalog) {
-            const CatalogEntry* entry = catalog->findByInfoHash(task.id);
-            if (entry)
-                iconUrl = entry->posterUrl;
-        }
-        setArtworkUrl(image_, service, iconUrl, currentIconUrl_, imageState_);
+    }
+
+    void onFocusGained() override {
+        brls::RecyclerCell::onFocusGained();
+        title_->setAnimated(true);
+    }
+
+    void onFocusLost() override {
+        brls::RecyclerCell::onFocusLost();
+        title_->setAnimated(false);
     }
 
 private:
@@ -148,6 +250,21 @@ private:
     std::string currentIconUrl_;
     std::shared_ptr<ImageRequestState> imageState_ =
         std::make_shared<ImageRequestState>();
+    std::string paintedId_;
+    DownloadStatus paintedStatus_ = DownloadStatus::Queued;
+    uint64_t paintedCompleted_ = 0;
+    uint64_t paintedTotal_ = 0;
+    uint64_t paintedSpeed_ = 0;
+    uint64_t paintedInstallSpeed_ = 0;
+    uint32_t paintedPeers_ = 0;
+    uint32_t paintedPackages_ = 0;
+    uint32_t paintedPackageCount_ = 0;
+    uint64_t paintedInstalled_ = 0;
+    std::string paintedCurrentPackage_;
+    std::string paintedError_;
+    double paintedFetch_ = 0;
+    uint64_t paintedDeployGen_ = 0;
+    uint64_t paintedDeployBytes_ = 0;
 };
 
 }  // namespace pipensx::ui
