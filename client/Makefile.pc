@@ -84,6 +84,7 @@ DEBRID_TRANSFER_TEST_TARGET = tests/test_debrid_transfer
 TB_PROVIDER_TEST_TARGET = tests/test_torbox_provider
 TS_PROVIDER_TEST_TARGET = tests/test_torrserver_provider
 TASK_FILES_TEST_TARGET = tests/test_task_files
+TASK_PROGRESS_TEST_TARGET = tests/test_task_progress
 SWITCH_DEPLOY_TEST_TARGET = tests/test_switch_deploy
 PORT_ARCHIVE_TEST_TARGET = tests/test_port_archive
 TEST_SRCS = \
@@ -288,7 +289,7 @@ test: $(TEST_TARGET) $(MANAGER_TEST_TARGET) $(PACKAGE_TEST_TARGET) \
 		$(DEBRID_TRANSFER_TEST_TARGET) \
 		$(TB_PROVIDER_TEST_TARGET) $(TS_PROVIDER_TEST_TARGET) \
 		$(TASK_FILES_TEST_TARGET) $(SWITCH_DEPLOY_TEST_TARGET) \
-		$(PORT_ARCHIVE_TEST_TARGET)
+		$(PORT_ARCHIVE_TEST_TARGET) $(TASK_PROGRESS_TEST_TARGET)
 	./$(TEST_TARGET)
 	./$(PACKAGE_TEST_TARGET)
 	./$(CATALOG_TEST_TARGET)
@@ -325,6 +326,7 @@ test: $(TEST_TARGET) $(MANAGER_TEST_TARGET) $(PACKAGE_TEST_TARGET) \
 	./$(TASK_FILES_TEST_TARGET)
 	./$(SWITCH_DEPLOY_TEST_TARGET)
 	./$(PORT_ARCHIVE_TEST_TARGET)
+	./$(TASK_PROGRESS_TEST_TARGET)
 	python3 tests/test_bug_report_decode.py
 	python3 tests/test_telemetry_analyzer.py
 	python3 scripts/check_i18n.py
@@ -449,6 +451,11 @@ $(TASK_FILES_TEST_TARGET): tests/test_task_files.cpp \
 		src/core/metainfo.o src/core/sha1.o \
 		src/core/util.o src/platform/storage.o
 	$(CXX) $(CXXFLAGS) -Isrc -o $@ $^ $(LDFLAGS)
+
+# Header-only: exercises the inline progress fractions in download_manager.hpp.
+$(TASK_PROGRESS_TEST_TARGET): tests/test_task_progress.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -Isrc -o $@ $<
 
 $(SWITCH_DEPLOY_TEST_TARGET): tests/test_switch_deploy.cpp \
 		src/app/switch_deploy.o src/app/task_files.o \
