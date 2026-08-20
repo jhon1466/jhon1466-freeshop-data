@@ -1,4 +1,5 @@
 #include "game_metadata_service.hpp"
+#include "curl_https.hpp"
 #include "snapshot_zstd.hpp"
 
 extern "C" {
@@ -194,9 +195,19 @@ bool httpGetOnce(const std::string& url, size_t limit,
         });
     curl_easy_setopt(curl, CURLOPT_XFERINFODATA,
                      const_cast<std::atomic<bool>*>(stopping));
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, verifyTls ? 1L : 0L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, verifyTls ? 2L : 0L);
+    // Trusted fetches (manifest/index) verify the peer against the bundled
+    // Switch roots; plain images keep TLS off because relay hosts serve
+    // mixed content. curlApplyTrustedSsl only touches CAINFO on __SWITCH__,
+    // so the PC build keeps using the OpenSSL system store.
+    if (verifyTls)
+        curlApplyTrustedSsl(curl);
+    else {
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    }
     curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+    char sslError[CURL_ERROR_SIZE] = {0};
+    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, sslError);
     CURLcode result = curl_easy_perform(curl);
     long status = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
@@ -205,6 +216,14 @@ bool httpGetOnce(const std::string& url, size_t limit,
     if (effectiveUrl)
         *effectiveUrl = effective ? std::string(effective) : std::string();
     curl_easy_cleanup(curl);
+    if (result != CURLE_OK) {
+        log_msg("[metadata] http fail verifyTls=%d url=%s rc=%d (%s) "
+                "errbuf='%s'\n", verifyTls ? 1 : 0, url.c_str(), result,
+                curl_easy_strerror(result),
+                sslError[0] ? sslError : "-");
+        if (sslError[0])
+            log_msg("[metadata] ssl detail: %s\n", sslError);
+    }
     if (result != CURLE_OK || status < 200 || status >= 300 ||
         buffer.overflow) {
         if (buffer.overflow)

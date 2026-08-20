@@ -162,10 +162,14 @@ bool httpGet(const std::string& url, std::string& body, std::string& error,
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 45L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeHttp);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buffer);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+    // Peer verify stays on and imports the bundled Switch roots; without
+    // CAINFO the console's own store is the only trust anchor and the fetch
+    // fails with an SSL certificate error when a root is missing there.
+    curlApplyTrustedSsl(curl);
     curlPinHttpsOnly(curl);
     curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+    char sslError[CURL_ERROR_SIZE] = {0};
+    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, sslError);
     CURLcode result = curl_easy_perform(curl);
     long status = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
@@ -175,6 +179,13 @@ bool httpGet(const std::string& url, std::string& body, std::string& error,
         effective ? std::string(effective) : std::string();
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
+    if (result != CURLE_OK) {
+        log_msg("[catalog] http fail url=%s rc=%d (%s) errbuf='%s'\n",
+                url.c_str(), result, curl_easy_strerror(result),
+                sslError[0] ? sslError : "-");
+        if (sslError[0])
+            log_msg("[catalog] ssl detail: %s\n", sslError);
+    }
     if (result != CURLE_OK || status < 200 || status >= 300 ||
         buffer.overflow) {
         if (buffer.overflow)

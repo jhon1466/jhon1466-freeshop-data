@@ -1,4 +1,5 @@
 #include "update_service.hpp"
+#include "curl_https.hpp"
 #include "update_transaction.h"
 
 #include <curl/curl.h>
@@ -143,8 +144,10 @@ bool configureCurl(CURL* curl, const std::string& url, TransferKind kind,
         curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
         curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, 30L);
     }
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+    // Peer verify stays on and imports the bundled Switch roots; without
+    // CAINFO the console's own store is the only trust anchor and release
+    // checks fail with an SSL certificate error.
+    curlApplyTrustedSsl(curl);
     curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
     return true;
 }
@@ -167,11 +170,20 @@ bool fetchText(const std::string& url, size_t limit, std::string& body,
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
     curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, reportTransferProgress);
     curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &progress);
+    char sslError[CURL_ERROR_SIZE] = {0};
+    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, sslError);
     CURLcode result = curl_easy_perform(curl);
     long status = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
+    if (result != CURLE_OK) {
+        log_msg("[update] fetchText fail url=%s rc=%d (%s) errbuf='%s'\n",
+                url.c_str(), result, curl_easy_strerror(result),
+                sslError[0] ? sslError : "-");
+        if (sslError[0])
+            log_msg("[update] ssl detail: %s\n", sslError);
+    }
     if (buffer.overflow)
         error = "La respuesta de actualización superó su límite de tamaño.";
     else if (result != CURLE_OK)
@@ -207,11 +219,20 @@ bool fetchFile(const std::string& url, const std::string& path, size_t limit,
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
     curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, reportTransferProgress);
     curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &progress);
+    char sslError[CURL_ERROR_SIZE] = {0};
+    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, sslError);
     CURLcode result = curl_easy_perform(curl);
     long status = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
     curl_easy_cleanup(curl);
     writer.output.close();
+    if (result != CURLE_OK) {
+        log_msg("[update] fetchFile fail url=%s rc=%d (%s) errbuf='%s'\n",
+                url.c_str(), result, curl_easy_strerror(result),
+                sslError[0] ? sslError : "-");
+        if (sslError[0])
+            log_msg("[update] ssl detail: %s\n", sslError);
+    }
     if (writer.overflow)
         error = "La descarga de actualización superó su límite de tamaño.";
     else if (result != CURLE_OK)
