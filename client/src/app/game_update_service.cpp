@@ -7,13 +7,19 @@
 #include "download_manager.hpp"
 #include "catalog_presentation.hpp"
 
+#include <borealis/extern/nlohmann/json.hpp>
+
 #include <algorithm>
+#include <cassert>
 #include <cctype>
+#include <cerrno>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <unordered_set>
+#include <unistd.h>
 
 namespace pipensx {
 
@@ -33,6 +39,44 @@ bool parseDecimal(const std::string& text, uint64_t& out) {
     out = value;
     return true;
 }
+
+constexpr int kStateVersion = 1;
+
+bool parseState(const std::string& name, GameUpdateState& out) {
+    if (name == "update_available") {
+        out = GameUpdateState::UpdateAvailable;
+        return true;
+    }
+    if (name == "up_to_date") {
+        out = GameUpdateState::UpToDate;
+        return true;
+    }
+    if (name == "source_unknown") {
+        out = GameUpdateState::SourceUnknown;
+        return true;
+    }
+    if (name == "check_error") {
+        out = GameUpdateState::CheckError;
+        return true;
+    }
+    if (name == "not_checked") {
+        out = GameUpdateState::NotChecked;
+        return true;
+    }
+    return false;
+}
+
+const char* stateName(GameUpdateState state) {
+    switch (state) {
+        case GameUpdateState::NotChecked: return "not_checked";
+        case GameUpdateState::Checking: return "checking";
+        case GameUpdateState::UpToDate: return "up_to_date";
+        case GameUpdateState::UpdateAvailable: return "update_available";
+        case GameUpdateState::SourceUnknown: return "source_unknown";
+        case GameUpdateState::CheckError: return "check_error";
+    }
+    return "not_checked";
+}
 } // namespace
 
 GameUpdateService::GameUpdateService(GameMetadataService* metadata,
@@ -40,24 +84,108 @@ GameUpdateService::GameUpdateService(GameMetadataService* metadata,
     : metadata_(metadata), cachePath_(cachePath) {}
 
 bool GameUpdateService::load(std::string& error) {
-    std::ifstream input(cachePath_);
+    error.clear();
+    results_.clear();
+    ignored_.clear();
+    generation_ = 0;
+    lastMetadataRefreshMs_ = 0;
+
+    std::ifstream input(cachePath_ + "/game_updates.json", std::ios::binary);
     if (!input) {
-        // First run: no cache yet.
+        // First run: no state file yet.
         return true;
     }
 
-    std::stringstream buffer;
-    buffer << input.rdbuf();
-    std::string json = buffer.str();
+    std::string data((std::istreambuf_iterator<char>(input)),
+                     std::istreambuf_iterator<char>());
+    nlohmann::json root = nlohmann::json::parse(data, nullptr, false);
+    if (root.is_discarded() || !root.is_object() ||
+        root.value("version", 0) != kStateVersion) {
+        error = "Game-update state file is not valid.";
+        return false;
+    }
+    if (root.contains("results") && root["results"].is_array()) {
+        for (const auto& item : root["results"]) {
+            if (!item.is_object())
+                continue;
+            const std::string titleId = item.value("title_id", "");
+            if (titleId.empty())
+                continue;
+            GameUpdateResult result;
+            if (!parseState(item.value("state", ""), result.state))
+                continue;
+            result.titleId = titleId;
+            result.latestVersion = item.value("latest_version", "");
+            result.foundVersion = item.value("found_version", "");
+            result.error = item.value("error", "");
+            result.ok = result.state == GameUpdateState::UpdateAvailable;
+            results_[titleId] = std::move(result);
+        }
+    }
+    if (root.contains("ignored_title_ids") &&
+        root["ignored_title_ids"].is_array()) {
+        for (const auto& item : root["ignored_title_ids"]) {
+            if (!item.is_string())
+                continue;
+            const std::string titleId = item.get<std::string>();
+            if (!titleId.empty())
+                ignored_.insert(titleId);
+        }
+    }
+    return true;
+}
 
-    // Simple JSON parse for the results array
-    size_t pos = json.find("\"results\"");
-    if (pos == std::string::npos)
+bool GameUpdateService::save(std::string& error) const {
+    error.clear();
+    nlohmann::json root = nlohmann::json::object();
+    root["version"] = kStateVersion;
+    nlohmann::json list = nlohmann::json::array();
+    for (const auto& entry : results_) {
+        nlohmann::json item = nlohmann::json::object();
+        item["title_id"] = entry.first;
+        item["state"] = stateName(entry.second.state);
+        item["latest_version"] = entry.second.latestVersion;
+        item["found_version"] = entry.second.foundVersion;
+        item["error"] = entry.second.error;
+        list.push_back(std::move(item));
+    }
+    root["results"] = std::move(list);
+    nlohmann::json ignored = nlohmann::json::array();
+    for (const std::string& titleId : ignored_)
+        ignored.push_back(titleId);
+    root["ignored_title_ids"] = std::move(ignored);
+
+    const std::string path = cachePath_ + "/game_updates.json";
+    const std::string temporary = path + ".tmp";
+    {
+        std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+        if (!output) {
+            error = "Unable to create game-update state file.";
+            return false;
+        }
+        output << root.dump(2) << "\n";
+        output.flush();
+        if (!output.good()) {
+            unlink(temporary.c_str());
+            error = "Unable to write game-update state file.";
+            return false;
+        }
+    }
+    if (rename(temporary.c_str(), path.c_str()) == 0)
         return true;
 
-    // Very simple parse - in reality you'd use a proper JSON library
-    // For now just return true and let checkAll rebuild
-    return true;
+    // Same fallback as AppSettings::write: some FAT drivers refuse to rename
+    // over an existing file.
+    int renameError = errno;
+    if ((unlink(path.c_str()) == 0 || errno == ENOENT) &&
+        rename(temporary.c_str(), path.c_str()) == 0) {
+        return true;
+    }
+    int finalError = errno;
+    unlink(temporary.c_str());
+    error = std::string("Unable to replace game-update state file: ") +
+            std::strerror(finalError ? finalError : renameError);
+    return false;
 }
 
 void GameUpdateService::checkAll(const std::vector<InstalledTitle>& installed,
@@ -84,6 +212,10 @@ void GameUpdateService::checkAll(const std::vector<InstalledTitle>& installed,
             results_[result.titleId] = std::move(result);
         }
     }
+    error.clear();
+    std::string saveError;
+    if (!save(saveError))
+        error = std::move(saveError);
 }
 
 void GameUpdateService::checkOne(const std::string& titleId,
@@ -97,6 +229,38 @@ void GameUpdateService::checkOne(const std::string& titleId,
         return;
     }
     error = "Not implemented: checkOne needs installed service";
+}
+
+bool GameUpdateService::isIgnored(const std::string& titleId) const {
+    return ignored_.count(titleId) != 0;
+}
+
+void GameUpdateService::setIgnored(const std::string& titleId, bool ignored,
+                                   std::string& error) {
+    error.clear();
+    if (ignored)
+        ignored_.insert(titleId);
+    else
+        ignored_.erase(titleId);
+    // The cached verdict stays in place so un-ignore flips the row straight
+    // back into the Updates section; every query filters by isIgnored().
+    std::string saveError;
+    if (!save(saveError))
+        error = std::move(saveError);
+}
+
+size_t GameUpdateService::availableCount(
+    const std::vector<InstalledTitle>& titles) const {
+    size_t count = 0;
+    for (const InstalledTitle& title : titles) {
+        if (ignored_.count(title.titleId))
+            continue;
+        auto it = results_.find(title.titleId);
+        if (it != results_.end() &&
+            it->second.state == GameUpdateState::UpdateAvailable)
+            ++count;
+    }
+    return count;
 }
 
 bool GameUpdateService::stale(uint64_t installedGen, uint64_t lastMetadataRefreshMs) const {

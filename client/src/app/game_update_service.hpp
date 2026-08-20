@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <functional>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -66,6 +67,19 @@ struct GameUpdateService {
     // Whether the update cache is stale for the current generation.
     bool stale(uint64_t installedGen, uint64_t lastMetadataRefreshMs) const;
 
+    // Ignored titles stay out of the Updates section and the update badge;
+    // the choice persists in the same state file as the check results.
+    bool isIgnored(const std::string& titleId) const;
+    void setIgnored(const std::string& titleId, bool ignored,
+                    std::string& error);
+
+    // UpdateAvailable titles that are not ignored.
+    size_t availableCount(const std::vector<InstalledTitle>& titles) const;
+
+    // Persist the check results and the ignored set. Called by checkAll /
+    // setIgnored; exposed for the UI when a re-check happens elsewhere.
+    bool save(std::string& error) const;
+
     // Called by the update-file chooser when it resolves the selected
     // file actions into a DownloadTaskSpec.
     std::vector<uint8_t> buildUpdateActions(const std::string& titleId,
@@ -90,6 +104,7 @@ private:
     InstalledTitleService* installed_ = nullptr;
     std::string cachePath_;
     GameUpdateResults results_;
+    std::set<std::string> ignored_;
     uint64_t generation_ = 0;
     uint64_t lastMetadataRefreshMs_ = 0;
 

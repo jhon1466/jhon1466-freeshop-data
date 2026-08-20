@@ -63,6 +63,7 @@
   "common": {
     "choose_files": "Choose files",
     "close": "Close",
+    "more": "More",
     "ok": "OK",
     "cancel": "Cancel",
     "clear": "Clear",
@@ -343,6 +344,11 @@
     "update_chip_not_checked": "Not checked",
     "update_chip_no_source": "No source",
     "update_chip_error": "Error",
+    "update_chip_ignored": "Ignored",
+    "section_other": "Other",
+    "ignore_updates": "Ignore updates",
+    "unignore_updates": "Stop ignoring updates",
+    "update_action": "Update",
     "update_no_bundle": "No release bundle for this title in the index",
     "update_choose_bundle": "Choose a release bundle",
     "update_install_confirm": "Download update {1} for {0}?",
@@ -697,7 +703,8 @@
   "updates": {
     "update_all": "Update All",
     "update_all_empty": "No updates available.",
-    "update_all_started": "Queuing {} updates&"
+    "update_all_started": "Queuing {} updates&",
+    "count": "{} updates available"
   },
   "deploy": {
     "exit_question": "Cancel installation and exit?",

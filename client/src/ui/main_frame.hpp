@@ -589,8 +589,10 @@ public:
 
     // Like TabFrame::addTab, but also plants an icon between the active-accent
     // bar and the label, and remembers the label so it can be folded away.
+    // countBadge reserves the trailing update-count pill (Updates tab) and
+    // lets setUpdateCountBadge drive it from outside.
     void addNavTab(const std::string& label, NavIconType icon,
-                   brls::TabViewCreator creator) {
+                   brls::TabViewCreator creator, bool countBadge = false) {
         this->addTab(label, std::move(creator));
         const int index = static_cast<int>(this->sidebar->getItemsSize()) - 1;
         brls::SidebarItem* item = this->sidebar->getItem(index);
@@ -607,6 +609,38 @@ public:
             if (collapsed_)
                 labelView->setVisibility(brls::Visibility::GONE);
         }
+        if (countBadge) {
+            updateBadge_ = new brls::Box();
+            updateBadge_->setFocusable(false);
+            updateBadge_->setHeight(24);
+            updateBadge_->setCornerRadius(theme::kRadiusSmall);
+            updateBadge_->setBackgroundColor(theme::accent());
+            updateBadge_->setPadding(0, 8, 0, 8);
+            updateBadge_->setMarginLeft(8);
+            updateBadge_->setMarginRight(8);
+            updateBadge_->setShrink(0.0f);
+            updateBadge_->setAlignSelf(brls::AlignSelf::CENTER);
+            updateBadge_->setAlignItems(brls::AlignItems::CENTER);
+            updateBadge_->setJustifyContent(brls::JustifyContent::CENTER);
+            updateBadge_->setVisibility(brls::Visibility::GONE);
+            updateBadgeLabel_ = new brls::Label();
+            updateBadgeLabel_->setFontSize(theme::kFontCaption);
+            updateBadgeLabel_->setTextColor(theme::onAccent());
+            updateBadge_->addView(updateBadgeLabel_);
+            item->addView(updateBadge_);
+        }
+    }
+
+    void setUpdateCountBadge(size_t count) {
+        updateBadgeCount_ = count;
+        if (!updateBadge_ || !updateBadgeLabel_)
+            return;
+        if (count == 0 || collapsed_) {
+            updateBadge_->setVisibility(brls::Visibility::GONE);
+            return;
+        }
+        updateBadgeLabel_->setText(count > 99 ? "99+" : std::to_string(count));
+        updateBadge_->setVisibility(brls::Visibility::VISIBLE);
     }
 
     void setCollapsed(bool collapsed) {
@@ -617,6 +651,11 @@ public:
         for (brls::View* label : labels_)
             label->setVisibility(collapsed ? brls::Visibility::GONE
                                            : brls::Visibility::VISIBLE);
+        if (updateBadge_)
+            updateBadge_->setVisibility(
+                collapsed || updateBadgeCount_ == 0
+                    ? brls::Visibility::GONE
+                    : brls::Visibility::VISIBLE);
     }
 
 protected:
@@ -636,6 +675,9 @@ private:
     bool collapsed_ = false;
     float expandedWidth_ = 248.0f;
     std::vector<brls::View*> labels_;
+    brls::Box* updateBadge_ = nullptr;
+    brls::Label* updateBadgeLabel_ = nullptr;
+    size_t updateBadgeCount_ = 0;
 };
 
 }  // namespace pipensx::ui

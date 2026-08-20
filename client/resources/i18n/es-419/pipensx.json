@@ -63,6 +63,7 @@
   "common": {
     "choose_files": "Elegir archivos",
     "close": "Cerrar",
+    "more": "Más",
     "ok": "OK",
     "cancel": "Cancelar",
     "clear": "Borrar",
@@ -343,6 +344,11 @@
     "update_chip_not_checked": "Sin verificar",
     "update_chip_no_source": "Sin fuente",
     "update_chip_error": "Error",
+    "update_chip_ignored": "Ignorada",
+    "section_other": "Otros",
+    "ignore_updates": "Ignorar actualizaciones",
+    "unignore_updates": "Dejar de ignorar actualizaciones",
+    "update_action": "Actualizar",
     "update_no_bundle": "No hay paquete de lanzamiento para este título en el índice",
     "update_choose_bundle": "Elegir un paquete de lanzamiento",
     "update_install_confirm": "¿Descargar la actualización {1} para {0}?",
@@ -697,7 +703,8 @@
   "updates": {
     "update_all": "Actualizar todo",
     "update_all_empty": "No hay actualizaciones disponibles.",
-    "update_all_started": "Poniendo en cola {} actualizaciones&"
+    "update_all_started": "Poniendo en cola {} actualizaciones&",
+    "count": "{} actualizaciones disponibles"
   },
   "deploy": {
     "exit_question": "¿Cancelar instalación y salir?",

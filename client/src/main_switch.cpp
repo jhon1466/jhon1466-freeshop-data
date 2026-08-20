@@ -151,11 +151,15 @@ public:
             return new MainView(manager, catalog, metadata, settings, deploy);
         });
         tabs->addNavTab(tr("pipensx/nav/updates"), NavIconType::Updates,
-                        [installed, manager, metadata, settings, catalog, gameUpdates, deploy, portUninstall] {
-            return new InstalledView(installed, manager, metadata, settings,
-                                     catalog, gameUpdates, true, nullptr,
-                                     deploy, portUninstall);
-        });
+                        [installed, manager, metadata, settings, catalog, gameUpdates, deploy, portUninstall, tabs] {
+            InstalledView* view =
+                new InstalledView(installed, manager, metadata, settings,
+                                  catalog, gameUpdates, true, nullptr,
+                                  deploy, portUninstall);
+            view->setOnUpdateCount(
+                [tabs](size_t count) { tabs->setUpdateCountBadge(count); });
+            return view;
+        }, true);
         tabs->addNavTab(tr("pipensx/nav/explorer"), NavIconType::Explorer,
                         [settings] {
             return new ExplorerView(settings);
