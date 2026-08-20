@@ -217,7 +217,6 @@ set(UI_SOURCES
     src/ui/saves/save_detail_activity.cpp
     src/ui/settings/about_view.cpp
     src/ui/settings/bug_report_view.cpp
-    src/ui/settings/storage_manager.hpp
 )
 
 if (NOT PIPENSX_GOLDEN)
