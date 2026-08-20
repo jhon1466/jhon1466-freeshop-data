@@ -12,6 +12,9 @@
 #include <iostream>
 #include <optional>
 #include <thread>
+#include <utility>
+#include <vector>
+#include <zlib.h>
 
 namespace fs = std::filesystem;
 using namespace pipensx;
@@ -56,8 +59,111 @@ void writeCompletedQueue(const std::string& root, const std::string& taskId,
     queue += "5:totali" + std::to_string(total) + "e";
     queue += "16:wanted-completedi" + std::to_string(total) + "e";
     queue += "12:wanted-totali" + std::to_string(total) + "e";
-    queue += "ee7:versioni6ee";
+    queue += "ee7:versioni5ee";
     writeFile(root + "/queue.bencode", queue);
+}
+
+// Minimal stored (method 0) ZIP writer for the deploy fixture. The harness
+// links zlib already (extractZip), so CRC-32 comes from there.
+std::string writeStoredZip(
+    const std::vector<std::pair<std::string, std::string>>& entries) {
+    auto crcOf = [](const std::string& data) {
+        return static_cast<uint32_t>(crc32(0L, reinterpret_cast<const Bytef*>(
+                                                  data.data()),
+                                          static_cast<uInt>(data.size())));
+    };
+    std::string out;
+    auto put16 = [&out](uint16_t value) {
+        out.push_back(static_cast<char>(value & 0xff));
+        out.push_back(static_cast<char>(value >> 8));
+    };
+    auto put32 = [&out](uint32_t value) {
+        for (int i = 0; i < 4; ++i)
+            out.push_back(static_cast<char>((value >> (8 * i)) & 0xff));
+    };
+    std::vector<uint32_t> offsets;
+    for (const auto& entry : entries) {
+        offsets.push_back(static_cast<uint32_t>(out.size()));
+        put32(0x04034b50); // local header
+        put16(20);         // version needed
+        put16(0);          // flags
+        put16(0);          // method: stored
+        put16(0);          // mtime
+        put16(0);          // mdate
+        put32(crcOf(entry.second));
+        put32(static_cast<uint32_t>(entry.second.size()));
+        put32(static_cast<uint32_t>(entry.second.size()));
+        put16(static_cast<uint16_t>(entry.first.size()));
+        put16(0); // extra
+        out += entry.first;
+        out += entry.second;
+    }
+    const uint32_t directoryOffset = static_cast<uint32_t>(out.size());
+    for (size_t i = 0; i < entries.size(); ++i) {
+        put32(0x02014b50); // central directory
+        put16(20);         // version made by
+        put16(20);         // version needed
+        put16(0);          // flags
+        put16(0);          // method: stored
+        put16(0);          // mtime
+        put16(0);          // mdate
+        put32(crcOf(entries[i].second));
+        put32(static_cast<uint32_t>(entries[i].second.size()));
+        put32(static_cast<uint32_t>(entries[i].second.size()));
+        put16(static_cast<uint16_t>(entries[i].first.size()));
+        put16(0); // extra
+        put16(0); // comment
+        put16(0); // disk
+        put16(0); // internal attrs
+        put32(0); // external attrs
+        put32(offsets[i]);
+        out += entries[i].first;
+    }
+    const uint32_t directorySize =
+        static_cast<uint32_t>(out.size()) - directoryOffset;
+    put32(0x06054b50); // end of central directory
+    put16(0);          // disk
+    put16(0);          // directory disk
+    put16(static_cast<uint16_t>(entries.size()));
+    put16(static_cast<uint16_t>(entries.size()));
+    put32(directorySize);
+    put32(directoryOffset);
+    put16(0); // comment
+    return out;
+}
+
+// Writes a v1 receipt (no unpacked member list) for the loose files.
+void writeV1Receipt(const std::string& root, const std::string& taskId,
+                    const std::vector<std::pair<std::string, uint64_t>>& files) {
+    std::string blob = "d5:filesl";
+    for (const auto& file : files) {
+        blob += "d6:digest" + bstr(std::string(32, '\0'));
+        blob += "4:path" + bstr(file.first);
+        blob += "4:size" + std::string("i") + std::to_string(file.second) +
+                "ee";
+    }
+    blob += "e4:task" + bstr(taskId);
+    blob += "7:versioni1ee";
+    writeFile(root + "/deployments/" + taskId + ".bencode", blob);
+}
+
+// Writes a v2 receipt (unpacked member list, no recorded titles).
+void writeV2Receipt(const std::string& root, const std::string& taskId,
+                    const std::vector<std::pair<std::string, uint64_t>>& files,
+                    const std::vector<std::string>& unpacked) {
+    std::string blob = "d5:filesl";
+    for (const auto& file : files) {
+        blob += "d6:digest" + bstr(std::string(32, '\0'));
+        blob += "4:path" + bstr(file.first);
+        blob += "4:size" + std::string("i") + std::to_string(file.second) +
+                "ee";
+    }
+    blob += "e4:task" + bstr(taskId);
+    blob += "8:unpackedl";
+    for (const std::string& path : unpacked)
+        blob += bstr(path);
+    blob += "e7:versioni2ee";
+    writeFile(root + "/deployments/" + taskId + ".bencode", blob);
 }
 
 } // namespace
@@ -171,6 +277,7 @@ int main() {
     assert(inspection.plan.files.size() == 2);
     assert(inspection.plan.ignoredFiles == 2);
     assert(inspection.plan.bytesToCopy == nro.size() + asset.size());
+    assert(!switchDeployFullyInstalled(inspection));
     assert(inspection.plan.files[0].destinationRelativePath ==
                "MyPort/MyPort.nro" ||
            inspection.plan.files[1].destinationRelativePath ==
@@ -276,11 +383,13 @@ int main() {
     assert(inspection.canStart());
     assert(inspection.plan.identicalFiles == 2);
     assert(inspection.plan.bytesToCopy == 0);
+    assert(switchDeployFullyInstalled(inspection));
 
     writeFile(target + "/MyPort/data.bin", "DIFFERENT");
     inspection = deploy.inspect(taskId);
     assert(inspection.problem == SwitchDeployProblem::Conflict);
     assert(inspection.plan.conflictFiles == 1);
+    assert(!switchDeployFullyInstalled(inspection));
     assert(deploy.receiptState(taskId) == SwitchDeployReceiptState::Modified);
 
     deploy.shutdown();
@@ -398,6 +507,373 @@ int main() {
     oneTapDeploy.clearAutoCopy(oneTapId);
     assert(!oneTapDeploy.autoCopyArmed(oneTapId));
     oneTapDeploy.shutdown();
+
+    // Deleting the installed files must not restart the copy. A one-tap
+    // auto-copy that already ran leaves a receipt; when the user removes the
+    // files from /switch afterwards, the next app start must not offer or
+    // auto-start the copy again - restoring them is a manual choice.
+    const std::string rearmRoot = root + "/rearm";
+    const std::string rearmData = rearmRoot + "/downloads/task";
+    const std::string rearmTarget = rearmRoot + "/sd/switch";
+    const std::string rearmId = "dddddddddddddddddddddddddddddddddddddddd";
+    fs::create_directories(rearmTarget);
+    writeFile(rearmData + "/Release/switch/MyPort/MyPort.nro", nro);
+    writeFile(rearmData + "/Release/switch/MyPort/data.bin", asset);
+    writeFile(rearmData + "/Release/switch/MyPort/update.nsp", package);
+    writeFile(rearmData + "/Release/README.txt", external);
+    writeCompletedQueue(rearmRoot, rearmId, rearmData,
+                        nro.size() + asset.size() + package.size() +
+                            external.size(),
+                        "install", "installed");
+    TaskFileManifest rearmManifest = manifest;
+    rearmManifest.taskId = rearmId;
+    assert(saveTaskFileManifest(rearmRoot, rearmManifest, error));
+    DownloadManager rearmManager(rearmRoot, false);
+    SwitchDeployService rearmDeploy(rearmManager, rearmRoot, rearmTarget);
+    assert(rearmDeploy.armAutoCopy(rearmId));
+    rearmDeploy.scheduleDeployOfferPoll();
+    std::optional<SwitchDeployService::PendingOffer> rearmOffer;
+    for (int i = 0; i < 500 && !rearmOffer; ++i) {
+        rearmOffer = rearmDeploy.takePendingDeployOffer();
+        if (!rearmOffer)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    assert(rearmOffer);
+    assert(rearmOffer->autoStart);
+    assert(rearmOffer->inspection.canStart());
+    rearmDeploy.dismissDeployOffer(rearmId);
+    assert(rearmDeploy.start(rearmId, error, false));
+    for (int i = 0; i < 500 && rearmDeploy.snapshot().active(); ++i)
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    assert(rearmDeploy.snapshot().phase == SwitchDeployPhase::Completed);
+    assert(rearmDeploy.receiptState(rearmId) == SwitchDeployReceiptState::Valid);
+    // The one-tap marker survives until the next offer poll, like on console.
+    assert(rearmDeploy.autoCopyArmed(rearmId));
+    // User deletes the installed port files from /switch.
+    fs::remove_all(rearmTarget + "/MyPort");
+    assert(rearmDeploy.receiptState(rearmId) ==
+           SwitchDeployReceiptState::Modified);
+    rearmDeploy.shutdown();
+    {
+        // Fresh service = fresh offer bookkeeping, as after an app restart.
+        SwitchDeployService fresh(rearmManager, rearmRoot, rearmTarget);
+        fresh.scheduleDeployOfferPoll();
+        std::optional<SwitchDeployService::PendingOffer> rearmAgain;
+        for (int i = 0; i < 500 && !rearmAgain; ++i) {
+            rearmAgain = fresh.takePendingDeployOffer();
+            if (!rearmAgain)
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        assert(!rearmAgain);
+        assert(!fresh.autoCopyArmed(rearmId));
+    }
+
+    // ------------------------------------------------------------------
+    // Receipt v2 + PortUninstallService: a port with loose files and a
+    // switch.zip archive.
+    const std::string portRoot = root + "/port";
+    const std::string portData = portRoot + "/downloads/task";
+    const std::string portTarget = portRoot + "/sd/switch";
+    const std::string portId = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+    fs::create_directories(portTarget);
+    const std::string extra1 = "EXTRA-ONE";
+    const std::string extra2 = std::string(512, 'E');
+    const std::string skipInZip = "SKIP-ME";
+    const std::string zipBytes = writeStoredZip({
+        {"switch/MyPort/extra1.bin", extra1},
+        {"switch/MyPort/sub/extra2.bin", extra2},
+        {"other/skip.bin", skipInZip},
+    });
+    writeFile(portData + "/Release/switch/MyPort/MyPort.nro", nro);
+    writeFile(portData + "/Release/switch/MyPort/data.bin", asset);
+    writeFile(portData + "/Release/switch.zip", zipBytes);
+    writeCompletedQueue(portRoot, portId, portData,
+                        nro.size() + asset.size() + zipBytes.size());
+    TaskFileManifest portManifest;
+    portManifest.taskId = portId;
+    TaskFileRecord portNro = nroRecord;
+    portManifest.files.push_back(portNro);
+    TaskFileRecord portAsset = assetRecord;
+    portManifest.files.push_back(portAsset);
+    TaskFileRecord portZip;
+    portZip.logicalPath = "Release/switch.zip";
+    portZip.localPath = portZip.logicalPath;
+    portZip.size = zipBytes.size();
+    portManifest.files.push_back(portZip);
+    assert(saveTaskFileManifest(portRoot, portManifest, error));
+    DownloadManager portManager(portRoot, false);
+    SwitchDeployService portDeploy(portManager, portRoot, portTarget);
+    PortUninstallService portUninstall(portManager, portRoot, portTarget);
+    assert(portUninstall.receiptExists(portId) == false);
+    SwitchDeployInspection portInspection = portDeploy.inspect(portId);
+    assert(portInspection.canStart());
+    assert(portInspection.plan.files.size() == 2);
+    assert(portInspection.plan.archives.size() == 1);
+    assert(portInspection.plan.archives[0].extractable);
+    assert(portDeploy.start(portId, error));
+    for (int i = 0; i < 500 && portDeploy.snapshot().active(); ++i)
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    assert(portDeploy.snapshot().phase == SwitchDeployPhase::Completed);
+    assert(fs::exists(portTarget + "/MyPort/MyPort.nro"));
+    assert(fs::exists(portTarget + "/MyPort/data.bin"));
+    assert(fs::exists(portTarget + "/MyPort/extra1.bin"));
+    assert(fs::exists(portTarget + "/MyPort/sub/extra2.bin"));
+    assert(!fs::exists(portTarget + "/other/skip.bin"));
+    // v2 receipt roundtrip: unpacked members are saved and verified on load.
+    assert(portDeploy.receiptState(portId) == SwitchDeployReceiptState::Valid);
+    assert(portUninstall.receiptExists(portId));
+    fs::remove(portTarget + "/MyPort/extra1.bin");
+    assert(portDeploy.receiptState(portId) == SwitchDeployReceiptState::Modified);
+    writeFile(portTarget + "/MyPort/extra1.bin", extra1);
+    assert(portDeploy.receiptState(portId) == SwitchDeployReceiptState::Valid);
+    portDeploy.shutdown();
+
+    // The plan drives the dialog: 2 receipt copies + 2 extracted members,
+    // the task and its data are still present.
+    PortUninstallPlan portPlan;
+    assert(portUninstall.plan("0100000000eeee00", {portId}, portPlan));
+    assert(portPlan.taskIds == std::vector<std::string>({portId}));
+    assert(portPlan.switchFiles.size() == 4);
+    assert(portPlan.switchBytes ==
+           nro.size() + asset.size() + extra1.size() + extra2.size());
+    assert(portPlan.wholeFolders.empty());
+    assert(portPlan.hasTask);
+    assert(portPlan.taskHasData);
+
+    // Files outside the receipt are not touched: an unknown file inside the
+    // port folder survives, the folder itself stays, empty subfolders go.
+    writeFile(portTarget + "/MyPort/user-save.bin", "KEEP");
+    writeFile(portTarget + "/KeepMe/keep.txt", "KEEP");
+    PortUninstallReport portReport;
+    assert(portUninstall.uninstallPort(
+        portPlan,
+        [](std::string&) { return true; },
+        portReport));
+    assert(portReport.complete());
+    assert(portReport.shortcutRemoved);
+    assert(portReport.filesRemoved == 4);
+    assert(portReport.filesMissing == 0);
+    assert(portReport.filesFailed == 0);
+    assert(!fs::exists(portTarget + "/MyPort/MyPort.nro"));
+    assert(!fs::exists(portTarget + "/MyPort/data.bin"));
+    assert(!fs::exists(portTarget + "/MyPort/extra1.bin"));
+    assert(!fs::exists(portTarget + "/MyPort/sub"));
+    assert(fs::exists(portTarget + "/MyPort/user-save.bin"));
+    assert(fs::exists(portTarget + "/KeepMe/keep.txt"));
+    assert(!portManager.snapshot(portId));
+    assert(!fs::exists(portData));
+    assert(!portUninstall.receiptExists(portId));
+    assert(!fs::exists(portRoot + "/deployments/" + portId + ".auto"));
+    portManager.shutdown();
+
+    // ------------------------------------------------------------------
+    // v1 receipt with the archive still in the task data: the unpacked list
+    // is rebuilt from the archive headers.
+    const std::string v1Root = root + "/v1";
+    const std::string v1Data = v1Root + "/downloads/task";
+    const std::string v1Target = v1Root + "/sd/switch";
+    const std::string v1Id = "ffffffffffffffffffffffffffffffffffffffff";
+    fs::create_directories(v1Target);
+    writeFile(v1Data + "/Release/switch/MyPort/MyPort.nro", nro);
+    writeFile(v1Data + "/Release/switch/MyPort/data.bin", asset);
+    writeFile(v1Data + "/Release/switch.zip", zipBytes);
+    writeCompletedQueue(v1Root, v1Id, v1Data,
+                        nro.size() + asset.size() + zipBytes.size());
+    TaskFileManifest v1Manifest = portManifest;
+    v1Manifest.taskId = v1Id;
+    assert(saveTaskFileManifest(v1Root, v1Manifest, error));
+    writeV1Receipt(v1Root, v1Id,
+                   {{"MyPort/MyPort.nro", nro.size()},
+                    {"MyPort/data.bin", asset.size()}});
+    // Simulate the deployment the receipt describes.
+    writeFile(v1Target + "/MyPort/MyPort.nro", nro);
+    writeFile(v1Target + "/MyPort/data.bin", asset);
+    writeFile(v1Target + "/MyPort/extra1.bin", extra1);
+    writeFile(v1Target + "/MyPort/sub/extra2.bin", extra2);
+    DownloadManager v1Manager(v1Root, false);
+    PortUninstallService v1Uninstall(v1Manager, v1Root, v1Target);
+    assert(v1Uninstall.receiptExists(v1Id));
+    PortUninstallPlan v1Plan;
+    assert(v1Uninstall.plan("0100000000ffff00", {v1Id}, v1Plan));
+    assert(v1Plan.wholeFolders.empty());
+    assert(v1Plan.switchFiles.size() == 4);
+    assert(v1Plan.switchBytes ==
+           nro.size() + asset.size() + extra1.size() + extra2.size());
+    assert(v1Uninstall.uninstallPort(
+        v1Plan, [](std::string&) { return true; }, portReport));
+    assert(portReport.complete());
+    assert(!fs::exists(v1Target + "/MyPort"));
+    assert(!v1Manager.snapshot(v1Id));
+    assert(!v1Uninstall.receiptExists(v1Id));
+    v1Manager.shutdown();
+
+    // ------------------------------------------------------------------
+    // Old v1 receipt + the archive deleted from the task data: the exact
+    // unpacked list is unknowable, so the plan switches to removing the
+    // receipt's top-level folders entirely.
+    const std::string goneRoot = root + "/v1-gone";
+    const std::string goneData = goneRoot + "/downloads/task";
+    const std::string goneTarget = goneRoot + "/sd/switch";
+    const std::string goneId = "abababababababababababababababababababab";
+    fs::create_directories(goneTarget);
+    writeFile(goneData + "/Release/switch/MyPort/MyPort.nro", nro);
+    writeFile(goneData + "/Release/switch/MyPort/data.bin", asset);
+    // No switch.zip: it was deleted from the task data after the copy.
+    writeCompletedQueue(goneRoot, goneId, goneData,
+                        nro.size() + asset.size());
+    TaskFileManifest goneManifest;
+    goneManifest.taskId = goneId;
+    TaskFileRecord goneNro = nroRecord;
+    goneManifest.files.push_back(goneNro);
+    TaskFileRecord goneAsset = assetRecord;
+    goneManifest.files.push_back(goneAsset);
+    TaskFileRecord goneZip;
+    goneZip.logicalPath = "Release/switch.zip";
+    goneZip.localPath = goneZip.logicalPath;
+    goneZip.size = zipBytes.size();
+    goneManifest.files.push_back(goneZip);
+    assert(saveTaskFileManifest(goneRoot, goneManifest, error));
+    writeV1Receipt(goneRoot, goneId,
+                   {{"MyPort/MyPort.nro", nro.size()},
+                    {"MyPort/data.bin", asset.size()}});
+    // The deployed state has files the receipt cannot know about.
+    writeFile(goneTarget + "/MyPort/MyPort.nro", nro);
+    writeFile(goneTarget + "/MyPort/data.bin", asset);
+    writeFile(goneTarget + "/MyPort/mystery.dat", "MYSTERY");
+    writeFile(goneTarget + "/KeepMe/keep.txt", "KEEP");
+    DownloadManager goneManager(goneRoot, false);
+    PortUninstallService goneUninstall(goneManager, goneRoot, goneTarget);
+    PortUninstallPlan gonePlan;
+    assert(goneUninstall.plan("0100000000abab00", {goneId}, gonePlan));
+    assert(gonePlan.wholeFolders ==
+           std::vector<std::string>({"MyPort"}));
+    assert(gonePlan.switchFiles.empty());
+    assert(gonePlan.hasTask);
+    // A failing shortcut keeps the receipt: repeating the removal is safe.
+    assert(!goneUninstall.uninstallPort(
+        gonePlan, [](std::string& error) {
+            error = "ns delete failed";
+            return false;
+        },
+        portReport));
+    assert(!portReport.complete());
+    assert(!portReport.shortcutRemoved);
+    assert(fs::exists(goneRoot + "/deployments/" + goneId + ".bencode"));
+    assert(!fs::exists(goneTarget + "/MyPort"));
+    assert(!goneManager.snapshot(goneId));
+    // Second pass: files and task are already gone, shortcut now succeeds -
+    // the receipt is dropped only after the full success.
+    assert(goneUninstall.plan("0100000000abab00", {goneId}, gonePlan));
+    assert(gonePlan.wholeFolders ==
+           std::vector<std::string>({"MyPort"}));
+    assert(goneUninstall.uninstallPort(
+        gonePlan, [](std::string&) { return true; }, portReport));
+    assert(portReport.complete());
+    assert(fs::exists(goneTarget + "/KeepMe/keep.txt"));
+    assert(!goneUninstall.receiptExists(goneId));
+    goneManager.shutdown();
+
+    // ------------------------------------------------------------------
+    // Receipt v3: the deploy records the bracketed title id of the forwarder
+    // package, so Uninstall links the title to its receipt without the
+    // metadata index (which covers retail releases only - the very reason a
+    // port uninstall used to fall back to a plain shortcut removal).
+    const std::string titledRoot = root + "/titled";
+    const std::string titledData = titledRoot + "/downloads/task";
+    const std::string titledTarget = titledRoot + "/sd/switch";
+    const std::string titledId = "f99434b99c431b6229609c2f5755e5d1e5b890ab";
+    fs::create_directories(titledTarget);
+    writeFile(titledData + "/Release/switch/MyPort/MyPort.nro", nro);
+    writeCompletedQueue(titledRoot, titledId, titledData, nro.size());
+    TaskFileManifest titledManifest;
+    titledManifest.taskId = titledId;
+    TaskFileRecord titledNro;
+    titledNro.logicalPath = "Release/switch/MyPort/MyPort.nro";
+    titledNro.localPath = titledNro.logicalPath;
+    titledNro.size = nro.size();
+    titledManifest.files.push_back(titledNro);
+    TaskFileRecord titledForwarder;
+    titledForwarder.logicalPath =
+        "Subway Surfers (port) [01d2c0b236000000].nsp";
+    titledForwarder.localPath = titledForwarder.logicalPath;
+    titledForwarder.size = 2048;
+    titledForwarder.package = true;
+    titledForwarder.action = TaskFileAction::Install;
+    titledManifest.files.push_back(titledForwarder);
+    assert(saveTaskFileManifest(titledRoot, titledManifest, error));
+    DownloadManager titledManager(titledRoot, false);
+    SwitchDeployService titledDeploy(titledManager, titledRoot, titledTarget);
+    PortUninstallService titledUninstall(titledManager, titledRoot,
+                                         titledTarget);
+    SwitchDeployInspection titledInspection = titledDeploy.inspect(titledId);
+    assert(titledInspection.canStart());
+    assert(titledDeploy.start(titledId, error));
+    for (int i = 0; i < 500 && titledDeploy.snapshot().active(); ++i)
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    assert(titledDeploy.snapshot().phase == SwitchDeployPhase::Completed);
+    assert(titledDeploy.receiptState(titledId) ==
+           SwitchDeployReceiptState::Valid);
+    // The receipt carries the title: the plan matches with no metadata
+    // hashes, and a different title id does not match.
+    PortUninstallPlan titledPlan;
+    assert(titledUninstall.plan("01d2c0b236000000", {}, titledPlan));
+    assert(titledPlan.taskIds == std::vector<std::string>({titledId}));
+    assert(titledPlan.switchFiles.size() == 1);
+    PortUninstallPlan otherPlan;
+    assert(!titledUninstall.plan("0100000000000000", {}, otherPlan));
+    // A full removal through the title-linked plan cleans everything.
+    PortUninstallReport titledReport;
+    assert(titledUninstall.uninstallPort(
+        titledPlan, [](std::string&) { return true; }, titledReport));
+    assert(titledReport.complete());
+    assert(!fs::exists(titledTarget + "/MyPort"));
+    assert(!titledManager.snapshot(titledId));
+    assert(!titledUninstall.receiptExists(titledId));
+    titledDeploy.shutdown();
+    titledManager.shutdown();
+
+    // ------------------------------------------------------------------
+    // Receipts written before titles were recorded (v2): the link title ->
+    // task is recovered from the bracketed id in the forwarder package name
+    // inside the task manifest - the exact shape of a deployed port on
+    // builds before this fix.
+    const std::string legacyRoot = root + "/legacy";
+    const std::string legacyData = legacyRoot + "/downloads/task";
+    const std::string legacyTarget = legacyRoot + "/sd/switch";
+    const std::string legacyId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    fs::create_directories(legacyTarget);
+    writeFile(legacyTarget + "/MyPort/MyPort.nro", nro);
+    writeCompletedQueue(legacyRoot, legacyId, legacyData, nro.size());
+    TaskFileManifest legacyManifest;
+    legacyManifest.taskId = legacyId;
+    TaskFileRecord legacyNro;
+    legacyNro.logicalPath = "Release/switch/MyPort/MyPort.nro";
+    legacyNro.localPath = legacyNro.logicalPath;
+    legacyNro.size = nro.size();
+    legacyManifest.files.push_back(legacyNro);
+    TaskFileRecord legacyForwarder;
+    legacyForwarder.logicalPath =
+        "Subway Surfers (port) [01d2c0b236000000].nsp";
+    legacyForwarder.localPath = legacyForwarder.logicalPath;
+    legacyForwarder.size = 2048;
+    legacyForwarder.package = true;
+    legacyForwarder.action = TaskFileAction::Install;
+    legacyManifest.files.push_back(legacyForwarder);
+    assert(saveTaskFileManifest(legacyRoot, legacyManifest, error));
+    writeV2Receipt(legacyRoot, legacyId,
+                   {{"MyPort/MyPort.nro", nro.size()}},
+                   {"MyPort/MyPort.nro"});
+    DownloadManager legacyManager(legacyRoot, false);
+    PortUninstallService legacyUninstall(legacyManager, legacyRoot,
+                                         legacyTarget);
+    // Matched with no metadata hashes: the forwarder name carries the id.
+    PortUninstallPlan legacyPlan;
+    assert(legacyUninstall.plan("01D2C0B236000000", {}, legacyPlan));
+    assert(legacyPlan.taskIds == std::vector<std::string>({legacyId}));
+    assert(legacyPlan.switchFiles.size() == 1);
+    // A different title id does not match.
+    assert(!legacyUninstall.plan("0100000000000000", {}, legacyPlan));
+    legacyManager.shutdown();
 
     setStorageSpaceOverride(nullptr);
     fs::remove_all(root);

@@ -14,6 +14,7 @@ extern "C" {
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <dirent.h>
 #include <fcntl.h>
 #include <fstream>
 #include <map>
@@ -27,9 +28,10 @@ namespace {
 
 constexpr size_t kCopyBufferBytes = 256 * 1024;
 constexpr uint32_t kNroMagic = 0x304f524e;
-constexpr int64_t kReceiptVersion = 1;
+constexpr int64_t kReceiptVersion = 3;
 constexpr int64_t kJobVersion = 1;
 constexpr size_t kMaxStateBytes = 8 * 1024 * 1024;
+constexpr size_t kMaxReceiptUnpacked = 16384;
 
 struct ReceiptFile {
     std::string path;
@@ -46,6 +48,34 @@ std::string lowerAscii(std::string value) {
 
 bool asciiEqual(const std::string& a, const std::string& b) {
     return lowerAscii(a) == lowerAscii(b);
+}
+
+// Every 16-hex title id embedded in a path, uppercased. Forwarder NSP file
+// names carry the id in brackets ("Port [01d2c0b236000000].nsp"), and the
+// receipt records them so Uninstall can link a title to its deployment
+// without the metadata index (which covers retail releases only).
+std::vector<std::string> titleIdsInPath(const std::string& path) {
+    std::vector<std::string> ids;
+    for (size_t i = 0; i + 16 <= path.size(); ++i) {
+        bool hex = true;
+        for (size_t j = 0; j < 16; ++j) {
+            const char c = path[i + j];
+            if (!(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') &&
+                !(c >= 'A' && c <= 'F')) {
+                hex = false;
+                break;
+            }
+        }
+        if (!hex)
+            continue;
+        std::string id = path.substr(i, 16);
+        for (char& c : id)
+            if (c >= 'a' && c <= 'f')
+                c = static_cast<char>(c - 'a' + 'A');
+        ids.push_back(std::move(id));
+        i += 15;
+    }
+    return ids;
 }
 
 std::vector<std::string> splitPath(const std::string& path) {
@@ -238,7 +268,9 @@ bool readBlob(const std::string& path, std::string& blob) {
     return true;
 }
 
-bool saveReceipt(const std::string& root, const SwitchDeployPlan& plan) {
+bool saveReceipt(const std::string& root, const SwitchDeployPlan& plan,
+                 const std::vector<std::string>& unpacked,
+                 const std::vector<std::string>& titleIds) {
     std::string blob = "d5:filesl";
     for (const SwitchDeployEntry& entry : plan.files) {
         blob += "d6:digest";
@@ -249,12 +281,33 @@ bool saveReceipt(const std::string& root, const SwitchDeployPlan& plan) {
         blob += "4:size" + bint(entry.size) + "e";
     }
     blob += "e4:task" + bstr(plan.taskId);
-    blob += "7:version" + bint(kReceiptVersion) + "e";
+    blob += "8:unpackedl";
+    size_t unpackedCount = 0;
+    for (const std::string& path : unpacked) {
+        if (unpackedCount >= kMaxReceiptUnpacked)
+            break;
+        blob += bstr(path);
+        ++unpackedCount;
+    }
+    blob += "e5:titlel";
+    for (const std::string& id : titleIds)
+        blob += bstr(id);
+    blob += "e7:version" + bint(kReceiptVersion) + "e";
     return atomicWrite(receiptPath(root, plan.taskId), blob);
 }
 
+// Loads a deployment receipt. Version 1 receipts have no unpacked member
+// list - *unpackedKnown reports whether the receipt carried one (v2+), which
+// tells the uninstall plan whether it must rebuild the list from the
+// archive headers in the task data.
 bool loadReceipt(const std::string& root, const std::string& taskId,
-                 std::vector<ReceiptFile>& files) {
+                 std::vector<ReceiptFile>& files,
+                 std::vector<std::string>& unpacked,
+                 bool* unpackedKnown = nullptr,
+                 std::vector<std::string>* titleIds = nullptr) {
+    if (unpackedKnown)
+        *unpackedKnown = false;
+    unpacked.clear();
     std::string blob;
     if (!readBlob(receiptPath(root, taskId), blob))
         return false;
@@ -268,7 +321,7 @@ bool loadReceipt(const std::string& root, const std::string& taskId,
     std::string storedTask;
     be_node_t list;
     if (!readInteger(rootNode, "version", version) ||
-        version != static_cast<uint64_t>(kReceiptVersion) ||
+        version < 1 || version > static_cast<uint64_t>(kReceiptVersion) ||
         !readString(rootNode, "task", storedTask) || storedTask != taskId ||
         !be_dict_get(rootNode.buf, rootNode.buf + rootNode.raw_len, "files", 5,
                      &list) || list.type != BE_LIST)
@@ -293,7 +346,47 @@ bool loadReceipt(const std::string& root, const std::string& taskId,
         std::memcpy(file.digest.data(), digest.data(), digest.size());
         parsed.push_back(std::move(file));
     }
+    if (version >= 2) {
+        be_node_t unpackedList;
+        if (!be_dict_get(rootNode.buf, rootNode.buf + rootNode.raw_len,
+                         "unpacked", 8, &unpackedList) ||
+            unpackedList.type != BE_LIST)
+            return false;
+        const char* unpackedCursor = unpackedList.buf + 1;
+        const char* unpackedEnd = unpackedList.buf + unpackedList.raw_len - 1;
+        be_node_t entry;
+        while (be_list_next(&unpackedCursor, unpackedEnd, &entry)) {
+            if (unpacked.size() >= kMaxReceiptUnpacked)
+                return false;
+            if (entry.type != BE_STR || entry.slen == 0)
+                return false;
+            const std::string path(entry.sval, entry.slen);
+            if (!taskFilePathIsFatCompatible(path))
+                return false;
+            unpacked.push_back(path);
+        }
+        if (unpackedKnown)
+            *unpackedKnown = true;
+    }
     files = std::move(parsed);
+    if (titleIds) {
+        titleIds->clear();
+        be_node_t titleList;
+        if (be_dict_get(rootNode.buf, rootNode.buf + rootNode.raw_len,
+                        "title", 5, &titleList)) {
+            if (titleList.type != BE_LIST)
+                return false;
+            const char* titleCursor = titleList.buf + 1;
+            const char* titleEnd = titleList.buf + titleList.raw_len - 1;
+            be_node_t titleEntry;
+            while (be_list_next(&titleCursor, titleEnd, &titleEntry)) {
+                if (titleIds->size() >= 64 || titleEntry.type != BE_STR ||
+                    titleEntry.slen == 0)
+                    return false;
+                titleIds->emplace_back(titleEntry.sval, titleEntry.slen);
+            }
+        }
+    }
     return true;
 }
 
@@ -413,6 +506,55 @@ bool copyFile(const SwitchDeployEntry& entry, const std::string& appRoot,
 #endif
     std::remove(jobPath(appRoot).c_str());
     return true;
+}
+
+std::string receiptTopFolder(const std::string& relative) {
+    const size_t slash = relative.find('/');
+    return slash == std::string::npos ? relative : relative.substr(0, slash);
+}
+
+// Removes the parent chain of `path` under `root` while the directories are
+// empty; never removes `root` itself. Stops at the first non-empty or
+// failing directory, so a folder holding files outside the receipt survives.
+void pruneEmptyParents(const std::string& root, std::string path) {
+    const size_t slash = path.find_last_of('/');
+    if (slash == std::string::npos)
+        return;
+    path.erase(slash);
+    while (path.size() > root.size() && path.rfind(root + "/", 0) == 0) {
+        if (rmdir(path.c_str()) != 0)
+            return;
+        const size_t next = path.find_last_of('/');
+        if (next == std::string::npos)
+            return;
+        path.erase(next);
+    }
+}
+
+// Recursive best-effort delete used only for whole-folder removal (the v1
+// receipt whose archive is gone). Never follows symlinks.
+bool removeTreeBestEffort(const std::string& path) {
+    struct stat st {};
+    if (lstat(path.c_str(), &st) != 0)
+        return errno == ENOENT;
+    if (!S_ISDIR(st.st_mode) || S_ISLNK(st.st_mode))
+        return std::remove(path.c_str()) == 0;
+    DIR* dir = opendir(path.c_str());
+    if (!dir)
+        return false;
+    bool ok = true;
+    struct dirent* entry = nullptr;
+    while ((entry = readdir(dir)) != nullptr) {
+        if (std::strcmp(entry->d_name, ".") == 0 ||
+            std::strcmp(entry->d_name, "..") == 0)
+            continue;
+        if (!removeTreeBestEffort(path + "/" + entry->d_name))
+            ok = false;
+    }
+    closedir(dir);
+    if (!ok)
+        return false;
+    return rmdir(path.c_str()) == 0;
 }
 
 } // namespace
@@ -759,6 +901,18 @@ void SwitchDeployService::run(DownloadManager::ExternalDeployLease lease,
                std::move(error));
         return;
     }
+    // The receipt records the title ids of the installed packages (the
+    // forwarder NSP carries its id in the file name): Uninstall links a
+    // title to its receipt through them, no metadata index needed.
+    std::vector<std::string> receiptTitleIds;
+    {
+        std::set<std::string> seen;
+        for (const TaskFileInfo& file : inventory.files)
+            if (file.package)
+                for (const std::string& id : titleIdsInPath(file.logicalPath))
+                    if (seen.insert(id).second)
+                        receiptTitleIds.push_back(id);
+    }
     SwitchDeployInspection inspection = inspectSwitchDeploy(
         std::move(inventory), targetRoot_);
     if (!inspection.canStart()) {
@@ -806,6 +960,12 @@ void SwitchDeployService::run(DownloadManager::ExternalDeployLease lease,
                std::move(completionDetail));
         return;
     }
+    // Extracted member paths, in extraction order, deduplicated: the receipt
+    // v2 unpacked list. The extraction callback is the authoritative source
+    // of what landed in /switch (the archive probe headers are only the
+    // fallback for v1 receipts at uninstall time).
+    std::vector<std::string> unpacked;
+    std::unordered_set<std::string> unpackedSeen;
     std::stable_sort(plan.files.begin(), plan.files.end(),
                      [](const SwitchDeployEntry& a,
                         const SwitchDeployEntry& b) {
@@ -876,7 +1036,9 @@ void SwitchDeployService::run(DownloadManager::ExternalDeployLease lease,
             snapshot_.bytesCopied += bytes;
             ++snapshot_.generation;
         };
-        auto current = [this](const std::string& path) {
+        auto current = [this, &unpacked, &unpackedSeen](const std::string& path) {
+            if (unpackedSeen.insert(path).second)
+                unpacked.push_back(path);
             std::lock_guard<std::mutex> lock(mutex_);
             snapshot_.currentPath = path;
             ++snapshot_.generation;
@@ -899,7 +1061,7 @@ void SwitchDeployService::run(DownloadManager::ExternalDeployLease lease,
         ++snapshot_.filesCopied;
         ++snapshot_.generation;
     }
-    if (!saveReceipt(appRoot_, plan)) {
+    if (!saveReceipt(appRoot_, plan, unpacked, receiptTitleIds)) {
         finish(SwitchDeployPhase::Completed, SwitchDeployProblem::Io,
                "Files were copied, but the deployment receipt was not saved.");
         return;
@@ -959,7 +1121,8 @@ SwitchDeploySnapshot SwitchDeployService::snapshot() const {
 SwitchDeployReceiptState SwitchDeployService::receiptState(
     const std::string& taskId) const {
     std::vector<ReceiptFile> files;
-    if (!loadReceipt(appRoot_, taskId, files))
+    std::vector<std::string> unpacked;
+    if (!loadReceipt(appRoot_, taskId, files, unpacked))
         return SwitchDeployReceiptState::None;
     for (const ReceiptFile& file : files) {
         if (!destinationParentsSafe(targetRoot_, file.path))
@@ -972,6 +1135,15 @@ SwitchDeployReceiptState SwitchDeployService::receiptState(
             return SwitchDeployReceiptState::Modified;
         std::array<uint8_t, 32> digest {};
         if (!hashFile(path, digest) || digest != file.digest)
+            return SwitchDeployReceiptState::Modified;
+    }
+    // Unpacked members carry no recorded size or digest - existence is all
+    // the receipt can verify.
+    for (const std::string& relative : unpacked) {
+        const std::string path = targetRoot_ + "/" + relative;
+        struct stat st {};
+        if (lstat(path.c_str(), &st) != 0 || !S_ISREG(st.st_mode) ||
+            S_ISLNK(st.st_mode))
             return SwitchDeployReceiptState::Modified;
     }
     return SwitchDeployReceiptState::Valid;
@@ -1003,7 +1175,11 @@ bool SwitchDeployService::autoCopyArmed(const std::string& taskId) const {
         const bool autoArmed = autoCopyArmed(taskId);
         if (task->mode != TransferMode::StreamInstall && !autoArmed)
             return false;
-        if (receiptState(taskId) == SwitchDeployReceiptState::Valid) {
+        // A saved receipt means this task was already copied to /switch once.
+        // Do not offer it again - if the user deleted or changed the installed
+        // files afterwards, restoring them is a deliberate manual action
+        // (Details - Install port), not something to silently restart.
+        if (receiptState(taskId) != SwitchDeployReceiptState::None) {
             if (autoArmed)
                 clearAutoCopy(taskId);
             std::lock_guard<std::mutex> lock(offerMutex_);
@@ -1116,6 +1292,285 @@ void SwitchDeployService::cleanupInterruptedJob() {
         std::remove(temporary.c_str());
     }
     std::remove(jobPath(appRoot_).c_str());
+}
+
+namespace {
+
+// Task ids of every receipt under <root>/deployments, sorted so the plan is
+// deterministic across runs.
+std::vector<std::string> listReceiptTaskIds(const std::string& root) {
+    std::vector<std::string> ids;
+    const std::string directory = root + "/deployments";
+    DIR* dir = opendir(directory.c_str());
+    if (!dir)
+        return ids;
+    while (struct dirent* entry = readdir(dir)) {
+        const std::string name = entry->d_name;
+        if (name.size() != 48 ||
+            name.compare(name.size() - 8, 8, ".bencode") != 0)
+            continue;
+        ids.push_back(name.substr(0, 40));
+    }
+    closedir(dir);
+    std::sort(ids.begin(), ids.end());
+    return ids;
+}
+
+// Does the receipt link taskId to titleId? Receipt v3 records the title ids
+// of the installed packages; older receipts fall back to the bracketed id in
+// the task manifest's package file names. False for unreadable receipts and
+// for titles the receipt does not belong to.
+bool receiptMatchesTitle(const std::string& root, const std::string& taskId,
+                         const std::string& titleId) {
+    std::vector<ReceiptFile> files;
+    std::vector<std::string> unpacked;
+    std::vector<std::string> titleIds;
+    if (!loadReceipt(root, taskId, files, unpacked, nullptr, &titleIds))
+        return false;
+    for (const std::string& id : titleIds)
+        if (asciiEqual(id, titleId))
+            return true;
+    if (!titleIds.empty())
+        return false; // v3 names the titles - no other source to consult
+    TaskFileManifest manifest;
+    std::string manifestError;
+    if (!loadTaskFileManifest(root, taskId, manifest, manifestError))
+        return false;
+    for (const TaskFileRecord& file : manifest.files)
+        if (file.package)
+            for (const std::string& id : titleIdsInPath(file.logicalPath))
+                if (asciiEqual(id, titleId))
+                    return true;
+    return false;
+}
+
+} // namespace
+
+PortUninstallService::PortUninstallService(DownloadManager& manager,
+                                           std::string appRoot,
+                                           std::string targetRoot)
+    : manager_(manager), appRoot_(std::move(appRoot)),
+      targetRoot_(std::move(targetRoot)) {
+    while (targetRoot_.size() > 1 && targetRoot_.back() == '/')
+        targetRoot_.pop_back();
+}
+
+bool PortUninstallService::receiptExists(const std::string& taskId) const {
+    struct stat st {};
+    return lstat(receiptPath(appRoot_, taskId).c_str(), &st) == 0 &&
+           S_ISREG(st.st_mode) && !S_ISLNK(st.st_mode);
+}
+
+bool PortUninstallService::plan(const std::string& titleId,
+                                const std::vector<std::string>& taskIds,
+                                PortUninstallPlan& result) const {
+    result = {};
+    result.titleId = titleId;
+    std::set<std::string> switchFiles;
+    std::set<std::string> wholeFolders;
+    uint64_t switchBytes = 0;
+    bool anyReceipt = false;
+    // Every receipt on disk is matched to the title two ways: the recorded
+    // title ids (receipt v3), or - for receipts written before titles were
+    // recorded - the bracketed id in the task manifest's package file names
+    // (forwarder NSPs carry it, e.g. "Port [01d2c0b236000000].nsp").
+    // `taskIds` carries the metadata-index infohashes and only acts as a
+    // last-resort fallback for ordinary NSP titles; the index covers retail
+    // releases only, which is exactly how ports were missed before.
+    std::set<std::string> fallback(taskIds.begin(), taskIds.end());
+    std::vector<std::string> matched;
+    for (const std::string& taskId : listReceiptTaskIds(appRoot_)) {
+        if (receiptMatchesTitle(appRoot_, taskId, titleId))
+            matched.push_back(taskId);
+        else if (fallback.count(taskId))
+            matched.push_back(taskId);
+    }
+    if (matched.empty())
+        return false;
+    for (const std::string& taskId : matched) {
+        std::vector<ReceiptFile> files;
+        std::vector<std::string> unpacked;
+        bool unpackedKnown = false;
+        if (!loadReceipt(appRoot_, taskId, files, unpacked,
+                         &unpackedKnown))
+            continue;
+        anyReceipt = true;
+        result.taskIds.push_back(taskId);
+        const std::optional<DownloadTask> task = manager_.snapshot(taskId);
+        if (task) {
+            result.hasTask = true;
+            if (!task->dataPath.empty()) {
+                struct stat st {};
+                if (lstat(task->dataPath.c_str(), &st) == 0)
+                    result.taskHasData = true;
+            }
+        }
+        if (!unpackedKnown) {
+            // v1 receipt: rebuild the unpacked member list from the archive
+            // headers still present in the task data. When the archive is
+            // gone (or the task is), the exact list is unknowable - remove
+            // the receipt's top-level folders entirely instead, which is
+            // what the dialog warns about in that case.
+            bool listed = false;
+            if (task) {
+                TaskFileInventory inventory;
+                std::string inventoryError;
+                if (buildTaskFileInventory(appRoot_, *task, inventory,
+                                           inventoryError)) {
+                    bool archiveGone = false;
+                    for (const TaskFileInfo& file : inventory.files) {
+                        if (!isPortArchiveName(file.logicalPath))
+                            continue;
+                        if (file.state != TaskFileState::Present ||
+                            file.absolutePath.empty()) {
+                            archiveGone = true;
+                            break;
+                        }
+                        PortArchiveProbe probe;
+                        if (!probePortArchive(file.absolutePath, probe) ||
+                            !probe.ok) {
+                            archiveGone = true;
+                            break;
+                        }
+                        for (const std::string& path : probe.files)
+                            if (unpacked.size() < kMaxReceiptUnpacked)
+                                unpacked.push_back(path);
+                    }
+                    listed = !archiveGone;
+                }
+            }
+            if (listed) {
+                for (const std::string& path : unpacked)
+                    switchFiles.insert(path);
+            } else {
+                for (const ReceiptFile& file : files) {
+                    const std::string folder =
+                        receiptTopFolder(file.path);
+                    if (!folder.empty() && lowerAscii(folder) != "pipensx")
+                        wholeFolders.insert(folder);
+                }
+                continue;
+            }
+        }
+        for (const std::string& path : unpacked) {
+            switchFiles.insert(path);
+            // The receipt records sizes only for the copied files; stat the
+            // extracted members so the dialog reports the real footprint.
+            const std::string full = targetRoot_ + "/" + path;
+            struct stat st {};
+            if (lstat(full.c_str(), &st) == 0 && S_ISREG(st.st_mode))
+                switchBytes += static_cast<uint64_t>(st.st_size);
+        }
+        for (const ReceiptFile& file : files) {
+            switchFiles.insert(file.path);
+            switchBytes += file.size;
+        }
+    }
+    if (!anyReceipt)
+        return false;
+    result.switchFiles.assign(switchFiles.begin(), switchFiles.end());
+    result.wholeFolders.assign(wholeFolders.begin(), wholeFolders.end());
+    result.switchBytes = switchBytes;
+    return true;
+}
+
+bool PortUninstallService::deleteDeployed(
+    const PortUninstallPlan& plan, PortUninstallReport& report) const {
+    bool ok = true;
+    auto fail = [&](const std::string& detail) {
+        ok = false;
+        if (report.error.empty())
+            report.error = detail;
+    };
+    for (const std::string& relative : plan.switchFiles) {
+        const std::string full = targetRoot_ + "/" + relative;
+        struct stat st {};
+        if (lstat(full.c_str(), &st) != 0) {
+            if (errno == ENOENT)
+                ++report.filesMissing;
+            else
+                fail("Unable to remove " + relative + ".");
+            continue;
+        }
+        if (S_ISDIR(st.st_mode)) {
+            // A directory where the receipt recorded a file: leave it alone -
+            // something outside the receipt may live inside it.
+            continue;
+        }
+        if (std::remove(full.c_str()) != 0) {
+            ++report.filesFailed;
+            fail("Unable to remove " + relative + ".");
+            continue;
+        }
+        ++report.filesRemoved;
+        pruneEmptyParents(targetRoot_, full);
+    }
+    for (const std::string& folder : plan.wholeFolders) {
+        const std::string full = targetRoot_ + "/" + folder;
+        struct stat st {};
+        if (lstat(full.c_str(), &st) != 0) {
+            if (errno == ENOENT)
+                continue;
+            fail("Unable to remove /switch/" + folder + ".");
+            continue;
+        }
+        if (!removeTreeBestEffort(full)) {
+            ++report.filesFailed;
+            fail("Unable to remove /switch/" + folder + " entirely.");
+        }
+    }
+    return ok;
+}
+
+bool PortUninstallService::removeTasks(const PortUninstallPlan& plan,
+                                       PortUninstallReport& report) const {
+    bool ok = true;
+    for (const std::string& taskId : plan.taskIds) {
+        if (!manager_.snapshot(taskId))
+            continue; // already gone - nothing to remove
+        std::string error;
+        if (!manager_.remove(taskId, true, error) &&
+            manager_.snapshot(taskId)) {
+            ok = false;
+            if (report.error.empty())
+                report.error = error.empty()
+                    ? "Unable to remove the download task."
+                    : error;
+        }
+    }
+    return ok;
+}
+
+bool PortUninstallService::uninstallPort(
+    const PortUninstallPlan& plan,
+    const std::function<bool(std::string&)>& uninstallShortcut,
+    PortUninstallReport& report) const {
+    report = {};
+    report.filesDeleted = deleteDeployed(plan, report);
+    report.tasksRemoved = removeTasks(plan, report);
+    std::string shortcutError;
+    report.shortcutRemoved =
+        !uninstallShortcut || uninstallShortcut(shortcutError);
+    if (!report.shortcutRemoved && report.error.empty())
+        report.error = shortcutError.empty()
+            ? "Unable to uninstall the application."
+            : shortcutError;
+    if (report.complete()) {
+        // Full success only: the receipts and auto-copy markers go last, so
+        // a failed run leaves everything in place and Uninstall again stays
+        // safe.
+        for (const std::string& taskId : plan.taskIds) {
+            std::remove(receiptPath(appRoot_, taskId).c_str());
+            std::remove(autoCopyPath(appRoot_, taskId).c_str());
+        }
+    }
+    log_msg("[port-uninstall] %s title=%s tasks=%zu files=%zu missing=%zu "
+            "failed=%zu shortcut=%d %s\n",
+            report.complete() ? "removed" : "partial", plan.titleId.c_str(),
+            plan.taskIds.size(), report.filesRemoved, report.filesMissing,
+            report.filesFailed, report.shortcutRemoved ? 1 : 0,
+            report.error.c_str());
+    return report.complete();
 }
 
 } // namespace pipensx
