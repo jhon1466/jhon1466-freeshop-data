@@ -125,19 +125,37 @@ public:
     }
 
 private:
-    // Three fader lines with offset knobs — the app-wide settings glyph.
+    // Gear/cogwheel: universal settings glyph.
     static void drawGeneral(NVGcontext* vg, float gx, float gy, float s) {
-        const float ys[3] = {gy + 5.0f, gy + 12.0f, gy + 19.0f};
-        const float knob[3] = {gx + 8.0f, gx + 16.0f, gx + 11.0f};
-        for (int i = 0; i < 3; i++) {
-            nvgBeginPath(vg);
-            nvgMoveTo(vg, gx + 2.0f, ys[i]);
-            nvgLineTo(vg, gx + s - 2.0f, ys[i]);
-            nvgStroke(vg);
-            nvgBeginPath(vg);
-            nvgCircle(vg, knob[i], ys[i], 2.6f);
-            nvgFill(vg);
+        const float cx = gx + s / 2.0f;
+        const float cy = gy + s / 2.0f;
+        const float r_outer = s / 2.0f - 2.0f;
+        const float r_inner = r_outer * 0.45f;
+        const int teeth = 8;
+        nvgBeginPath(vg);
+        for (int i = 0; i < teeth; i++) {
+            const float a1 = (float)i * NVG_PI * 2.0f / teeth;
+            const float a2 = a1 + NVG_PI / teeth;
+            const float a_mid = a1 + NVG_PI / (teeth * 2.0f);
+            const float x1_outer = cx + cosf(a1) * r_outer;
+            const float y1_outer = cy + sinf(a1) * r_outer;
+            const float x2_outer = cx + cosf(a2) * r_outer;
+            const float y2_outer = cy + sinf(a2) * r_outer;
+            const float x_mid = cx + cosf(a_mid) * (r_outer + 1.5f);
+            const float y_mid = cy + sinf(a_mid) * (r_outer + 1.5f);
+            if (i == 0) {
+                nvgMoveTo(vg, x1_outer, y1_outer);
+            } else {
+                nvgLineTo(vg, x1_outer, y1_outer);
+            }
+            nvgLineTo(vg, x_mid, y_mid);
+            nvgLineTo(vg, x2_outer, y2_outer);
         }
+        nvgClosePath(vg);
+        nvgStroke(vg);
+        nvgBeginPath(vg);
+        nvgCircle(vg, cx, cy, r_inner);
+        nvgStroke(vg);
     }
 
     // Down arrow dropping into a tray.
@@ -160,19 +178,32 @@ private:
         nvgStroke(vg);
     }
 
-    // Chain link: two interlocked rounded rings.
+    // Database cylinder: three stacked ellipses with sides.
     static void drawSource(NVGcontext* vg, float gx, float gy, float s) {
-        nvgSave(vg);
-        nvgTranslate(vg, gx + s / 2.0f, gy + s / 2.0f);
-        nvgRotate(vg, NVG_PI / 4.0f);
-        const float w = 13.0f, h = 6.0f;
+        const float cx = gx + s / 2.0f;
+        const float cy = gy + s / 2.0f;
+        const float r = s * 0.38f;
+        const float h = 3.0f;
+        const float dy = 5.5f;
+        // Top ellipse
         nvgBeginPath(vg);
-        nvgRoundedRect(vg, -w / 2.0f - 1.0f, -h / 2.0f, w, h, 3.0f);
+        nvgEllipse(vg, cx, cy - dy, r, h);
         nvgStroke(vg);
+        // Middle ellipse
         nvgBeginPath(vg);
-        nvgRoundedRect(vg, -w / 2.0f + 1.0f, -h / 2.0f, w, h, 3.0f);
+        nvgEllipse(vg, cx, cy, r, h);
         nvgStroke(vg);
-        nvgRestore(vg);
+        // Bottom ellipse
+        nvgBeginPath(vg);
+        nvgEllipse(vg, cx, cy + dy, r, h);
+        nvgStroke(vg);
+        // Side lines connecting ellipses
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, cx - r, cy - dy);
+        nvgLineTo(vg, cx - r, cy + dy);
+        nvgMoveTo(vg, cx + r, cy - dy);
+        nvgLineTo(vg, cx + r, cy + dy);
+        nvgStroke(vg);
     }
 
     // Wi-fi: three arcs and a dot.
@@ -190,25 +221,21 @@ private:
         nvgFill(vg);
     }
 
-    // Stacked layers: a crest plus two chevrons.
+    // 2x2 grid: represents a catalog/list view.
     static void drawCatalog(NVGcontext* vg, float gx, float gy, float s) {
-        const float cx = gx + s / 2.0f;
-        nvgBeginPath(vg);
-        nvgMoveTo(vg, cx, gy + 2.0f);
-        nvgLineTo(vg, cx + 6.5f, gy + 6.0f);
-        nvgLineTo(vg, cx - 6.5f, gy + 6.0f);
-        nvgClosePath(vg);
-        nvgStroke(vg);
-        nvgBeginPath(vg);
-        nvgMoveTo(vg, cx - 7.5f, gy + 10.5f);
-        nvgLineTo(vg, cx, gy + 13.5f);
-        nvgLineTo(vg, cx + 7.5f, gy + 10.5f);
-        nvgStroke(vg);
-        nvgBeginPath(vg);
-        nvgMoveTo(vg, cx - 7.5f, gy + 16.5f);
-        nvgLineTo(vg, cx, gy + 19.5f);
-        nvgLineTo(vg, cx + 7.5f, gy + 16.5f);
-        nvgStroke(vg);
+        const float cell = 8.5f;
+        const float gap = 3.0f;
+        const float startX = gx + (s - (cell * 2 + gap)) / 2.0f;
+        const float startY = gy + (s - (cell * 2 + gap)) / 2.0f;
+        for (int row = 0; row < 2; row++) {
+            for (int col = 0; col < 2; col++) {
+                const float px = startX + col * (cell + gap);
+                const float py = startY + row * (cell + gap);
+                nvgBeginPath(vg);
+                nvgRoundedRect(vg, px, py, cell, cell, 2.0f);
+                nvgStroke(vg);
+            }
+        }
     }
 
     // SD card: body, corner notch, contact pins.
@@ -230,22 +257,29 @@ private:
         nvgStroke(vg);
     }
 
-    // Chip: body plus pins on four sides.
+    // Wrench: maintenance/tools.
     static void drawSystem(NVGcontext* vg, float gx, float gy, float s) {
         const float cx = gx + s / 2.0f;
         const float cy = gy + s / 2.0f;
+        // Handle
         nvgBeginPath(vg);
-        nvgRoundedRect(vg, cx - 3.2f, cy - 3.2f, 6.4f, 6.4f, 1.0f);
+        nvgMoveTo(vg, cx - 6.5f, cy + 8.0f);
+        nvgLineTo(vg, cx + 6.5f, cy - 8.0f);
+        nvgStrokeWidth(vg, 3.0f);
         nvgStroke(vg);
+        nvgStrokeWidth(vg, 2.0f);
+        // Jaw
         nvgBeginPath(vg);
-        nvgMoveTo(vg, cx, gy + 2.0f);
-        nvgLineTo(vg, cx, cy - 5.5f);
-        nvgMoveTo(vg, cx, cy + 5.5f);
-        nvgLineTo(vg, cx, gy + s - 2.0f);
-        nvgMoveTo(vg, gx + 2.0f, cy);
-        nvgLineTo(vg, cx - 5.5f, cy);
-        nvgMoveTo(vg, cx + 5.5f, cy);
-        nvgLineTo(vg, gx + s - 2.0f, cy);
+        nvgMoveTo(vg, cx + 5.5f, cy - 9.0f);
+        nvgLineTo(vg, cx + 9.5f, cy - 5.0f);
+        nvgLineTo(vg, cx + 6.5f, cy - 8.0f);
+        nvgLineTo(vg, cx + 4.5f, cy - 11.0f);
+        nvgClosePath(vg);
+        nvgStroke(vg);
+        // Jaw opening
+        nvgBeginPath(vg);
+        nvgMoveTo(vg, cx + 6.0f, cy - 9.5f);
+        nvgLineTo(vg, cx + 7.5f, cy - 7.5f);
         nvgStroke(vg);
     }
 

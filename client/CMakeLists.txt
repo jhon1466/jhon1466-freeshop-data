@@ -473,8 +473,9 @@ file(COPY
     ${CMAKE_CURRENT_SOURCE_DIR}/resources/icon.png
     DESTINATION ${ROMFS_DIR}
 )
-# TorBox (and other GTS/Cloudflare) HTTPS: switch-curl/libnx imports these
-# roots via CURLOPT_CAINFO. See src/app/curl_https.hpp curlApplyTrustedSsl.
+# HTTPS trust anchors for switch-curl/libnx, imported via CURLOPT_CAINFO.
+# Full Mozilla CA extract — GitHub (DigiCert), Cloudflare (GTS) and TorBox.
+# See src/app/curl_https.hpp curlApplyTrustedSsl.
 file(COPY
     ${CMAKE_CURRENT_SOURCE_DIR}/resources/ssl
     DESTINATION ${ROMFS_DIR}

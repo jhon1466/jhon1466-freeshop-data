@@ -14,6 +14,7 @@ extern "C" {
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <curl/curl.h>
 #include <dirent.h>
 #include <fstream>
@@ -217,10 +218,19 @@ bool httpGetOnce(const std::string& url, size_t limit,
         *effectiveUrl = effective ? std::string(effective) : std::string();
     curl_easy_cleanup(curl);
     if (result != CURLE_OK) {
+        long verifyResult = 0;
+        curl_easy_getinfo(curl, CURLINFO_SSL_VERIFYRESULT, &verifyResult);
+        time_t now = time(nullptr);
+        char dateText[32] = {0};
+        struct tm* broken = localtime(&now);
+        if (broken)
+            std::strftime(dateText, sizeof(dateText), "%Y-%m-%d %H:%M:%S",
+                          broken);
         log_msg("[metadata] http fail verifyTls=%d url=%s rc=%d (%s) "
-                "errbuf='%s'\n", verifyTls ? 1 : 0, url.c_str(), result,
+                "errbuf='%s' verify_result=%ld clock='%s'\n",
+                verifyTls ? 1 : 0, url.c_str(), result,
                 curl_easy_strerror(result),
-                sslError[0] ? sslError : "-");
+                sslError[0] ? sslError : "-", verifyResult, dateText);
         if (sslError[0])
             log_msg("[metadata] ssl detail: %s\n", sslError);
     }

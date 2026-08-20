@@ -125,6 +125,7 @@ public:
           gameUpdates_(gameUpdates), favorites_(favorites), webServer_(webServer),
           deploy_(deploy), portUninstall_(portUninstall) {
         auto* tabs = new pipensx::ui::MainFrame();
+        tabs_ = tabs;
         using pipensx::ui::NavIconType;
         using pipensx::CatalogSection;
         // Games, Ports, separator, Downloads, ... — Downloads is sidebar index 3.
@@ -279,6 +280,18 @@ private:
     SwitchDeployService* deploy_ = nullptr;
     PortUninstallService* portUninstall_ = nullptr;
     brls::AppletFrame* frame_;
+    MainFrame* tabs_ = nullptr;
+
+public:
+    void updateUpdatesBadge() {
+        std::string error;
+        gameUpdates_->checkAll(installed_->titles(), installed_->generation(),
+                               settings_->get().lastMetadataRefreshMs, error);
+        if (tabs_) {
+            tabs_->setUpdateCountBadge(
+                gameUpdates_->availableCount(installed_->titles()));
+        }
+    }
 };
 
 }  // namespace
@@ -966,6 +979,14 @@ int main(int argc, char** argv) {
                         }
                     }
                 }
+                // Ensure installed title scan has completed before checking for updates
+                if (installedScanner.thread.joinable())
+                    installedScanner.thread.join();
+
+                // Check for updates and update the badge so it shows from launch,
+                // without requiring the user to enter the Updates section first.
+                activity->updateUpdatesBadge();
+
                 firstFrame = false;
             }
         }

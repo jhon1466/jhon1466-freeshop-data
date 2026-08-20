@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <fstream>
 #include <sstream>
 #include <sys/socket.h>
@@ -178,9 +179,18 @@ bool fetchText(const std::string& url, size_t limit, std::string& body,
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
     if (result != CURLE_OK) {
-        log_msg("[update] fetchText fail url=%s rc=%d (%s) errbuf='%s'\n",
+        long verifyResult = 0;
+        curl_easy_getinfo(curl, CURLINFO_SSL_VERIFYRESULT, &verifyResult);
+        time_t now = time(nullptr);
+        char dateText[32] = {0};
+        struct tm* broken = localtime(&now);
+        if (broken)
+            std::strftime(dateText, sizeof(dateText), "%Y-%m-%d %H:%M:%S",
+                          broken);
+        log_msg("[update] fetchText fail url=%s rc=%d (%s) errbuf='%s' "
+                "verify_result=%ld clock='%s'\n",
                 url.c_str(), result, curl_easy_strerror(result),
-                sslError[0] ? sslError : "-");
+                sslError[0] ? sslError : "-", verifyResult, dateText);
         if (sslError[0])
             log_msg("[update] ssl detail: %s\n", sslError);
     }
@@ -227,9 +237,18 @@ bool fetchFile(const std::string& url, const std::string& path, size_t limit,
     curl_easy_cleanup(curl);
     writer.output.close();
     if (result != CURLE_OK) {
-        log_msg("[update] fetchFile fail url=%s rc=%d (%s) errbuf='%s'\n",
+        long verifyResult = 0;
+        curl_easy_getinfo(curl, CURLINFO_SSL_VERIFYRESULT, &verifyResult);
+        time_t now = time(nullptr);
+        char dateText[32] = {0};
+        struct tm* broken = localtime(&now);
+        if (broken)
+            std::strftime(dateText, sizeof(dateText), "%Y-%m-%d %H:%M:%S",
+                          broken);
+        log_msg("[update] fetchFile fail url=%s rc=%d (%s) errbuf='%s' "
+                "verify_result=%ld clock='%s'\n",
                 url.c_str(), result, curl_easy_strerror(result),
-                sslError[0] ? sslError : "-");
+                sslError[0] ? sslError : "-", verifyResult, dateText);
         if (sslError[0])
             log_msg("[update] ssl detail: %s\n", sslError);
     }
