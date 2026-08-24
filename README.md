@@ -33,7 +33,7 @@ Homebrew Menu.
   [Borealis](https://github.com/XITRIX/borealis) (`moonlight_wiliwili`
   branch - the same fork/branch [pipensx](https://github.com/i3sey/pipensx)
   itself uses, vendored under `client/vendor/borealis/` but not committed,
-  see [`CMakeLists.txt`](client/CMakeLists.txt)), themed with pipensx's own
+  see [`CMakeLists.txt`](client/CMakeLists.txt)), themed with  own
   design tokens (see [`views/theme.cpp`](client/source/views/theme.cpp)).
   Everything below the UI - catalog fetching, the torrent engine, NSP/XCI/NSZ
   installers, MTP/FTP, save backups - is plain C, reached from the C++ views
