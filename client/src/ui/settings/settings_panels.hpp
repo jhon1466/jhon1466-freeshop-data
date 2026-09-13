@@ -32,6 +32,7 @@
 #include "ui/common/storage_meter.hpp"
 #include "ui/common/ui_helpers.hpp"
 #include "ui/common/web_qr.hpp"
+#include "ui/catalog/catalog_helpers.hpp"
 #include "ui/debrid_ui.hpp"
 #include "ui/i18n.hpp"
 #include "ui/settings/settings_cells.hpp"
@@ -1224,7 +1225,7 @@ private:
                 if (!ok) {
                     diagnostic_error("catalog", "settings_refresh", "error=%s",
                                      error.c_str());
-                    brls::Application::notify(error);
+                    brls::Application::notify(formatCatalogRefreshError(error));
                     return;
                 }
                 catalog_->adopt(std::move(entries), catalogSourceUrl);
@@ -1259,7 +1260,7 @@ private:
                 if (!ok) {
                     diagnostic_error("metadata", "settings_refresh",
                                      "error=%s", error.c_str());
-                    brls::Application::notify(error);
+                    brls::Application::notify(formatCatalogRefreshError(error));
                     return;
                 }
                 metadata_->adopt(std::move(snapshot));
@@ -1797,7 +1798,7 @@ private:
                         tr("pipensx/settings/install_failed"));
                     diagnostic_error("update", "install", "error=%s",
                                      error.c_str());
-                    brls::Application::notify(error);
+                    brls::Application::notify(formatCatalogRefreshError(error));
                     return;
                 }
                 updateAction_->setDetailText(
