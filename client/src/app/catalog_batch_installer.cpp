@@ -1,6 +1,7 @@
 #include "catalog_batch_installer.hpp"
 #include "download_manager.hpp"
 #include "nx_file_types.hpp"
+#include "torrent_metainfo_fetch.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -8,7 +9,6 @@
 #include <cstdio>
 #include <limits>
 #include <memory>
-#include <thread>
 #include <utility>
 #include <unistd.h>
 
@@ -32,22 +32,6 @@ void addEstimate(uint64_t& target, uint64_t value, bool& overflow) {
     } else {
         target += value;
     }
-}
-
-uint64_t nowMs() {
-    return (uint64_t)std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now().time_since_epoch()).count();
-}
-
-bool sleepAbortable(std::atomic<bool>& cancelled, uint32_t ms) {
-    uint32_t elapsed = 0;
-    while (elapsed < ms) {
-        if (cancelled.load()) return false;
-        uint32_t slice = ms - elapsed < 50 ? ms - elapsed : 50;
-        std::this_thread::sleep_for(std::chrono::milliseconds(slice));
-        elapsed += slice;
-    }
-    return !cancelled.load();
 }
 
 TorrentPreview previewFromDebrid(const DebridInfo& info) {
@@ -256,49 +240,46 @@ BatchPreparation CatalogBatchInstaller::prepareViaDebrid(
     for (size_t i = 0; i < entries.size(); ++i) {
         if (cancelled.load()) { result.cancelled_ = true; removeAll(); return result; }
         if (progress) progress({i + 1, entries.size(), entries[i].title, {}});
+        const CatalogEntry& entry = entries[i];
+        const uint64_t serial = gBatchTempSerial.fetch_add(1);
+        const std::string hash = lowerAscii(entry.infoHash);
+        const std::string tmp = rootPath_ + "/_debrid_batch_" +
+                                (hash.empty() ? "unknown" : hash) + "_" +
+                                std::to_string(serial) + ".torrent";
+        const auto deadline =
+            std::chrono::steady_clock::now() +
+            std::chrono::milliseconds(timing.resolveWindowMs);
         std::string id;
+        DebridInfo info;
         std::string err;
-        if (!provider.createFromMagnet(entries[i].magnetUri, id, err)) {
+        if (!createDebridWithMetainfoFallback(
+                provider, entry.magnetUri, hash, entry.infoDict, tmp, cancelled,
+                deadline, id, info, err)) {
+            if (cancelled.load()) {
+                result.cancelled_ = true;
+                removeAll();
+                return result;
+            }
             result.failures_.push_back(
-                {entries[i], err.empty() ? "El servicio debrid rechazó el magnet." : err});
+                {entry, err.empty() ? "El servicio debrid no pudo abrir este torrent. Prueba con otra versión." : err});
             continue;
         }
-        Pending p; p.entry = entries[i]; p.id = id;
+        Pending p;
+        p.entry = entry;
+        p.id = id;
+        p.info = std::move(info);
+        p.ready = true;
+        p.haveInfo = true;
         pending.push_back(std::move(p));
     }
 
-    uint64_t start = nowMs();
-    while (!pending.empty()) {
-        if (cancelled.load()) { result.cancelled_ = true; removeAll(); return result; }
-        bool allReady = true;
-        size_t readyCount = 0;
-        for (Pending& p : pending) {
-            if (p.ready) { ++readyCount; continue; }
-            DebridInfo info;
-            std::string err;
-            if (provider.fetchInfo(p.id, info, err)) {
-                p.info = info; p.haveInfo = true;
-                if (info.phase >= DebridInfo::Phase::AwaitingSelection &&
-                    !info.files.empty()) {
-                    p.ready = true; ++readyCount;
-                } else {
-                    allReady = false;
-                }
-            } else {
-                allReady = false;
-            }
-        }
-        if (allReady) break;
-        if (progress)
-            progress({readyCount, pending.size(),
-                      "Obteniendo listas de archivos del servicio debrid", {}});
-        if (nowMs() - start >= timing.resolveWindowMs) break;
-        if (!sleepAbortable(cancelled, timing.pollIntervalMs)) {
-            result.cancelled_ = true; removeAll(); return result;
-        }
-    }
-
     for (Pending& p : pending) {
+        if (p.haveInfo && p.info.phase == DebridInfo::Phase::Failed) {
+            std::string ignored;
+            provider.remove(p.id, ignored);
+            result.failures_.push_back({p.entry, "El servicio debrid no pudo abrir este torrent. Prueba con otra versión."});
+            continue;
+        }
         if (p.ready) {
             TorrentPreview preview = previewFromDebrid(p.info);
             TransferMode mode = TransferMode::StreamInstall;

@@ -90,6 +90,7 @@ PORT_ARCHIVE_TEST_TARGET = tests/test_port_archive
 TICKET_RIGHTS_TEST_TARGET = tests/test_ticket_rights
 STORAGE_MANAGER_TEST_TARGET = tests/test_storage_manager
 VERSION_MATCH_TEST_TARGET = tests/test_version_match
+METAINFO_FETCH_TEST_TARGET = tests/test_torrent_metainfo_fetch
 TEST_SRCS = \
     tests/test_piece.c       \
     src/core/sha1.c          \
@@ -294,7 +295,7 @@ test: $(TEST_TARGET) $(MANAGER_TEST_TARGET) $(PACKAGE_TEST_TARGET) \
 		$(TASK_FILES_TEST_TARGET) $(SWITCH_DEPLOY_TEST_TARGET) \
 		$(PORT_ARCHIVE_TEST_TARGET) $(TASK_PROGRESS_TEST_TARGET) \
 		$(TICKET_RIGHTS_TEST_TARGET) $(STORAGE_MANAGER_TEST_TARGET) \
-		$(VERSION_MATCH_TEST_TARGET)
+		$(VERSION_MATCH_TEST_TARGET) $(METAINFO_FETCH_TEST_TARGET)
 	./$(TEST_TARGET)
 	./$(PACKAGE_TEST_TARGET)
 	./$(CATALOG_TEST_TARGET)
@@ -335,6 +336,7 @@ test: $(TEST_TARGET) $(MANAGER_TEST_TARGET) $(PACKAGE_TEST_TARGET) \
 	./$(TICKET_RIGHTS_TEST_TARGET)
 	./$(STORAGE_MANAGER_TEST_TARGET)
 	./$(VERSION_MATCH_TEST_TARGET)
+	./$(METAINFO_FETCH_TEST_TARGET)
 	python3 tests/test_bug_report_decode.py
 	python3 tests/test_telemetry_analyzer.py
 	python3 scripts/check_i18n.py
@@ -373,6 +375,7 @@ $(FAVORITES_TEST_TARGET): tests/test_favorites.cpp \
 
 $(BATCH_INSTALL_TEST_TARGET): tests/test_batch_install.cpp \
 		src/app/catalog_batch_installer.cpp src/app/install_space.cpp \
+		src/app/torrent_metainfo_fetch.o src/app/magnet_resolver.o \
 		src/app/download_manager.o src/app/task_files.o \
 		src/app/web_seed_source.o \
 		src/app/stream_ram_budget.o src/app/stream_budget_arbiter.o \
@@ -451,8 +454,9 @@ $(DEBRID_TRANSFER_TEST_TARGET): tests/test_debrid_transfer.cpp \
 		src/app/stream_ram_budget.o \
 		src/app/torbox_provider.o \
 		src/app/realdebrid_client.o src/app/realdebrid_provider.o \
-		src/install/package_stream.o src/install/install_backend_pc.o \
-		src/core/util.o
+		src/install/package_stream.o src/install/install_journal.o \
+		src/install/install_backend_pc.o \
+		src/core/bencode.o src/core/util.o
 	$(CXX) $(CXXFLAGS) -Isrc -o $@ $^ $(LDFLAGS) $(INSTALL_LDFLAGS) -pthread
 
 $(TASK_FILES_TEST_TARGET): tests/test_task_files.cpp \
@@ -479,6 +483,14 @@ $(VERSION_MATCH_TEST_TARGET): tests/test_version_match.cpp \
 		src/app/game_metadata_service.o src/app/snapshot_zstd.o \
 		src/core/util.o src/core/sha1.o src/core/sha256.o
 	$(CXX) $(CXXFLAGS) -Isrc -o $@ $^ $(LDFLAGS) -lcurl -lm -lcrypto -lzstd -lz -pthread
+
+$(METAINFO_FETCH_TEST_TARGET): tests/test_torrent_metainfo_fetch.cpp \
+		src/app/torrent_metainfo_fetch.o src/app/magnet_resolver.o \
+		src/core/tracker.o src/core/net.o \
+		src/core/dht.o vendor/dht/dht.o \
+		src/core/bencode.o src/core/metainfo.o \
+		src/core/sha1.o src/core/sha256.o src/core/mse.o src/core/util.o
+	$(CXX) $(CXXFLAGS) -Isrc -o $@ $^ $(LDFLAGS) -lcurl -lm -lcrypto -pthread
 
 $(SWITCH_DEPLOY_TEST_TARGET): tests/test_switch_deploy.cpp \
 		src/app/switch_deploy.o src/app/task_files.o \
@@ -584,6 +596,7 @@ clean:
 		$(TB_PROVIDER_TEST_TARGET) $(TS_PROVIDER_TEST_TARGET) \
 		$(TASK_FILES_TEST_TARGET) $(SWITCH_DEPLOY_TEST_TARGET) \
 		$(PORT_ARCHIVE_TEST_TARGET) $(TICKET_RIGHTS_TEST_TARGET) \
-		$(STORAGE_MANAGER_TEST_TARGET) $(VERSION_MATCH_TEST_TARGET)
+		$(STORAGE_MANAGER_TEST_TARGET) $(VERSION_MATCH_TEST_TARGET) \
+		$(METAINFO_FETCH_TEST_TARGET)
 
 .PHONY: all test clean
