@@ -1,4 +1,5 @@
 #include "app/game_update_install.hpp"
+#include "app/nx_file_types.hpp"
 
 #include <cassert>
 #include <cstdio>
@@ -230,6 +231,15 @@ void testUtf8TruncateBoundary() {
     assert(pipensx::utf8TruncateBoundary("", 0) == 0);
 }
 
+void testPackageInstallRank() {
+    using pipensx::packageInstallRank;
+    assert(packageInstallRank(
+               "Minecraft [0100D71004694000][v0].nsp") == 0);
+    assert(packageInstallRank(
+               "Minecraft [0100D71004694800][v10420224].nsp") == 1);
+    assert(packageInstallRank("readme.txt") == 2);
+}
+
 } // namespace
 
 // --- B6 update guard: BOTW/Broforce mocks ---
@@ -445,6 +455,7 @@ int main() {
     testInstalledVersionLabel();
     testLayeredFsModDir();
     testNacpDisplayVersionString();
+    testPackageInstallRank();
     std::puts("update file selection tests passed");
     return 0;
 }
