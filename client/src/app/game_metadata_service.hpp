@@ -127,7 +127,8 @@ public:
     bool load(std::string& error);
     bool fetchLatest(MetadataSnapshot& snapshot, std::string& error) const;
     void adopt(MetadataSnapshot snapshot);
-    const GameMetadata* findByInfoHash(const std::string& infoHash) const;
+    const GameMetadata* findByInfoHash(const std::string& infoHash,
+                                       const std::string& titleId = {}) const;
     // Appends every index entry matching titleId that carries a non-empty
     // latestVersion (the same entry set collectLatestVersions folds). The
     // caller chooses among bundles; returns false when the title has none.
@@ -178,6 +179,16 @@ public:
     size_t size() const { return byHash_.size(); }
     const MetadataManifest& manifest() const { return manifest_; }
 
+    // PlayerMode bits present anywhere in the loaded index. The catalogue
+    // builds its player-filter menu from this, so an index that predates the
+    // field (or a mode nobody in it supports) simply has no menu entry.
+    uint8_t availablePlayerModes() const { return availableModes_; }
+    // True when the filter has anything to work with at all: either a mode
+    // flag, or a couch-multiplayer player count to fall back on.
+    bool hasPlayerData() const {
+        return availableModes_ != 0 || localPlayerCounts_;
+    }
+
     static bool parseIndex(const std::string& json,
                            std::vector<GameMetadata>& items,
                            std::string& error);
@@ -207,10 +218,15 @@ private:
     };
 
     void imageWorkerMain() const;
+    // Refresh availableModes_/localPlayerCounts_ from items_. Called from
+    // every place that reassigns them (load, adopt).
+    void recomputePlayerSummary();
     // Rebuild byTitleId_ (titleId → latestVersion strings) and
-    // byTitleIdHashes_ (titleId → info hashes) from byHash_. Called from every
-    // place that reassigns byHash_ (load, adopt).
+    // byTitleIdItems_ (titleId → indices into items_) from every index row.
+    // Combo dumps share an infoHash across title IDs; those rows must all
+    // stay, so this walks items_ rather than the unique-hash map.
     void rebuildTitleIdIndex();
+    void ingestItems(std::vector<GameMetadata> items);
     bool loadCachedSnapshot(MetadataSnapshot& snapshot,
                             std::string& error) const;
     ImageLoadResult loadImageInternal(const std::string& url,
@@ -238,14 +254,20 @@ private:
     mutable std::atomic<ImageNetwork> imageNetwork_{ImageNetwork::Full};
     mutable std::atomic<bool> stoppingRequested_{false};
     mutable bool stoppingImages_ = false;
-    std::unordered_map<std::string, GameMetadata> byHash_;
+    std::vector<GameMetadata> items_;
+    // infoHash → first items_ index. Catalog art looks up by torrent hash;
+    // combo dumps keep every title-id row in items_ and only the first hash
+    // wins here.
+    std::unordered_map<std::string, size_t> byHash_;
     // titleId (upper-case hex) → non-empty latestVersion of every entry that
-    // carries one. Built beside byHash_ (same UI-thread-only reassignment
+    // carries one. Built beside items_ (same UI-thread-only reassignment
     // rule) and consumed by collectLatestVersions().
     std::unordered_map<std::string, std::vector<std::string>> byTitleId_;
-    // titleId (upper-case hex) → info hashes of the same entry set as
+    // titleId (upper-case hex) → items_ indices of the same entry set as
     // byTitleId_. Consumed by findByTitleId() for update downloads.
-    std::unordered_map<std::string, std::vector<std::string>> byTitleIdHashes_;
+    std::unordered_map<std::string, std::vector<size_t>> byTitleIdItems_;
+    uint8_t availableModes_ = 0;
+    bool localPlayerCounts_ = false;
     MetadataManifest manifest_;
 };
 

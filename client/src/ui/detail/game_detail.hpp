@@ -95,7 +95,8 @@ public:
                        FavoritesService* favorites = nullptr,
                        SwitchDeployService* deploy = nullptr,
                        bool autoInstall = false,
-                       bool portInstall = false)
+                       bool portInstall = false,
+                       std::string titleIdHint = {})
         : entry_(std::move(entry)), lastFailure_(std::move(lastFailure)),
           manager_(manager), metadata_(metadata), installed_(installed),
           settings_(settings), favorites_(favorites),
@@ -105,7 +106,8 @@ public:
           alive_(std::make_shared<std::atomic<bool>>(true)),
           cancelled_(std::make_shared<std::atomic<bool>>(false)),
           autoInstall_(autoInstall), portInstall_(portInstall) {
-        const GameMetadata* found = metadata_->findByInfoHash(entry_.infoHash);
+        const GameMetadata* found =
+            metadata_->findByInfoHash(entry_.infoHash, titleIdHint);
         presentation_ = resolveCatalogPresentation(entry_, found,
                                                    catalogTextPreference());
         titleId_ = presentation_.titleId;
@@ -502,7 +504,7 @@ private:
 
     std::string latestVersionForEntry() const {
         const GameMetadata* metadata =
-            metadata_->findByInfoHash(entry_.infoHash);
+            metadata_->findByInfoHash(entry_.infoHash, titleId_);
         return metadata ? metadata->latestVersion : std::string();
     }
 

@@ -240,6 +240,27 @@ void testPackageInstallRank() {
     assert(packageInstallRank("readme.txt") == 2);
 }
 
+void testComboDumpDoesNotSelectOtherTitlePatch() {
+    TorrentPreview preview;
+    preview.files = {
+        package("Super Mario Galaxy [0100AAAA00000000][v0].nsp"),
+        package("Super Mario Galaxy [0100AAAA00000800][v131072].nsp"),
+        package("Super Mario Galaxy 2 [0100BBBB00000000][v0].nsp"),
+        package("Super Mario Galaxy 2 [0100BBBB00000800][v327680].nsp")};
+    expectActions(preview, "131072", {
+        static_cast<uint8_t>(FileAction::Skip),
+        static_cast<uint8_t>(FileAction::Install),
+        static_cast<uint8_t>(FileAction::Skip),
+        static_cast<uint8_t>(FileAction::Skip),
+    }, "0100AAAA00000000");
+    expectActions(preview, "327680", {
+        static_cast<uint8_t>(FileAction::Skip),
+        static_cast<uint8_t>(FileAction::Skip),
+        static_cast<uint8_t>(FileAction::Skip),
+        static_cast<uint8_t>(FileAction::Install),
+    }, "0100BBBB00000000");
+}
+
 } // namespace
 
 // --- B6 update guard: BOTW/Broforce mocks ---
@@ -456,6 +477,7 @@ int main() {
     testLayeredFsModDir();
     testNacpDisplayVersionString();
     testPackageInstallRank();
+    testComboDumpDoesNotSelectOtherTitlePatch();
     std::puts("update file selection tests passed");
     return 0;
 }

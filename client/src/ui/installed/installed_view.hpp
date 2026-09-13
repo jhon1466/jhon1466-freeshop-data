@@ -627,7 +627,8 @@ private:
                         reload();
                 });
             },
-            nullptr, favorites_, deploy_, autoInstall));
+            nullptr, favorites_, deploy_, autoInstall,
+            /*portInstall=*/false, titleId));
     }
 
     void openInCatalog(const std::string& titleId) {

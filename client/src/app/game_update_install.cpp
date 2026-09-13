@@ -85,7 +85,41 @@ bool pathHasTitleId(const std::string& path, const std::string& titleId) {
                    [](unsigned char c) {
                        return static_cast<char>(std::tolower(c));
                    });
-    return lowerPath.find(lowerId) != std::string::npos;
+    if (lowerPath.find(lowerId) != std::string::npos)
+        return true;
+    // Patch packages carry the …800 update id while callers pass the …000
+    // base id (combo dumps, installed-view updates). Normalize both sides
+    // onto the base application id before comparing.
+    auto parseHex16 = [](const std::string& text, size_t at, uint64_t& out) {
+        if (at + 16 > text.size())
+            return false;
+        uint64_t value = 0;
+        for (size_t i = 0; i < 16; ++i) {
+            const unsigned char c =
+                static_cast<unsigned char>(text[at + i]);
+            unsigned digit = 0;
+            if (c >= '0' && c <= '9')
+                digit = c - '0';
+            else if (c >= 'a' && c <= 'f')
+                digit = 10 + (c - 'a');
+            else
+                return false;
+            value = (value << 4) | digit;
+        }
+        out = value;
+        return true;
+    };
+    uint64_t wanted = 0;
+    if (!parseHex16(lowerId, 0, wanted) || lowerId.size() != 16)
+        return false;
+    wanted &= ~0x1FFFULL;
+    for (size_t i = 0; i + 16 <= lowerPath.size(); ++i) {
+        uint64_t candidate = 0;
+        if (parseHex16(lowerPath, i, candidate) &&
+            (candidate & ~0x1FFFULL) == wanted)
+            return true;
+    }
+    return false;
 }
 
 } // namespace
