@@ -13,6 +13,7 @@
 #include "../install/install_backend.hpp"
 #include "../install/install_journal.hpp"
 #include "../install/package_stream.hpp"
+#include "../platform/storage.h"
 
 extern "C" {
 #include "../core/bencode.h"
@@ -2987,7 +2988,11 @@ void DownloadManager::runTask(RunnerSlot* slot, ClaimedTask claim) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (DownloadTask* task = findLocked(activeId)) {
             task->status = DownloadStatus::Error;
-            task->error = "No se pudo inicializar el almacenamiento o la red del torrent.";
+            const char* storageError = storage_open_error();
+            if (storageError[0])
+                task->error = storageError;
+            else
+                task->error = "No se pudo inicializar el almacenamiento o la red del torrent.";
             std::string ignored;
             saveLocked(ignored);
         }
@@ -3203,9 +3208,16 @@ void DownloadManager::runTask(RunnerSlot* slot, ClaimedTask claim) {
                 task->resumeBitfield = std::move(teardownBitfield);
             std::string ignored;
             saveLocked(ignored);
-            if (finished)
+            if (finished) {
+                std::string manifestError;
+                if (!refreshTorrentManifestLocalPaths(rootPath_, *task,
+                                                      manifestError))
+                    diagnostic_error("task_files", "refresh_paths",
+                                     "task=%s error=%s", activeId.c_str(),
+                                     manifestError.c_str());
                 log_msg("[manager] completion saved %s\n",
                         activeId.c_str());
+            }
         }
     }
     if (finished)

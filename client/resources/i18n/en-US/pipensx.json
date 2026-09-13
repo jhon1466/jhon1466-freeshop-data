@@ -726,6 +726,7 @@
     "receipt_modified": "Files modified",
     "cancel_requested": "Cancel requested...",
     "problem_busy": "Operation in progress",
+    "problem_not_port": "This download contains native packages (NSP/NSZ). Install them as packages, not as a /switch port.",
     "cancel": "Cancel copy",
     "progress": "Copying {} ({}%)",
     "waiting_stream": "Waiting for stream...",

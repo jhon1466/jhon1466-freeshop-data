@@ -83,7 +83,11 @@ int main() {
         storage.freeBytes = 800;
         InstallSpaceCheck check = assessInstallSpace(estimate, storage);
         assert(check.status == InstallSpaceCheckStatus::Insufficient);
-        assert(check.shortfallBytes == 100);
+        assert(check.shortfallBytes == 1900);
+
+        storage.freeBytes = 3000;
+        check = assessInstallSpace(estimate, storage);
+        assert(check.status == InstallSpaceCheckStatus::Enough);
     }
 
     std::puts("install space tests passed");

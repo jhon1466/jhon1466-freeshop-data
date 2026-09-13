@@ -496,10 +496,13 @@ public:
                 errorResult("No se pudo consultar el espacio libre de contenido", rc);
                 return false;
             }
-            if (freeSpace < 0 || static_cast<uint64_t>(freeSpace) < size) {
+            if (freeSpace < 0 ||
+                static_cast<uint64_t>(freeSpace) <
+                    size + pendingPlaceholderBytes_) {
                 char required[32];
                 char available[32];
-                fmt_bytes(required, sizeof(required), size);
+                const uint64_t totalNeed = size + pendingPlaceholderBytes_;
+                fmt_bytes(required, sizeof(required), totalNeed);
                 fmt_bytes(available, sizeof(available),
                           freeSpace > 0 ? static_cast<uint64_t>(freeSpace) : 0);
                 const char* where = storageId_ == NcmStorageId_BuiltInUser
@@ -507,9 +510,12 @@ public:
                 error_ = std::string("No hay suficiente espacio en ") + where + " para " +
                          current_->name + ": se necesitan " + required + ", disponibles " +
                          available + ".";
-                log_msg("[install] insufficient space name='%s' need=%llu free=%lld\n",
+                log_msg("[install] insufficient space name='%s' need=%llu "
+                        "pending=%llu free=%lld\n",
                         current_->name.c_str(),
                         static_cast<unsigned long long>(size),
+                        static_cast<unsigned long long>(
+                            pendingPlaceholderBytes_),
                         static_cast<long long>(freeSpace));
                 return false;
             }
@@ -519,9 +525,11 @@ public:
                 rc = ncmContentStorageCreatePlaceHolder(
                     &storage_, &current_->id, &current_->placeholder, size);
             if (R_FAILED(rc)) {
-                errorResult("No se pudo crear el marcador de posición de contenido", rc);
+                placeholderErrorResult("No se pudo crear el marcador de posición de contenido",
+                                       rc, 0, 0);
                 return false;
             }
+            pendingPlaceholderBytes_ += size;
         }
         sha256ContextCreate(&sha_);
         hashActive_ = true;
@@ -569,7 +577,8 @@ public:
             if (ncmStartedUs)
                 ncmUs = now_us() - ncmStartedUs;
             if (R_FAILED(rc)) {
-                errorResult("No se pudo escribir el marcador de posición de contenido", rc);
+                placeholderErrorResult("No se pudo escribir el marcador de posición de contenido", rc,
+                                       current_->written, size);
                 return false;
             }
         }
@@ -1338,6 +1347,48 @@ private:
                 error_.c_str(), currentName_.c_str(), packageName_.c_str());
     }
 
+    void placeholderErrorResult(const char* message, Result rc,
+                                uint64_t offset, size_t chunk) {
+        if (current_ && !current_->existing) {
+            s64 freeSpace = 0;
+            const Result spaceRc =
+                ncmContentStorageGetFreeSpaceSize(&storage_, &freeSpace);
+            if (R_SUCCEEDED(spaceRc) && freeSpace >= 0) {
+                const uint64_t remaining =
+                    current_->size > current_->written
+                        ? current_->size - current_->written
+                        : 0;
+                if (static_cast<uint64_t>(freeSpace) < remaining) {
+                    char required[32];
+                    char available[32];
+                    fmt_bytes(required, sizeof(required), remaining);
+                    fmt_bytes(available, sizeof(available),
+                              static_cast<uint64_t>(freeSpace));
+                    const char* where =
+                        storageId_ == NcmStorageId_BuiltInUser
+                            ? "la memoria del sistema" : "la tarjeta SD";
+                    error_ = std::string("No hay suficiente espacio en ") + where + " para " +
+                             current_->name + ": se necesitan " + required + ", disponibles " +
+                             available + ".";
+                    log_msg("[install] placeholder error: %s offset=%llu "
+                            "chunk=%zu free=%lld rc=0x%08x\n",
+                            error_.c_str(),
+                            static_cast<unsigned long long>(offset), chunk,
+                            static_cast<long long>(freeSpace), rc);
+                    return;
+                }
+            }
+        }
+        errorResult(message, rc);
+        if (current_) {
+            log_msg("[install] placeholder error: %s offset=%llu chunk=%zu "
+                    "written=%llu file='%s' rc=0x%08x\n",
+                    error_.c_str(), static_cast<unsigned long long>(offset),
+                    chunk, static_cast<unsigned long long>(current_->written),
+                    current_->name.c_str(), rc);
+        }
+    }
+
     void discardPlaceholders() {
         for (auto& content : contents_)
             if (!content.existing && content.size)
@@ -1378,6 +1429,7 @@ private:
         expected_ = 0;
         installed_ = 0;
         ignoredRemaining_ = 0;
+        pendingPlaceholderBytes_ = 0;
         earlyMeta_ = ParsedMeta {};
         earlyMetaValid_ = false;
         skippedDeltaIds_.clear();
@@ -1413,6 +1465,7 @@ private:
     mutable std::vector<NcmContentId> skippedDeltaIds_;
     uint64_t auxiliaryExpected_ = 0;
     uint64_t ignoredRemaining_ = 0;
+    uint64_t pendingPlaceholderBytes_ = 0;
     uint64_t expected_ = 0;
     uint64_t installed_ = 0;
     uint64_t applicationId_ = 0;
