@@ -36,14 +36,13 @@ namespace {
 #define PIPENSX_VERSION "0.0.0"
 #endif
 
-// Proxied through our own Worker (not straight at api.github.com/github.com)
-// so update checks keep working once the data repo is set to private, and
-// so the repo owner/name doesn't appear in the compiled .nro's strings. See
-// worker/src/index.ts's handleReleaseLatest/handleReleaseAsset.
+// Direct GitHub API (data repo is public; proxy worker is not deployed).
+// The proxy was meant for private repos; since this data repo is public,
+// we use GitHub API directly. The repo name will appear in NRO strings.
 constexpr const char* kLatestReleaseUrl =
-    "https://freeshop-proxy.freeshopnx.workers.dev/releases/latest";
+    "https://api.github.com/repos/jhon1466/jhon1466-freeshop-data/releases/latest";
 constexpr const char* kReleaseAssetPrefix =
-    "https://freeshop-proxy.freeshopnx.workers.dev/releases/assets/";
+    "https://github.com/jhon1466/jhon1466-freeshop-data/releases/download/";
 constexpr size_t kMetadataLimit = 512 * 1024;
 constexpr size_t kChecksumLimit = 1024;
 constexpr size_t kNroLimit = 64 * 1024 * 1024;
