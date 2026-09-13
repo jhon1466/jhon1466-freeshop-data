@@ -549,6 +549,10 @@ Step pollUntilReady(RunContext& ctx) {
                     DebridTaskSpec::ResolvedFile file;
                     file.path = sanitizeRelative(info.files[i].path, info.name,
                                                  pathOk);
+                    if (!pathOk || file.path.empty())
+                        file.path = baseName(info.files[i].path);
+                    while (!file.path.empty() && file.path.front() == '/')
+                        file.path.erase(file.path.begin());
                     file.localPath = file.path;
                     file.bytes = info.files[i].bytes;
                     file.action = !selected(ctx.spec, i, info.files[i])
@@ -556,8 +560,6 @@ Step pollUntilReady(RunContext& ctx) {
                         : installs(ctx.spec, i, info.files[i])
                             ? static_cast<uint8_t>(FileAction::Install)
                             : static_cast<uint8_t>(FileAction::Download);
-                    if (!pathOk)
-                        file.path = info.files[i].path;
                     resolved.push_back(std::move(file));
                 }
                 ctx.spec.filesResolved(resolved);
@@ -582,6 +584,17 @@ Step pollUntilReady(RunContext& ctx) {
             return Step::Stopped;
     }
 }
+}
+
+// One TCP stream from offset to EOF. Stream-install uses this instead of
+// fetchOrdered: parallel Range workers on the same debrid CDN URL corrupt
+// the byte stream (RD returns 206 but pipensx sees non-PFS0 payloads).
+bool fetchSequential(const RangeFetcher& fetcher, const std::string& url,
+                     uint64_t offset,
+                     const std::function<bool(const uint8_t*, size_t)>& sink,
+                     const std::function<bool()>& cancelled,
+                     std::string& error) {
+    return fetcher(url, offset, 0, sink, cancelled, error);
 }
 
 // Pull [offset, totalBytes) through the injected fetcher. Several Range
@@ -700,7 +713,7 @@ bool fetchOrdered(const RangeFetcher& fetcher, const std::string& url,
             failed = true;
             stopWorkers = true;
             if (workerError.empty())
-                workerError = "The installer rejected the downloaded data.";
+                workerError = "Unable to write the downloaded data.";
             cv.notify_all();
             break;
         }
@@ -782,8 +795,11 @@ Step fetchAppend(RunContext& ctx, const std::string& url,
     StreamRamBudget budget = detectStreamRamBudget(1 * 1024 * 1024);
     const size_t maximumBuffered = budget.valid
         ? budget.maxBufferedBytes : 64 * 1024 * 1024;
-    bool ok = fetchOrdered(ctx.fetcher, url, offset, fileBytes,
-                           maximumBuffered / 2, sink, *ctx.shouldStop, err);
+    // TorBox/TorrServer still pipeline Range workers; RD's CDN does not.
+    bool ok = std::strcmp(ctx.provider.name(), "realdebrid") == 0
+        ? fetchSequential(ctx.fetcher, url, offset, sink, *ctx.shouldStop, err)
+        : fetchOrdered(ctx.fetcher, url, offset, fileBytes,
+                       maximumBuffered / 2, sink, *ctx.shouldStop, err);
     std::fflush(out);
     std::fclose(out);
     if (!ok) {
@@ -948,9 +964,8 @@ Step attemptStreamInstall(RunContext& ctx, const DebridFile& file,
             ctx.packageDownloadedBytes.fetch_add(n);
             return queue.push(data, n);
         };
-        fetchOk = fetchOrdered(ctx.fetcher, url, 0, file.bytes,
-                               maximumBuffered / 2, sink, *ctx.shouldStop,
-                               fetchError);
+        fetchOk = fetchSequential(ctx.fetcher, url, 0, sink, *ctx.shouldStop,
+                                  fetchError);
         queue.finish();
     });
 

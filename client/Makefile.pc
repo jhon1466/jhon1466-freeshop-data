@@ -450,6 +450,7 @@ $(DEBRID_TRANSFER_TEST_TARGET): tests/test_debrid_transfer.cpp \
 		src/app/install_pacer.o \
 		src/app/stream_ram_budget.o \
 		src/app/torbox_provider.o \
+		src/app/realdebrid_client.o src/app/realdebrid_provider.o \
 		src/install/package_stream.o src/install/install_backend_pc.o \
 		src/core/util.o
 	$(CXX) $(CXXFLAGS) -Isrc -o $@ $^ $(LDFLAGS) $(INSTALL_LDFLAGS) -pthread

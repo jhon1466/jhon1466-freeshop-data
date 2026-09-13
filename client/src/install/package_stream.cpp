@@ -1505,7 +1505,13 @@ private:
             return true;
         uint64_t parseStartedUs = telemetry_enabled() ? now_us() : 0;
         if (std::memcmp(pending_.data(), "PFS0", 4) != 0) {
-            error_ = "El paquete no es un NSP/NSZ PFS0.";
+            if (std::memcmp(pending_.data(), "HEAD", 4) == 0)
+                error_ = "El paquete es un volcado de cartucho XCI, no un NSP/NSZ.";
+            else if (pending_[0] == '<' || pending_[0] == '{')
+                error_ =
+                    "El paquete no es un NSP/NSZ PFS0 (la descarga era una página web).";
+            else
+                error_ = "El paquete no es un NSP/NSZ PFS0.";
             return fail();
         }
         uint32_t count = read32(pending_.data() + 4);
