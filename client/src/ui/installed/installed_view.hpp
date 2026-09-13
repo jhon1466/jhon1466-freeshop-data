@@ -188,16 +188,23 @@ private:
     // exists for when an update is available, so it must never be pushed off
     // the end. The 16-hex title ID was dropped — nothing on screen can act on
     // it, and on long publishers it was the first thing to get clipped.
+    // B3: raw decimal title versions ("v327680") read as garbage — show
+    // the eShop x.y.z form ("v5.0.0"), keeping the raw text when it is
+    // not a decimal version.
+    static std::string prettyVersion(const std::string& decimal) {
+        const std::string formatted = formatTitleVersion(decimal);
+        return formatted.empty() ? decimal : formatted;
+    }
     void updateSubtitle() {
         std::string subtitle;
         if (!publisher_.empty())
             subtitle = publisher_ + " · ";
         if (!version_.empty()) {
-            subtitle += "v" + version_;
+            subtitle += "v" + prettyVersion(version_);
             if (!ignored_ &&
                 currentState_ == GameUpdateState::UpdateAvailable &&
                 !currentFoundVersion_.empty())
-                subtitle += " → v" + currentFoundVersion_;
+                subtitle += " → v" + prettyVersion(currentFoundVersion_);
         }
         subtitle_->setText(subtitle);
     }
@@ -518,7 +525,10 @@ private:
             if (it != updates_->results().end() &&
                 it->second.state == GameUpdateState::UpdateAvailable)
                 add(tr("pipensx/installed/update_action"),
-                    [this, titleId = title.titleId] { installUpdate(titleId); });
+                    [this, titleId = title.titleId,
+                     foundVersion = it->second.foundVersion] {
+                        installUpdate(titleId, foundVersion);
+                    });
         }
         add(tr("pipensx/installed/open_in_catalog"),
             [this, titleId = title.titleId] { openInCatalog(titleId); });
@@ -548,12 +558,26 @@ private:
 
     // "En catálogo" (Y): open the release's catalog page, where the smart
     // install contract and any "Copy to /switch" deploy offer live.
-    const CatalogEntry* catalogEntryForTitle(const std::string& titleId) const {
+    const CatalogEntry* catalogEntryForTitle(
+        const std::string& titleId,
+        const std::string& foundVersion = {}) const {
         if (!catalog_)
             return nullptr;
         std::vector<const GameMetadata*> entries;
         if (metadata_)
             metadata_->findByTitleId(titleId, entries);
+        // B3: the update check names the wanted version — open the bundle
+        // carrying it, not the newest-published one (usually the base
+        // game), so "install update" does not download the whole game.
+        if (!foundVersion.empty() && metadata_) {
+            if (const GameMetadata* match =
+                    GameMetadataService::preferVersionMatch(entries,
+                                                           foundVersion)) {
+                if (const CatalogEntry* direct =
+                        catalog_->findByInfoHash(match->infoHash))
+                    return direct;
+            }
+        }
         const CatalogEntry* best = nullptr;
         for (const CatalogEntry& entry : catalog_->entries()) {
             const std::string hash = catalogLower(entry.infoHash);
@@ -572,8 +596,10 @@ private:
         return best;
     }
 
-    void openCatalogPage(const std::string& titleId, bool autoInstall) {
-        const CatalogEntry* catalogEntry = catalogEntryForTitle(titleId);
+    void openCatalogPage(const std::string& titleId, bool autoInstall,
+                         const std::string& foundVersion = {}) {
+        const CatalogEntry* catalogEntry =
+            catalogEntryForTitle(titleId, foundVersion);
         if (!catalogEntry) {
             brls::Application::notify(
                 tr("pipensx/installed/update_no_bundle"));
@@ -597,7 +623,8 @@ private:
 
     // "Update" menu item: fork's direct flow — resolve the update torrent's
     // magnet, pick the files, import into the download manager.
-    void installUpdate(const std::string& titleId) {
+    void installUpdate(const std::string& titleId,
+                       const std::string& foundVersion = {}) {
         if (refreshing_ || updateInFlight_ || uninstallInFlight_)
             return;
         std::vector<const GameMetadata*> entries;
@@ -605,6 +632,17 @@ private:
             brls::Application::notify(
                 tr("pipensx/installed/update_no_bundle"));
             return;
+        }
+        // B3: the update check names the wanted version — install the
+        // bundle carrying it instead of paging from the newest-published
+        // one (usually the base game).
+        if (!foundVersion.empty()) {
+            if (const GameMetadata* match =
+                    GameMetadataService::preferVersionMatch(entries,
+                                                           foundVersion)) {
+                confirmUpdateInstall(GameMetadata(*match));
+                return;
+            }
         }
         if (entries.size() == 1) {
             confirmUpdateInstall(GameMetadata(*entries.front()));

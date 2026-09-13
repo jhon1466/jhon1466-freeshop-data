@@ -89,6 +89,7 @@ SWITCH_DEPLOY_TEST_TARGET = tests/test_switch_deploy
 PORT_ARCHIVE_TEST_TARGET = tests/test_port_archive
 TICKET_RIGHTS_TEST_TARGET = tests/test_ticket_rights
 STORAGE_MANAGER_TEST_TARGET = tests/test_storage_manager
+VERSION_MATCH_TEST_TARGET = tests/test_version_match
 TEST_SRCS = \
     tests/test_piece.c       \
     src/core/sha1.c          \
@@ -292,7 +293,8 @@ test: $(TEST_TARGET) $(MANAGER_TEST_TARGET) $(PACKAGE_TEST_TARGET) \
 		$(TB_PROVIDER_TEST_TARGET) $(TS_PROVIDER_TEST_TARGET) \
 		$(TASK_FILES_TEST_TARGET) $(SWITCH_DEPLOY_TEST_TARGET) \
 		$(PORT_ARCHIVE_TEST_TARGET) $(TASK_PROGRESS_TEST_TARGET) \
-		$(TICKET_RIGHTS_TEST_TARGET) $(STORAGE_MANAGER_TEST_TARGET)
+		$(TICKET_RIGHTS_TEST_TARGET) $(STORAGE_MANAGER_TEST_TARGET) \
+		$(VERSION_MATCH_TEST_TARGET)
 	./$(TEST_TARGET)
 	./$(PACKAGE_TEST_TARGET)
 	./$(CATALOG_TEST_TARGET)
@@ -332,6 +334,7 @@ test: $(TEST_TARGET) $(MANAGER_TEST_TARGET) $(PACKAGE_TEST_TARGET) \
 	./$(TASK_PROGRESS_TEST_TARGET)
 	./$(TICKET_RIGHTS_TEST_TARGET)
 	./$(STORAGE_MANAGER_TEST_TARGET)
+	./$(VERSION_MATCH_TEST_TARGET)
 	python3 tests/test_bug_report_decode.py
 	python3 tests/test_telemetry_analyzer.py
 	python3 scripts/check_i18n.py
@@ -471,6 +474,11 @@ $(STORAGE_MANAGER_TEST_TARGET): tests/test_storage_manager.cpp \
 		src/app/storage_manager.cpp src/app/install_space.cpp
 	$(CXX) $(CXXFLAGS) -Isrc -o $@ $^ $(LDFLAGS)
 
+$(VERSION_MATCH_TEST_TARGET): tests/test_version_match.cpp \
+		src/app/game_metadata_service.o src/app/snapshot_zstd.o \
+		src/core/util.o src/core/sha1.o src/core/sha256.o
+	$(CXX) $(CXXFLAGS) -Isrc -o $@ $^ $(LDFLAGS) -lcurl -lm -lcrypto -lzstd -lz -pthread
+
 $(SWITCH_DEPLOY_TEST_TARGET): tests/test_switch_deploy.cpp \
 		src/app/switch_deploy.o src/app/task_files.o \
 		src/app/port_archive.o $(LZMA_OBJS) \
@@ -575,6 +583,6 @@ clean:
 		$(TB_PROVIDER_TEST_TARGET) $(TS_PROVIDER_TEST_TARGET) \
 		$(TASK_FILES_TEST_TARGET) $(SWITCH_DEPLOY_TEST_TARGET) \
 		$(PORT_ARCHIVE_TEST_TARGET) $(TICKET_RIGHTS_TEST_TARGET) \
-		$(STORAGE_MANAGER_TEST_TARGET)
+		$(STORAGE_MANAGER_TEST_TARGET) $(VERSION_MATCH_TEST_TARGET)
 
 .PHONY: all test clean
