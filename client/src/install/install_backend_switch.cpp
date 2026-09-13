@@ -1,4 +1,5 @@
 #include "install/content_meta.hpp"
+#include "install/ticket_rights.hpp"
 #include "install_backend.hpp"
 
 #ifdef __SWITCH__
@@ -125,6 +126,35 @@ std::string hexBytes(const uint8_t* data, size_t size) {
         result[i * 2 + 1] = Digits[data[i] & 0x0f];
     }
     return result;
+}
+
+bool rightsIdInstalled(const uint8_t rightsId[16]) {
+    auto matches = [&](const EsRightsId* ids, u32 count) {
+        for (u32 i = 0; i < count; ++i) {
+            if (std::memcmp(ids[i].fs_id.c, rightsId, 16) == 0)
+                return true;
+        }
+        return false;
+    };
+    u32 commonCount = esCountCommonTicket();
+    if (commonCount > 0) {
+        std::vector<EsRightsId> ids(commonCount);
+        u32 written = 0;
+        if (R_SUCCEEDED(esListCommonTicket(
+                &written, ids.data(), ids.size() * sizeof(EsRightsId))) &&
+            matches(ids.data(), written))
+            return true;
+    }
+    u32 personalizedCount = esCountPersonalizedTicket();
+    if (personalizedCount > 0) {
+        std::vector<EsRightsId> ids(personalizedCount);
+        u32 written = 0;
+        if (R_SUCCEEDED(esListPersonalizedTicket(
+                &written, ids.data(), ids.size() * sizeof(EsRightsId))) &&
+            matches(ids.data(), written))
+            return true;
+    }
+    return false;
 }
 
 // F-B journal blob helpers: little-endian, length-prefixed.
@@ -873,11 +903,37 @@ public:
                 error_ = "Falta el certificado del ticket.";
                 return false;
             }
-            rc = esImportTicket(ticket_.data(), ticket_.size(),
-                                certificate_.data(), certificate_.size());
-            if (R_FAILED(rc)) {
-                errorResult("No se pudo importar el ticket del título", rc);
+            uint8_t rightsId[16] {};
+            if (!parseTicketRightsId(ticket_.data(), ticket_.size(), rightsId)) {
+                error_ = "El ticket del título no es válido o está truncado.";
                 return false;
+            }
+            log_msg("[install] importing ticket rights_id=%s ticket_bytes=%zu "
+                    "cert_bytes=%zu\n",
+                    hexBytes(rightsId, sizeof(rightsId)).c_str(),
+                    ticket_.size(), certificate_.size());
+            if (!rightsIdInstalled(rightsId)) {
+                rc = esImportTicket(ticket_.data(), ticket_.size(),
+                                    certificate_.data(), certificate_.size());
+                if (R_FAILED(rc)) {
+                    if (rc == 0x291u && rightsIdInstalled(rightsId)) {
+                        log_msg("[install] ticket import returned 0x291 but "
+                                "ticket is present, continuing\n");
+                    } else if (rc == 0x291u) {
+                        error_ = "Falló la importación del ticket del título (0x00000291). "
+                                 "Es posible que falten los parches de firma ES (sys-patch) "
+                                 "o estén desactualizados para este firmware.";
+                        log_msg("[install] error: %s file='%s' package='%s'\n",
+                                error_.c_str(), currentName_.c_str(),
+                                packageName_.c_str());
+                        return false;
+                    } else {
+                        errorResult("No se pudo importar el ticket del título", rc);
+                        return false;
+                    }
+                }
+            } else {
+                log_msg("[install] ticket already present, skipping import\n");
             }
         }
 

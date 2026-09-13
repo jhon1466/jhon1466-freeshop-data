@@ -87,6 +87,7 @@ TASK_FILES_TEST_TARGET = tests/test_task_files
 TASK_PROGRESS_TEST_TARGET = tests/test_task_progress
 SWITCH_DEPLOY_TEST_TARGET = tests/test_switch_deploy
 PORT_ARCHIVE_TEST_TARGET = tests/test_port_archive
+TICKET_RIGHTS_TEST_TARGET = tests/test_ticket_rights
 TEST_SRCS = \
     tests/test_piece.c       \
     src/core/sha1.c          \
@@ -289,7 +290,8 @@ test: $(TEST_TARGET) $(MANAGER_TEST_TARGET) $(PACKAGE_TEST_TARGET) \
 		$(DEBRID_TRANSFER_TEST_TARGET) \
 		$(TB_PROVIDER_TEST_TARGET) $(TS_PROVIDER_TEST_TARGET) \
 		$(TASK_FILES_TEST_TARGET) $(SWITCH_DEPLOY_TEST_TARGET) \
-		$(PORT_ARCHIVE_TEST_TARGET) $(TASK_PROGRESS_TEST_TARGET)
+		$(PORT_ARCHIVE_TEST_TARGET) $(TASK_PROGRESS_TEST_TARGET) \
+		$(TICKET_RIGHTS_TEST_TARGET)
 	./$(TEST_TARGET)
 	./$(PACKAGE_TEST_TARGET)
 	./$(CATALOG_TEST_TARGET)
@@ -327,6 +329,7 @@ test: $(TEST_TARGET) $(MANAGER_TEST_TARGET) $(PACKAGE_TEST_TARGET) \
 	./$(SWITCH_DEPLOY_TEST_TARGET)
 	./$(PORT_ARCHIVE_TEST_TARGET)
 	./$(TASK_PROGRESS_TEST_TARGET)
+	./$(TICKET_RIGHTS_TEST_TARGET)
 	python3 tests/test_bug_report_decode.py
 	python3 tests/test_telemetry_analyzer.py
 	python3 scripts/check_i18n.py
@@ -457,6 +460,11 @@ $(TASK_PROGRESS_TEST_TARGET): tests/test_task_progress.cpp
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) -Isrc -o $@ $<
 
+# Header-only: exercises ticket rights-id parsing in ticket_rights.hpp.
+$(TICKET_RIGHTS_TEST_TARGET): tests/test_ticket_rights.cpp
+	@mkdir -p $(dir $@)
+	$(CXX) $(CXXFLAGS) -Isrc -o $@ $<
+
 $(SWITCH_DEPLOY_TEST_TARGET): tests/test_switch_deploy.cpp \
 		src/app/switch_deploy.o src/app/task_files.o \
 		src/app/port_archive.o $(LZMA_OBJS) \
@@ -560,6 +568,6 @@ clean:
 		$(DEBRID_TRANSFER_TEST_TARGET) \
 		$(TB_PROVIDER_TEST_TARGET) $(TS_PROVIDER_TEST_TARGET) \
 		$(TASK_FILES_TEST_TARGET) $(SWITCH_DEPLOY_TEST_TARGET) \
-		$(PORT_ARCHIVE_TEST_TARGET)
+		$(PORT_ARCHIVE_TEST_TARGET) $(TICKET_RIGHTS_TEST_TARGET)
 
 .PHONY: all test clean
