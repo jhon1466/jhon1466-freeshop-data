@@ -200,8 +200,9 @@ struct torrent {
     uint8_t         announce_compact[200*6];
     int64_t         announce_downloaded;
     int64_t         announce_left;
-    int             announce_started_event;
+    int             announce_event;
     int             tracker_started_event_sent;
+    int             tracker_completed_event_sent;
     /* Set by torrent_destroy before it joins the announce thread, read by
        that thread between trackers and from curl's progress callback. */
     atomic_int      announce_stop;
@@ -1272,7 +1273,7 @@ static void *announce_worker(void *arg) {
     uint8_t compact[200*6];
     uint32_t n = tracker_announce_with_event(
         &t->mi, t->peer_id, t->listen_port, t->announce_downloaded,
-        t->announce_left, compact, 200, t->announce_started_event,
+        t->announce_left, compact, 200, t->announce_event,
         announce_cancelled, t);
     pthread_mutex_lock(&t->announce_mutex);
     memcpy(t->announce_compact, compact, (size_t)n*6);
@@ -1283,14 +1284,19 @@ static void *announce_worker(void *arg) {
 }
 
 /* Kick off an announce. No-op if one is already in flight. Falls back to a
-   synchronous announce if threading is unavailable or spawn fails. */
-static void announce_start(torrent_t *t, int64_t downloaded, int64_t left) {
+   synchronous announce if threading is unavailable or spawn fails.
+   event TRACKER_EVENT_NONE becomes STARTED on the first announce. */
+static void announce_start(torrent_t *t, int64_t downloaded, int64_t left,
+                           int event) {
     if (t->announce_active)
         return;
     t->announce_downloaded = downloaded;
     t->announce_left       = left;
-    t->announce_started_event = !t->tracker_started_event_sent;
-    t->tracker_started_event_sent = 1;
+    if (event == TRACKER_EVENT_NONE && !t->tracker_started_event_sent)
+        event = TRACKER_EVENT_STARTED;
+    if (event == TRACKER_EVENT_STARTED)
+        t->tracker_started_event_sent = 1;
+    t->announce_event = event;
     if (t->async_ok) {
         t->announce_done  = 0;
         t->announce_count = 0;
@@ -1303,9 +1309,61 @@ static void announce_start(torrent_t *t, int64_t downloaded, int64_t left) {
     uint8_t compact[200*6];
     uint32_t n = tracker_announce_with_event(
         &t->mi, t->peer_id, t->listen_port, downloaded, left, compact, 200,
-        t->announce_started_event, announce_cancelled, t);
+        t->announce_event, announce_cancelled, t);
     announce_push_results(t, compact, n);
     log_msg("[torrent] announce (sync): %u peers\n", n);
+}
+
+struct stopped_announce {
+    char url[512];
+    uint8_t info_hash[20];
+    uint8_t peer_id[20];
+    uint16_t listen_port;
+    int64_t downloaded;
+    int64_t left;
+};
+
+static void torrent_announce_totals(const torrent_t *t, int64_t *downloaded,
+                                    int64_t *left) {
+    int64_t total = t->mi.total_length;
+    int64_t done = t->pm ? (int64_t)t->pm->completed_bytes : 0;
+    if (done < 0)
+        done = 0;
+    if (done > total)
+        done = total;
+    *downloaded = done;
+    *left = total - done;
+}
+
+static void *stopped_announce_worker(void *arg) {
+    struct stopped_announce *job = arg;
+    uint8_t compact[6];
+    tracker_announce_url_ex_cancel_event(
+        job->url, job->info_hash, job->peer_id, job->listen_port,
+        job->downloaded, job->left, compact, 1, NULL, TRACKER_EVENT_STOPPED,
+        NULL, NULL);
+    free(job);
+    return NULL;
+}
+
+/* Best-effort event=stopped: destroy must not wait on a dead tracker. */
+static void announce_stopped_async(torrent_t *t) {
+    if (t->mi.num_trackers == 0)
+        return;
+    struct stopped_announce *job = calloc(1, sizeof(*job));
+    if (!job)
+        return;
+    snprintf(job->url, sizeof(job->url), "%s", t->mi.trackers[0]);
+    memcpy(job->info_hash, t->mi.info_hash, 20);
+    memcpy(job->peer_id, t->peer_id, 20);
+    job->listen_port = t->listen_port;
+    torrent_announce_totals(t, &job->downloaded, &job->left);
+    pthread_t thread;
+    if (pthread_create(&thread, NULL, stopped_announce_worker, job) != 0) {
+        free(job);
+        return;
+    }
+    pthread_detach(thread);
 }
 
 /* Drain a finished async announce into the peer queue. Called every tick. */
@@ -1469,7 +1527,11 @@ torrent_t *torrent_create_ex(const metainfo_t *mi,
     t->last_tracker_ms  = now_ms();
     t->speed_time_ms    = now_ms();
     t->last_health_ms   = t->speed_time_ms;
-    announce_start(t, 0, (int64_t)mi->total_length);
+    {
+        int64_t downloaded = 0, left = 0;
+        torrent_announce_totals(t, &downloaded, &left);
+        announce_start(t, downloaded, left, TRACKER_EVENT_NONE);
+    }
 
     log_msg("[torrent] started: tracker announce dispatched\n");
     telemetry_log("torrent", t->telemetry_tag,
@@ -1502,6 +1564,7 @@ void torrent_destroy(torrent_t *t) {
         pthread_join(t->announce_thread, NULL);
         t->announce_active = 0;
     }
+    announce_stopped_async(t);
     if (t->async_ok) {
         pthread_mutex_destroy(&t->announce_mutex);
         t->async_ok = 0;
@@ -1621,8 +1684,18 @@ int torrent_tick(torrent_t *t) {
        completion check so the last piece completes in the same tick. */
     piece_mgr_drain_hash_results(t->pm);
 
-    if (t->pm->num_done == t->pm->num_pieces)
+    if (t->pm->num_done == t->pm->num_pieces) {
+        if (!t->tracker_completed_event_sent) {
+            announce_collect(t);
+            if (t->announce_active)
+                return 1;
+            int64_t downloaded = 0, left = 0;
+            torrent_announce_totals(t, &downloaded, &left);
+            announce_start(t, downloaded, 0, TRACKER_EVENT_COMPLETED);
+            t->tracker_completed_event_sent = 1;
+        }
         return check_completion(t);
+    }
 
     uint64_t now = now_ms();
 
@@ -1715,12 +1788,9 @@ int torrent_tick(torrent_t *t) {
             }
         }
         if (due) {
-            uint64_t announced_downloaded = t->downloaded;
-            if (announced_downloaded > (uint64_t)t->mi.total_length)
-                announced_downloaded = (uint64_t)t->mi.total_length;
-            announce_start(t, (int64_t)announced_downloaded,
-                           (int64_t)t->mi.total_length -
-                               (int64_t)announced_downloaded);
+            int64_t downloaded = 0, left = 0;
+            torrent_announce_totals(t, &downloaded, &left);
+            announce_start(t, downloaded, left, TRACKER_EVENT_NONE);
             t->last_tracker_ms = now;
         }
     }
