@@ -225,12 +225,6 @@ bool dictionaryInteger(const be_node_t& dict, const char* key,
     return true;
 }
 
-// IMPROVEMENT_PLAN F-B: one journal file per task next to the queue state.
-std::string installJournalPath(const std::string& root,
-                               const std::string& taskId) {
-    return root + "/install-journal-" + taskId + ".bencode";
-}
-
 void upgradeLegacySelection(DownloadTask& task) {
     if (task.fileSelection.empty())
         return;
@@ -338,7 +332,7 @@ public:
             : 4 * 1024 * 1024;
         buildPieceOrder();
         if (streamInstall_ && error_.empty() && packageCount_ > completedPackages_) {
-            journalPath_ = installJournalPath(workingRoot, taskId_);
+            journalPath_ = install::installJournalPath(workingRoot, taskId_);
             tryResume();
             StreamRamBudget budget;
             arbiterLease_ = arbiter_->acquire(
@@ -2573,7 +2567,8 @@ bool DownloadManager::removeLocked(const std::string& id, bool deleteData,
         }
 if (!it->metainfoPath.empty())
             unlink(it->metainfoPath.c_str());
-        install::removeInstallJournal(installJournalPath(rootPath_, it->id));
+        install::removeInstallJournal(
+            install::installJournalPath(rootPath_, it->id));
         removeTaskFileManifest(rootPath_, it->id);
         tasks_.erase(it);
         return persist ? saveLocked(error) : true;

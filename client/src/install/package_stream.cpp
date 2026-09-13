@@ -1163,7 +1163,10 @@ public:
     const std::string& error() const { return error_; }
 
     bool checkpoint(PackageStreamState& out) const {
-        if (failed_ || finished_ || !headerReady_)
+        // A cancelled writeFile leaves pending_ unconsumed, so the last
+        // digested point is still a valid resume. Parse errors that happen
+        // before the PFS0 header is ready still refuse via !headerReady_.
+        if (finished_ || !headerReady_)
             return false;
         // IMPROVEMENT_PLAN F-B/replay: a solid NCZ entry mid-frame has no
         // safe point to serialize its zstd internals (checkpointable() is
