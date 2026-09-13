@@ -66,20 +66,40 @@ static void set_path_errno(storage_t *s, const char *path, const char *what) {
              strerror(errno));
 }
 
+/* One mkdir level where EEXIST only counts when the name is already a
+   directory. A regular file holding a directory's name used to pass as
+   success here and fail deeper with a cryptic ENOENT (B2: Tomodachi Life
+   port, `.../contents/английская озв`) — report the blocker as ENOTDIR. */
+static int mkdir_one(char *path) {
+    struct stat st;
+    if (mkdir(path, 0755) == 0)
+        return 1;
+    if (errno != EEXIST)
+        return 0;
+    if (stat(path, &st) != 0)
+        return 0;
+    if (!S_ISDIR(st.st_mode))
+        errno = ENOTDIR;
+    return S_ISDIR(st.st_mode) != 0;
+}
+
 /* mkdir -p equivalent (portable) */
-static void mkdirs(const char *path) {
+static int mkdirs(const char *path) {
     char tmp[512];
     int len = snprintf(tmp, sizeof(tmp), "%s", path);
     if (len < 0 || (size_t)len >= sizeof(tmp))
-        return;
+        return 0;
     for (char *p = tmp + 1; *p; p++) {
-        if (*p == '/') {
-            *p = 0;
-            mkdir(tmp, 0755);
+        if (*p != '/')
+            continue;
+        *p = 0;
+        if (!mkdir_one(tmp)) {
             *p = '/';
+            return 0;
         }
+        *p = '/';
     }
-    mkdir(tmp, 0755);
+    return mkdir_one(tmp);
 }
 
 static const char *basename_component(const char *path) {
@@ -345,10 +365,19 @@ storage_t *storage_open_ex(const metainfo_t *mi, const char *outdir,
         fh->path[sizeof(fh->path)-1] = '\0';
 
         char *slash = strrchr(fullpath, '/');
-        if (slash) { *slash = 0; mkdirs(fullpath); *slash = '/'; }
+        int parents_ok = 1;
+        if (slash) {
+            *slash = 0;
+            parents_ok = mkdirs(fullpath);
+            *slash = '/';
+        }
 
-        if (!open_disk_file(fh, s)) {
-            if (!using_fallback && errno == ENAMETOOLONG &&
+        if (!parents_ok || !open_disk_file(fh, s)) {
+            // A nested original path can fail mkdirs on the target FS
+            // (path limits, a file holding a directory's name) while the
+            // short sanitized _files/ fallback below still fits — try it
+            // before giving up (B2).
+            if (!using_fallback &&
                 build_fallback_path(fullpath, sizeof(fullpath), outdir, i, mf)) {
                 memcpy(fh->path, fullpath, sizeof(fh->path));
                 fh->path[sizeof(fh->path)-1] = '\0';
