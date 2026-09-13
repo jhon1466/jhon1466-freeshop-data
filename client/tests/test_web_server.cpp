@@ -161,6 +161,7 @@ int main() {
     WebServer server(manager, webRoot, "test-1.0", fakeResolver);
     assert(server.start(0));
     uint16_t port = server.boundPort();
+    const std::string pinHeader = "X-FreeShop-Pin: 1234\r\n";
 
     // info + static + storage
     {
@@ -178,6 +179,18 @@ int main() {
 
         resp = request(port, "GET", "/api/storage");
         assert(resp.find("totalBytes") != std::string::npos);
+    }
+
+    // Empty PIN fails closed for mutations
+    {
+        server.setPin("");
+        std::string resp = request(port, "POST", "/api/auth/check");
+        assert(resp.find("401") != std::string::npos);
+        resp = request(port, "POST", "/api/add/torrent?mode=download",
+                       gTorrentBytes);
+        assert(resp.find("401") != std::string::npos);
+        resp = request(port, "GET", "/api/tasks");
+        assert(resp.find("200 OK") != std::string::npos);
     }
 
     // PIN auth
@@ -206,7 +219,6 @@ int main() {
     // actually under test.
     {
         const std::string host = "Host: 192.168.1.50:8080\r\n";
-        const std::string pinHeader = "X-FreeShop-Pin: 1234\r\n";
         std::string resp = request(port, "POST", "/api/auth/check", "",
                                    host + "Origin: http://evil.example\r\n" +
                                        pinHeader);
@@ -222,7 +234,10 @@ int main() {
                        host + "Origin: null\r\n" + pinHeader);
         assert(resp.find("403") != std::string::npos);
 
-        // no Origin at all: not a browser (curl, a script on the LAN)
+        // no Origin at all: not a browser (curl, a script on the LAN) — PIN
+        // still required
+        resp = request(port, "POST", "/api/auth/check");
+        assert(resp.find("401") != std::string::npos);
         resp = request(port, "POST", "/api/auth/check", "", pinHeader);
         assert(resp.find("204") != std::string::npos);
 
@@ -236,7 +251,7 @@ int main() {
     {
         std::string resp = request(port, "POST",
                                    "/api/add/torrent?mode=download",
-                                   gTorrentBytes);
+                                   gTorrentBytes, pinHeader);
         assert(resp.find("200 OK") != std::string::npos);
         assert(responseBody(resp).find(torrentHash) != std::string::npos);
 
@@ -253,11 +268,11 @@ int main() {
         assert(body.find("\"fetchProgress\":0.0") != std::string::npos);
 
         resp = request(port, "POST", "/api/add/torrent?mode=download",
-                       gTorrentBytes);
+                       gTorrentBytes, pinHeader);
         assert(resp.find("409") != std::string::npos);
 
         resp = request(port, "POST", "/api/add/torrent?mode=bogus",
-                       gTorrentBytes);
+                       gTorrentBytes, pinHeader);
         assert(resp.find("400") != std::string::npos);
     }
 
@@ -267,7 +282,7 @@ int main() {
         manager.setTorrentingEnabled(false);
         std::string resp = request(port, "POST",
                                    "/api/add/torrent?mode=download",
-                                   gTorrentBytes);
+                                   gTorrentBytes, pinHeader);
         assert(resp.find("409") != std::string::npos);
         assert(responseBody(resp).find("torrenting is disabled") !=
                std::string::npos);
@@ -280,12 +295,13 @@ int main() {
     // task commands
     {
         std::string resp =
-            request(port, "POST", "/api/tasks/" + torrentHash + "/move-front");
+            request(port, "POST", "/api/tasks/" + torrentHash + "/move-front",
+                    "", pinHeader);
         assert(resp.find("204") != std::string::npos);
-        resp = request(port, "POST", "/api/tasks/nope/pause");
+        resp = request(port, "POST", "/api/tasks/nope/pause", "", pinHeader);
         assert(resp.find("404") != std::string::npos);
         resp = request(port, "POST", "/api/tasks/" + torrentHash + "/remove",
-                       "{\"deleteData\":true}");
+                       "{\"deleteData\":true}", pinHeader);
         assert(resp.find("204") != std::string::npos);
         resp = request(port, "GET", "/api/tasks");
         assert(responseBody(resp).find(torrentHash) == std::string::npos);
@@ -297,7 +313,8 @@ int main() {
                              "&tr=http://bt.t-ru.org/ann?magnet";
         std::string resp = request(port, "POST", "/api/add/magnet",
                                    "{\"magnet\":\"" + magnet +
-                                       "\",\"mode\":\"download\"}");
+                                       "\",\"mode\":\"download\"}",
+                                   pinHeader);
         assert(resp.find("202") != std::string::npos);
         assert(responseBody(resp).find("jobId") != std::string::npos);
 
@@ -312,12 +329,14 @@ int main() {
         // duplicate of an existing task → 409
         resp = request(port, "POST", "/api/add/magnet",
                        "{\"magnet\":\"" + magnet +
-                           "\",\"mode\":\"download\"}");
+                           "\",\"mode\":\"download\"}",
+                       pinHeader);
         assert(resp.find("409") != std::string::npos);
 
         resp = request(port, "POST", "/api/add/magnet",
                        "{\"magnet\":\"magnet:?xt=urn:btih:zz\",\"mode\":"
-                       "\"download\"}");
+                       "\"download\"}",
+                       pinHeader);
         assert(resp.find("400") != std::string::npos);
     }
 
@@ -350,7 +369,8 @@ int main() {
 
         resp = request(port, "POST", "/api/add/catalog",
                        "{\"infoHash\":\"ffffffffffffffffffffffffffffffffffffff"
-                       "ff\",\"mode\":\"install\"}");
+                       "ff\",\"mode\":\"install\"}",
+                       pinHeader);
         assert(resp.find("404") != std::string::npos);
 
         // Broken UTF-8 from the RuTracker dump (Cyrillic cut mid-sequence)
