@@ -289,6 +289,7 @@ target_compile_options(pipensx_probe_client PRIVATE -Wall -Wextra)
 
 set(APP_SOURCES
     ${CORE_SOURCES}
+    src/platform/switch_backlight.cpp
     src/platform/switch_crashlog.c
     src/platform/switch_performance.cpp
     ${APP_SERVICE_SOURCES}

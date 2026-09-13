@@ -52,6 +52,12 @@ struct AppSettingsData {
     StreamSelection streamSelection = StreamSelection::AllFiles;
     InstallLocation installLocation = InstallLocation::SdCard;
     bool showCompletedDownloads = true;
+    // OLED burn-in / screen-off guard (B5). On = after the idle delay the
+    // UI is covered with the saver and the panel is switched off through
+    // lbl while transfers keep running; any button or touch wakes. Off =
+    // never cover, never touch the backlight. Additive key, so files written
+    // before it exist keep the default on load.
+    bool screenSaverEnabled = true;
     bool extendedTelemetry = false;
     bool checkForUpdatesOnLaunch = true;
     // Console-native UI sound effects (borealis's SwitchAudioPlayer, reading
