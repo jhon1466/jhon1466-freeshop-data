@@ -74,6 +74,19 @@ using Clock = std::chrono::steady_clock;
 
 enum class Step { Ok, Stopped, Failed };
 
+// B4: a bare stream error ("not a PFS0 NSP/NSZ") tells the user nothing
+// when the transfer holds several files — name the offending package and
+// its size so the broken download is identifiable without guessing.
+std::string describeStreamError(const DebridFile& file,
+                                const std::string& displayName,
+                                const std::string& streamError) {
+    const std::string& name = displayName.empty() ? file.path : displayName;
+    return "Package '" + name + "' (" +
+           std::to_string(
+               static_cast<unsigned long long>(file.bytes)) +
+           " bytes): " + streamError;
+}
+
 class DebridStreamQueue {
 public:
     DebridStreamQueue(size_t maximumBytes, InstallPacer& pacer,
@@ -983,9 +996,10 @@ Step attemptStreamInstall(RunContext& ctx, const DebridFile& file,
         if (ctx.stop())
             return Step::Stopped;
         if (ctx.error.empty())
-            ctx.error = !stream.error().empty() ? stream.error()
-                        : (fetchError.empty() ? "Falló la descarga del paquete."
-                                              : fetchError);
+            ctx.error = !stream.error().empty()
+                ? describeStreamError(file, displayName, stream.error())
+                : (fetchError.empty() ? "Falló la descarga del paquete."
+                                      : fetchError);
         return Step::Failed;
     }
 
@@ -1001,8 +1015,9 @@ Step attemptStreamInstall(RunContext& ctx, const DebridFile& file,
     ctx.emit(committing);
 
     if (!stream.finish()) {
-        ctx.error = stream.error().empty() ? "Falló la finalización del paquete."
-                                           : stream.error();
+        ctx.error = stream.error().empty()
+            ? "Falló la finalización del paquete."
+            : describeStreamError(file, displayName, stream.error());
         backend->rollbackPackage();
         return Step::Failed;
     }

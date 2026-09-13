@@ -936,7 +936,7 @@ private:
             if (cancelRequested_)
                 return false;
             if (error().empty())
-                setError(stream_->error());
+                setError(describeStreamError(stream_->error()));
             log_msg("[install] stream error package='%s' offset=%lld: %s\n",
                     currentPackage_.c_str(),
                     static_cast<long long>(chunk.fileOffset), error().c_str());
@@ -957,7 +957,7 @@ private:
             }
             if (!stream_->finish()) {
                 if (error().empty())
-                    setError(stream_->error());
+                    setError(describeStreamError(stream_->error()));
                 log_msg("[install] finalize error package='%s': %s\n",
                         currentPackage_.c_str(), error().c_str());
                 backend_->rollbackPackage();
@@ -993,6 +993,20 @@ private:
     bool setError(const std::string& message) {
         std::lock_guard<std::mutex> lock(queueMutex_);
         return setErrorLocked(message, false);
+    }
+
+    // B4: a bare stream error ("not a PFS0 NSP/NSZ") tells the user nothing
+    // when the torrent holds several packages — name the offending file and
+    // its size so the broken download is identifiable without guessing.
+    std::string describeStreamError(const std::string& streamError) const {
+        if (activeFileIndex_ == UINT32_MAX ||
+            activeFileIndex_ >= metainfo_.num_files)
+            return streamError;
+        const mi_file_t& file = metainfo_.files[activeFileIndex_];
+        return "Package '" + std::string(file.path) + "' (" +
+               std::to_string(
+                   static_cast<unsigned long long>(file.length)) +
+               " bytes): " + streamError;
     }
 
     bool setErrorLocked(const std::string& message, bool recoverable) {
@@ -2877,12 +2891,15 @@ void DownloadManager::runTask(RunnerSlot* slot, ClaimedTask claim) {
     // Both branches below happen before the arbiter registration: a debrid
     // task runs no engine, so reserving engine RAM for it would starve the
     // torrent slots for nothing.
+    // B4 (#75): el texto anterior apuntaba a un ajuste que el usuario no
+    // podía encontrar — se llama "BitTorrent directo" en origen de descarga.
     if (claim.source == TaskSource::Torrent && !torrentingEnabled_.load()) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (DownloadTask* task = findLocked(claim.id)) {
             task->status = DownloadStatus::Error;
             task->error =
-                "Los torrents están desactivados — actívalos en Ajustes para reintentar.";
+                "Los torrents están desactivados — activa BitTorrent directo "
+                "en Ajustes (origen de descarga) para reintentar.";
             task->speedBytesPerSecond = 0;
             std::string ignored;
             saveLocked(ignored);
@@ -3060,7 +3077,8 @@ void DownloadManager::runTask(RunnerSlot* slot, ClaimedTask claim) {
             if (!torrentingEnabled_.load()) {
                 task->status = DownloadStatus::Error;
                 task->error =
-                    "Los torrents están desactivados — actívalos en Ajustes para reintentar.";
+                    "Los torrents están desactivados — activa BitTorrent directo "
+                    "en Ajustes (origen de descarga) para reintentar.";
                 task->speedBytesPerSecond = 0;
                 std::string ignored;
                 saveLocked(ignored);
