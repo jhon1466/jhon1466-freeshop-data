@@ -51,8 +51,8 @@ inline void curlPinScheme(CURL* curl, const std::string& url) {
     curlPinHttpsOnly(curl);
 }
 
-// Peer verify stays on. On Switch, import the bundled Mozilla CA extract in
-// romfs:/ssl/cacert.pem as the trust anchor (libnx curl uses
+// Peer verify stays on. On Switch, import the bundled CA roots in
+// romfs:/ssl/cacert.pem (TorBox GTS + Real-Debrid DigiCert; libnx curl uses
 // sslContextImportServerPki — additive to the system store). On PC, leave the
 // OpenSSL system store alone: CAINFO would replace it.
 inline void curlApplyTrustedSsl(CURL* curl) {
