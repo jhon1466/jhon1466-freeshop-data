@@ -123,6 +123,8 @@ public:
         titleId_ = title.titleId;
         publisher_ = title.publisher;
         version_ = title.version;
+        displayVersion_ = title.displayVersion;
+        hasMods_ = title.hasLayeredFsMods;
         updateSubtitle();
         placeholder_->setText(placeholderLetter(title.name));
         setArtworkUrl(image_, metadata, title.iconPath, currentIconPath_,
@@ -191,6 +193,9 @@ private:
     // B3: raw decimal title versions ("v327680") read as garbage — show
     // the eShop x.y.z form ("v5.0.0"), keeping the raw text when it is
     // not a decimal version.
+    // B6: append the NACP display_version in parens ("v5.0.0 (1.26.30)")
+    // and a mods marker when LayeredFS mods are installed, so the row
+    // states what an update would replace before the user taps it.
     static std::string prettyVersion(const std::string& decimal) {
         const std::string formatted = formatTitleVersion(decimal);
         return formatted.empty() ? decimal : formatted;
@@ -201,10 +206,16 @@ private:
             subtitle = publisher_ + " · ";
         if (!version_.empty()) {
             subtitle += "v" + prettyVersion(version_);
+            if (!displayVersion_.empty())
+                subtitle += " (" + displayVersion_ + ")";
             if (!ignored_ &&
                 currentState_ == GameUpdateState::UpdateAvailable &&
                 !currentFoundVersion_.empty())
                 subtitle += " → v" + prettyVersion(currentFoundVersion_);
+            if (hasMods_)
+                subtitle += " · " + tr("pipensx/installed/mods_suffix");
+        } else if (hasMods_) {
+            subtitle += tr("pipensx/installed/mods_suffix");
         }
         subtitle_->setText(subtitle);
     }
@@ -223,6 +234,8 @@ private:
     std::string titleId_;
     std::string publisher_;
     std::string version_;
+    std::string displayVersion_;
+    bool hasMods_ = false;
     std::string currentFoundVersion_;
     GameUpdateState currentState_ = GameUpdateState::NotChecked;
     bool ignored_ = false;
@@ -627,6 +640,28 @@ private:
                        const std::string& foundVersion = {}) {
         if (refreshing_ || updateInFlight_ || uninstallInFlight_)
             return;
+        // B6: state what is installed before replacing it. A title with
+        // LayeredFS mods opens the detail page for manual review (no
+        // one-tap) with a toast naming the mods folder, so a BOTW/Broforce-
+        // style stale-mod break stops being silent. Plain titles keep the
+        // direct one-tap flow below.
+        bool needReview = false;
+        if (installed_) {
+            for (const InstalledTitle& candidate : installed_->titles()) {
+                if (candidate.titleId == titleId) {
+                    const UpdatePreflight pre = describeUpdatePreflight(
+                        candidate, foundVersion, true);
+                    needReview = pre.warnMods();
+                    break;
+                }
+            }
+        }
+        if (needReview) {
+            brls::Application::notify(
+                tr("pipensx/installed/update_preflight_mods", titleId));
+            openCatalogPage(titleId, /*autoInstall=*/false, foundVersion);
+            return;
+        }
         std::vector<const GameMetadata*> entries;
         if (!metadata_ || !metadata_->findByTitleId(titleId, entries)) {
             brls::Application::notify(

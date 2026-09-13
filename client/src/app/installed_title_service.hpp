@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdio>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -20,6 +21,14 @@ struct InstalledTitle {
     // game-update check; empty when the ncm read is unavailable.
     std::string version;
     std::string iconPath;
+    // NACP display_version ("1.26.30"), empty when the control data read
+    // failed. Shown next to the decimal patch version so a pre-update
+    // dialog can state what is actually installed (B6: BOTW/Broforce).
+    std::string displayVersion;
+    // True when <sdRoot>/atmosphere/contents/<base title id>/ exists and is
+    // non-empty (LayeredFS romfs/exefs/cheats). An update can silently break
+    // such a title when the mod targets the old version.
+    bool hasLayeredFsMods = false;
 };
 
 class InstalledTitleService {
@@ -47,7 +56,32 @@ public:
     void injectTitles(std::vector<InstalledTitle> titles);
     void injectDlcTitleIds(std::vector<std::string> dlcTitleIds);
 
-    static std::string formatTitleId(uint64_t applicationId);
+    static std::string formatTitleId(uint64_t applicationId) {
+        char text[17];
+        std::snprintf(text, sizeof(text), "%016llX",
+                      static_cast<unsigned long long>(applicationId));
+        return text;
+    }
+    static bool parseTitleId(const std::string& titleId,
+                             uint64_t& applicationId) {
+        if (titleId.size() != 16)
+            return false;
+        uint64_t value = 0;
+        for (char c : titleId) {
+            int digit = -1;
+            if (c >= '0' && c <= '9')
+                digit = c - '0';
+            else if (c >= 'a' && c <= 'f')
+                digit = c - 'a' + 10;
+            else if (c >= 'A' && c <= 'F')
+                digit = c - 'A' + 10;
+            if (digit < 0)
+                return false;
+            value = (value << 4) | static_cast<uint64_t>(digit);
+        }
+        applicationId = value;
+        return true;
+    }
     // Updates set bit 11 (…800); DLC lives in the low 12 bits from …1000.
     // Masking those bits maps every variant onto the base application id.
     static uint64_t nxBaseApplicationId(uint64_t applicationId) {
@@ -108,5 +142,76 @@ inline std::string formatTitleVersion(const std::string& decimal) {
     return std::to_string(major) + "." + std::to_string(minor) + "." +
            std::to_string(micro);
 }
+
+inline bool titleVersionIsNewer(const std::string& latest,
+                                const std::string& installed) {
+    uint64_t latestValue = 0;
+    uint64_t installedValue = 0;
+    return parseTitleVersionDecimal(latest, latestValue) &&
+           parseTitleVersionDecimal(installed, installedValue) &&
+           latestValue > installedValue;
+}
+
+// SD layout for LayeredFS mods: <sdRoot>/atmosphere/contents/<TITLEID>/.
+// Pure string build; the caller scans the result. The title id is
+// normalised onto the base application id first, so a Patch id (…800) still
+// finds the mods installed under the base id (…000). Empty when the title
+// id is not a 16-hex id. C++17, no filesystem dependency.
+inline std::string layeredFsModDirForTitle(const std::string& sdRoot,
+                                            const std::string& titleId) {
+    uint64_t parsed = 0;
+    if (!InstalledTitleService::parseTitleId(titleId, parsed))
+        return {};
+    const std::string base = InstalledTitleService::formatTitleId(
+        InstalledTitleService::nxBaseApplicationId(parsed));
+    std::string root = sdRoot;
+    while (!root.empty() && root.back() == '/')
+        root.pop_back();
+    if (root.empty())
+        return {};
+    return root + "/atmosphere/contents/" + base;
+}
+
+// Copies display_version out of a raw NACP char field. The field may lack a
+// NUL when it fills all 16 bytes; trailing NULs and anything after the
+// first NUL are dropped. Empty when the field is all NUL/empty.
+inline std::string nacpDisplayVersionString(const char* field, size_t size) {
+    if (!field || size == 0)
+        return {};
+    size_t length = 0;
+    while (length < size && field[length] != '\0')
+        ++length;
+    // Trim trailing spaces some titles pad with.
+    while (length > 0 &&
+           (field[length - 1] == ' ' || field[length - 1] == '\0'))
+        --length;
+    return std::string(field, length);
+}
+
+// "v5.0.0 (1.26.30)" style label for a pre-update dialog: the eShop x.y.z
+// form of the decimal patch version plus the NACP display_version in
+// parens. Either half may be missing: unknown decimal yields just the
+// display string, unknown display yields just the x.y.z form, both unknown
+// yields an empty string so the caller can hide the row.
+inline std::string formatInstalledVersionLabel(
+    const std::string& decimalVersion, const std::string& displayVersion) {
+    const std::string xyz = formatTitleVersion(decimalVersion);
+    if (!xyz.empty() && !displayVersion.empty())
+        return xyz + " (" + displayVersion + ")";
+    if (!xyz.empty())
+        return xyz;
+    return displayVersion;
+}
+
+// True when a directory exists and holds at least one entry besides "."
+// and "..". Implemented in installed_title_service.cpp (POSIX opendir so
+// the Switch and PC builds share it); false on any error, including
+// ENOENT (no mods installed).
+bool directoryHasEntries(const std::string& path);
+
+// True when <sdRoot>/atmosphere/contents/<base title id>/ exists and is
+// non-empty. False for a malformed title id or any filesystem error.
+bool titleHasLayeredFsMods(const std::string& sdRoot,
+                            const std::string& titleId);
 
 } // namespace pipensx

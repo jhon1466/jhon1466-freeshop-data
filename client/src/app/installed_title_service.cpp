@@ -14,6 +14,7 @@ extern "C" {
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <dirent.h>
 #include <fstream>
 #include <memory>
 #include <sys/stat.h>
@@ -40,14 +41,7 @@ std::string upperAscii(std::string value) {
 // titleId is the 16-hex-char string formatTitleId() produces; rejects
 // anything else rather than feeding a partial/garbage id to ns.
 bool parseTitleId(const std::string& titleId, uint64_t& applicationId) {
-    if (titleId.size() != 16)
-        return false;
-    for (char c : titleId) {
-        if (!std::isxdigit(static_cast<unsigned char>(c)))
-            return false;
-    }
-    applicationId = std::strtoull(titleId.c_str(), nullptr, 16);
-    return true;
+    return InstalledTitleService::parseTitleId(titleId, applicationId);
 }
 
 bool writeIconIfMissing(const std::string& path, const uint8_t* bytes,
@@ -81,17 +75,36 @@ bool writeIconIfMissing(const std::string& path, const uint8_t* bytes,
 
 } // namespace
 
+bool directoryHasEntries(const std::string& path) {
+    if (path.empty())
+        return false;
+    DIR* dir = opendir(path.c_str());
+    if (!dir)
+        return false;
+    bool found = false;
+    while (dirent* entry = readdir(dir)) {
+        const char* name = entry->d_name;
+        if (!std::strcmp(name, ".") || !std::strcmp(name, ".."))
+            continue;
+        found = true;
+        break;
+    }
+    closedir(dir);
+    return found;
+}
+
+bool titleHasLayeredFsMods(const std::string& sdRoot,
+                            const std::string& titleId) {
+    const std::string dir = layeredFsModDirForTitle(sdRoot, titleId);
+    if (dir.empty())
+        return false;
+    return directoryHasEntries(dir);
+}
+
 InstalledTitleService::InstalledTitleService(std::string rootPath)
     : rootPath_(std::move(rootPath)),
       iconRoot_(rootPath_ + "/installed-icons") {
     mkdir(iconRoot_.c_str(), 0755);
-}
-
-std::string InstalledTitleService::formatTitleId(uint64_t applicationId) {
-    char text[17];
-    std::snprintf(text, sizeof(text), "%016llX",
-                  static_cast<unsigned long long>(applicationId));
-    return text;
 }
 
 bool InstalledTitleService::uninstall(const std::string& titleId,
@@ -295,6 +308,10 @@ bool InstalledTitleService::refresh(std::string& error) {
                 !name.empty())
                 title.name = std::move(name);
             title.publisher = std::move(author);
+            // B6: remember what is installed before an update replaces it.
+            title.displayVersion = nacpDisplayVersionString(
+                control->nacp.display_version,
+                sizeof(control->nacp.display_version));
             size_t iconSize = actualSize > sizeof(NacpStruct)
                 ? static_cast<size_t>(actualSize - sizeof(NacpStruct)) : 0;
             iconSize = std::min(iconSize, sizeof(control->icon));
@@ -305,6 +322,10 @@ bool InstalledTitleService::refresh(std::string& error) {
             diagnostic_error("installed", title.titleId.c_str(),
                              "event=control_data result=0x%08x", rc);
         }
+        // LayeredFS mods live on the SD card outside ncm, so a plain
+        // opendir is enough on both builds (PC path just misses -> false).
+        title.hasLayeredFsMods =
+            titleHasLayeredFsMods("sdmc:/", title.titleId);
         next.push_back(std::move(title));
     }
 
