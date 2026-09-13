@@ -406,6 +406,7 @@
     "clear_completed": "Clear completed downloads",
     "clear_images": "Clear image cache",
     "clear_torrents": "Clear torrent metadata",
+    "clear_orphan_downloads": "Clear orphaned downloads",
     "clear_temporary": "Clear temporary files",
     "cat_downloads": "Downloads",
     "cat_torrents": "Torrent metadata",

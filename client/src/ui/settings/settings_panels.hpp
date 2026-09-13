@@ -1345,6 +1345,11 @@ public:
                 confirmClearTorrents();
             });
         content_->addView(clearTorrents_);
+        clearOrphanDownloads_ = actionCell(
+            tr("pipensx/storage/clear_orphan_downloads"), "", [this] {
+                confirmClearOrphanDownloads();
+            });
+        content_->addView(clearOrphanDownloads_);
         clearTemporary_ = actionCell(
             tr("pipensx/storage/clear_temporary"), "", [this] {
                 confirmClearTemporary();
@@ -1369,6 +1374,7 @@ private:
         StorageBreakdown snapshot;
         uint64_t completedBytes = 0;
         uint64_t orphanBytes = 0;
+        uint64_t orphanDownloadBytes = 0;
         bool hasFinished = false;
     };
 
@@ -1377,9 +1383,12 @@ private:
         payload.snapshot = scanStorageBreakdown(manager_->rootPath());
         std::vector<DownloadTask> tasks = manager_->snapshot();
         std::vector<std::string> active;
+        std::vector<std::string> activeData;
         active.reserve(tasks.size());
+        activeData.reserve(tasks.size());
         for (const DownloadTask& task : tasks) {
             active.push_back(task.id);
+            activeData.push_back(task.dataPath);
             if (task.status != DownloadStatus::Completed &&
                 task.status != DownloadStatus::Installed)
                 continue;
@@ -1393,6 +1402,8 @@ private:
         }
         payload.orphanBytes =
             pipensx::orphanTorrentBytes(manager_->torrentRoot(), active);
+        payload.orphanDownloadBytes = pipensx::orphanDownloadBytes(
+            manager_->downloadRoot(), activeData);
         return payload;
     }
 
@@ -1400,6 +1411,7 @@ private:
         snapshot_ = payload.snapshot;
         completedBytes_ = payload.completedBytes;
         orphanBytes_ = payload.orphanBytes;
+        orphanDownloadBytes_ = payload.orphanDownloadBytes;
         hasFinished_ = payload.hasFinished;
 
         if (meter_) {
@@ -1418,15 +1430,19 @@ private:
                 recoverableDetail(snapshot_.imageCacheBytes));
         if (clearTorrents_)
             clearTorrents_->setDetailText(recoverableDetail(orphanBytes_));
+        if (clearOrphanDownloads_)
+            clearOrphanDownloads_->setDetailText(
+                recoverableDetail(orphanDownloadBytes_));
         if (clearTemporary_)
             clearTemporary_->setDetailText(
                 recoverableDetail(snapshot_.temporaryBytes));
 
         if (canFree_) {
             uint64_t total = orphanBytes_;
-            const uint64_t parts[3] = {
+            const uint64_t parts[4] = {
                 hasFinished_ ? completedBytes_ : 0,
-                snapshot_.imageCacheBytes, snapshot_.temporaryBytes};
+                snapshot_.imageCacheBytes, snapshot_.temporaryBytes,
+                orphanDownloadBytes_};
             for (uint64_t part : parts)
                 total = part > UINT64_MAX - total ? UINT64_MAX
                                                   : total + part;
@@ -1541,6 +1557,13 @@ private:
         confirmAction(orphanBytes_, [this] { clearTorrents(); });
     }
 
+    void confirmClearOrphanDownloads() {
+        if (refreshInFlight_)
+            return;
+        confirmAction(orphanDownloadBytes_,
+                      [this] { clearOrphanDownloads(); });
+    }
+
     void confirmClearTemporary() {
         if (manager_->hasActiveTransfer()) {
             brls::Application::notify(tr("pipensx/storage/busy_transfer"));
@@ -1609,6 +1632,25 @@ private:
         refresh();
     }
 
+    void clearOrphanDownloads() {
+        std::vector<DownloadTask> tasks = manager_->snapshot();
+        std::vector<std::string> activeData;
+        activeData.reserve(tasks.size());
+        for (const DownloadTask& task : tasks)
+            activeData.push_back(task.dataPath);
+        std::string error;
+        uint64_t recovered = 0;
+        if (!pipensx::clearOrphanDownloads(manager_->downloadRoot(),
+                                           activeData, error, recovered)) {
+            diagnostic_error("storage", "orphan_downloads", "error=%s",
+                             error.c_str());
+            brls::Application::notify(error);
+            return;
+        }
+        brls::Application::notify(tr("pipensx/storage/cleared"));
+        refresh();
+    }
+
     void clearTemporary() {
         if (manager_->hasActiveTransfer()) {
             brls::Application::notify(tr("pipensx/storage/busy_transfer"));
@@ -1634,11 +1676,13 @@ private:
     brls::DetailCell* clearCompleted_ = nullptr;
     brls::DetailCell* clearImages_ = nullptr;
     brls::DetailCell* clearTorrents_ = nullptr;
+    brls::DetailCell* clearOrphanDownloads_ = nullptr;
     brls::DetailCell* clearTemporary_ = nullptr;
     brls::Label* canFree_ = nullptr;
     StorageBreakdown snapshot_;
     uint64_t completedBytes_ = 0;
     uint64_t orphanBytes_ = 0;
+    uint64_t orphanDownloadBytes_ = 0;
     bool hasFinished_ = false;
     bool didFirstRefresh_ = false;
     bool refreshInFlight_ = false;

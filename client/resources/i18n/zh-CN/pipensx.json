@@ -478,6 +478,7 @@
                     "clear_completed":  "清除已完成的下载",
                     "clear_images":  "清除图片缓存",
                     "clear_torrents":  "清除种子元数据",
+                    "clear_orphan_downloads":  "清理孤立下载",
                     "clear_temporary":  "清除临时文件",
                     "cat_downloads":  "下载",
                     "cat_torrents":  "种子元数据",

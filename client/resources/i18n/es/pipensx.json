@@ -406,6 +406,7 @@
     "clear_completed": "Borrar descargas completadas",
     "clear_images": "Borrar caché de imágenes",
     "clear_torrents": "Borrar metadatos de torrents",
+    "clear_orphan_downloads": "Borrar descargas huérfanas",
     "clear_temporary": "Borrar archivos temporales",
     "cat_downloads": "Descargas",
     "cat_torrents": "Métadonnées de torrent",
