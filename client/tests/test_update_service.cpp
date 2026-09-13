@@ -17,6 +17,7 @@ constexpr const char* Target = "/tmp/pipensx-update-test.nro";
 constexpr const char* HelperSource = "/tmp/freeshop-client-updater-fixture.nro";
 
 bool emulateSwitchRename = false;
+bool emulateSwitchHelperRename = false;
 
 extern "C" int __real_rename(const char* oldPath, const char* newPath);
 
@@ -31,17 +32,25 @@ extern "C" int __wrap_rename(const char* oldPath, const char* newPath) {
             return -1;
         }
     }
+    if (emulateSwitchHelperRename &&
+        std::strcmp(oldPath, "/tmp/freeshop-client-updater.nro.tmp") == 0 &&
+        std::strcmp(newPath, "/tmp/freeshop-client-updater.nro") == 0 &&
+        access(newPath, F_OK) == 0) {
+        errno = EEXIST;
+        return -1;
+    }
     return __real_rename(oldPath, newPath);
 }
 
 std::string releaseJson(const std::string& version, bool checksum = true) {
+    const std::string base =
+        "https://github.com/jhon1466/jhon1466-freeshop-data/releases/"
+        "download/" + version + "/";
     return "{\"draft\":false,\"prerelease\":false,\"tag_name\":\"" +
            version + "\",\"assets\":[{\"name\":\"freeshop-client.nro\","
-           "\"browser_download_url\":\"https://freeshop-proxy.freeshopnx."
-           "workers.dev/releases/assets/1001\"}" +
+           "\"browser_download_url\":\"" + base + "freeshop-client.nro\"}" +
            (checksum ? ",{\"name\":\"freeshop-client.nro.sha256\","
-            "\"browser_download_url\":\"https://freeshop-proxy.freeshopnx."
-            "workers.dev/releases/assets/1002\"}" : "") +
+            "\"browser_download_url\":\"" + base + "freeshop-client.nro.sha256\"}" : "") +
            "]}";
 }
 
@@ -81,8 +90,8 @@ void testStagedReadyRecoversInterruptedRestart() {
         HelperSource);
     assert(!service.stagedReady());
     pipensx::ReleaseInfo release{"v1.2.3",
-        "https://freeshop-proxy.freeshopnx.workers.dev/releases/assets/1001",
-        "https://freeshop-proxy.freeshopnx.workers.dev/releases/assets/1002"};
+        "https://github.com/jhon1466/jhon1466-freeshop-data/releases/download/v1.2.3/freeshop-client.nro",
+        "https://github.com/jhon1466/jhon1466-freeshop-data/releases/download/v1.2.3/freeshop-client.nro.sha256"};
     std::string error;
     assert(service.install(release, error));
     // The app quit before chain-loading the helper: the staged download must
@@ -113,8 +122,8 @@ void testInstallVerifiesBeforeStaging() {
                   std::string&) { write(path, payload); return true; },
         HelperSource);
     pipensx::ReleaseInfo release{"v1.2.3",
-        "https://freeshop-proxy.freeshopnx.workers.dev/releases/assets/1001",
-        "https://freeshop-proxy.freeshopnx.workers.dev/releases/assets/1002"};
+        "https://github.com/jhon1466/jhon1466-freeshop-data/releases/download/v1.2.3/freeshop-client.nro",
+        "https://github.com/jhon1466/jhon1466-freeshop-data/releases/download/v1.2.3/freeshop-client.nro.sha256"};
     std::string error;
     assert(service.install(release, error));
     std::ifstream installed("/tmp/pipensx-update-test.nro.update",
@@ -208,8 +217,8 @@ void testTransientNetworkFailuresAreRetried() {
             return true;
         }, HelperSource);
     pipensx::ReleaseInfo release{"v9.9.9",
-        "https://freeshop-proxy.freeshopnx.workers.dev/releases/assets/2001",
-        "https://freeshop-proxy.freeshopnx.workers.dev/releases/assets/2002"};
+        "https://github.com/jhon1466/jhon1466-freeshop-data/releases/download/v9.9.9/freeshop-client.nro",
+        "https://github.com/jhon1466/jhon1466-freeshop-data/releases/download/v9.9.9/freeshop-client.nro.sha256"};
     std::string error;
     assert(installService.install(release, error));
     assert(checksumAttempts == 3);
@@ -236,8 +245,8 @@ void testInstallNeverTouchesRunningNro() {
                   std::string&) { write(path, payload); return true; },
         HelperSource);
     pipensx::ReleaseInfo release{"v1.2.3",
-        "https://freeshop-proxy.freeshopnx.workers.dev/releases/assets/1001",
-        "https://freeshop-proxy.freeshopnx.workers.dev/releases/assets/1002"};
+        "https://github.com/jhon1466/jhon1466-freeshop-data/releases/download/v1.2.3/freeshop-client.nro",
+        "https://github.com/jhon1466/jhon1466-freeshop-data/releases/download/v1.2.3/freeshop-client.nro.sha256"};
     std::string error;
     emulateSwitchRename = true;
     const bool installed = service.install(release, error);
@@ -277,6 +286,40 @@ void testShutdownInterruptsRetryWait() {
     assert(attempts.load() == 1);
 }
 
+void testHelperPublishReplacesExistingHelperOnFat32() {
+    unlink(Target);
+    unlink("/tmp/pipensx-update-test.nro.update");
+    unlink("/tmp/pipensx-update-test.nro.update.sha256");
+    unlink("/tmp/freeshop-client-updater.nro.tmp");
+    write(Target, "old");
+    write(HelperSource, "minimal updater helper");
+    write("/tmp/freeshop-client-updater.nro", "previous helper");
+    const std::string payload = "new verified pipensx nro";
+    const std::string checksum =
+        "9dc1034a694baa2d68b032ed446fbc9b170975306c571202e99ff741821365b4";
+    pipensx::UpdateService service(Target,
+        [checksum](const std::string&, size_t, std::string& body,
+                   std::string&) { body = checksum + "  freeshop-client.nro\n"; return true; },
+        [payload](const std::string&, const std::string& path, size_t,
+                  std::string&) { write(path, payload); return true; },
+        HelperSource);
+    pipensx::ReleaseInfo release{"v1.2.3",
+        "https://github.com/jhon1466/jhon1466-freeshop-data/releases/download/v1.2.3/freeshop-client.nro",
+        "https://github.com/jhon1466/jhon1466-freeshop-data/releases/download/v1.2.3/freeshop-client.nro.sha256"};
+    std::string error;
+    emulateSwitchHelperRename = true;
+    const bool installed = service.install(release, error);
+    emulateSwitchHelperRename = false;
+    assert(installed);
+    std::ifstream helper(service.helperPath(), std::ios::binary);
+    std::string bytes((std::istreambuf_iterator<char>(helper)), {});
+    assert(bytes == "minimal updater helper");
+    assert(access("/tmp/freeshop-client-updater.nro.tmp", F_OK) != 0);
+    service.discardStaged();
+    unlink(Target);
+    unlink(HelperSource);
+}
+
 void testHelperPublishFailurePreservesPreviousHelper() {
     unlink(Target);
     unlink("/tmp/pipensx-update-test.nro.update");
@@ -300,8 +343,8 @@ void testHelperPublishFailurePreservesPreviousHelper() {
                   std::string&) { write(path, payload); return true; },
         HelperSource);
     pipensx::ReleaseInfo release{"v1.2.3",
-        "https://freeshop-proxy.freeshopnx.workers.dev/releases/assets/1001",
-        "https://freeshop-proxy.freeshopnx.workers.dev/releases/assets/1002"};
+        "https://github.com/jhon1466/jhon1466-freeshop-data/releases/download/v1.2.3/freeshop-client.nro",
+        "https://github.com/jhon1466/jhon1466-freeshop-data/releases/download/v1.2.3/freeshop-client.nro.sha256"};
     std::string error;
     const bool installed = service.install(release, error);
     assert(!installed);
@@ -327,6 +370,7 @@ int main() {
     testTransientNetworkFailuresAreRetried();
     testInstallNeverTouchesRunningNro();
     testShutdownInterruptsRetryWait();
+    testHelperPublishReplacesExistingHelperOnFat32();
     testHelperPublishFailurePreservesPreviousHelper();
     std::puts("update service tests passed");
     return 0;
