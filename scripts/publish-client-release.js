@@ -25,6 +25,7 @@ const nroPath = path.join(root, "client", "build-switch", ASSET_NAME);
 const versionFile = path.join(root, "client", "VERSION");
 
 function readToken() {
+  if (process.env.GITHUB_TOKEN) return process.env.GITHUB_TOKEN.trim();
   const envPath = path.join(root, "server", ".env");
   let text;
   try {
