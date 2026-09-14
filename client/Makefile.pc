@@ -56,6 +56,7 @@ CATALOG_TEST_TARGET = tests/test_catalog
 TELEMETRY_TEST_TARGET = tests/test_telemetry
 PEER_TEST_TARGET = tests/test_peer
 TORRENT_TEST_TARGET = tests/test_torrent
+TRACKER_TEST_TARGET = tests/test_tracker
 SETTINGS_TEST_TARGET = tests/test_app_settings
 FAVORITES_TEST_TARGET = tests/test_favorites
 UPDATE_TEST_TARGET = tests/test_update_service
@@ -273,7 +274,7 @@ $(PROBE_REPORT_TEST_TARGET): tests/test_probe_report.c src/probe/probe_report.c
 test: $(TEST_TARGET) $(MANAGER_TEST_TARGET) $(PACKAGE_TEST_TARGET) \
 		$(CATALOG_TEST_TARGET) \
 		$(TELEMETRY_TEST_TARGET) $(PEER_TEST_TARGET) \
-		$(TORRENT_TEST_TARGET) $(SETTINGS_TEST_TARGET) $(UPDATE_TEST_TARGET) \
+		$(TORRENT_TEST_TARGET) $(TRACKER_TEST_TARGET) $(SETTINGS_TEST_TARGET) $(UPDATE_TEST_TARGET) \
 		$(GAME_UPDATE_TEST_TARGET) \
 		$(UPDATE_FILE_SELECT_TEST_TARGET) \
 		$(UPDATE_TRANSACTION_TEST_TARGET) \
@@ -302,6 +303,7 @@ test: $(TEST_TARGET) $(MANAGER_TEST_TARGET) $(PACKAGE_TEST_TARGET) \
 	./$(TELEMETRY_TEST_TARGET)
 	./$(PEER_TEST_TARGET)
 	./$(TORRENT_TEST_TARGET)
+	./$(TRACKER_TEST_TARGET)
 	./$(SETTINGS_TEST_TARGET)
 	./$(UPDATE_TEST_TARGET)
 	./$(GAME_UPDATE_TEST_TARGET)
@@ -533,6 +535,12 @@ $(TORRENT_TEST_TARGET): tests/test_torrent.c src/core/torrent.c \
 	$(CC) $(CFLAGS) -Isrc -o $@ $(filter-out src/core/torrent.c,$^) \
 		$(LDFLAGS) -lstdc++
 
+# Same pattern: test_tracker.c #includes tracker.c as source.
+$(TRACKER_TEST_TARGET): tests/test_tracker.c src/core/tracker.c \
+		src/core/bencode.o src/core/net.o src/core/util.o
+	$(CC) $(CFLAGS) -Isrc -o $@ $(filter-out src/core/tracker.c,$^) \
+		$(LDFLAGS) -pthread
+
 # Manual browser testing for the web companion (not part of all/test):
 #   make -f Makefile.pc webserver && ./tools/webserver
 webserver: tools/webserver
@@ -578,7 +586,7 @@ clean:
 		$(MANAGER_TEST_TARGET) $(PACKAGE_TEST_TARGET) \
 		$(CATALOG_TEST_TARGET) \
 		$(TELEMETRY_TEST_TARGET) $(PEER_TEST_TARGET) \
-		$(TORRENT_TEST_TARGET) $(SETTINGS_TEST_TARGET) $(UPDATE_TEST_TARGET) \
+		$(TORRENT_TEST_TARGET) $(TRACKER_TEST_TARGET) $(SETTINGS_TEST_TARGET) $(UPDATE_TEST_TARGET) \
 		$(GAME_UPDATE_TEST_TARGET) $(UPDATE_FILE_SELECT_TEST_TARGET) \
 		$(UPDATE_TRANSACTION_TEST_TARGET) \
 		$(INSTALL_SPACE_TEST_TARGET) $(BATCH_INSTALL_TEST_TARGET) \
