@@ -502,7 +502,7 @@ int main(int argc, char** argv) {
         brls::AudioPlayer::enabled = settings.get().soundEffectsEnabled;
 
         startupStage("Borealis createWindow");
-        brls::Application::createWindow("pipensx");
+        brls::Application::createWindow("FreeShop");
         brls::Application::setGlobalQuit(false);
 
         // "auto" leaves whatever SwitchPlatform's constructor already read
@@ -1103,8 +1103,10 @@ int main(int argc, char** argv) {
     } catch (const std::exception& error) {
         log_msg("[crash] exception at stage '%s': %s\n",
                 "see previous startup marker", error.what());
+        log_flush();
     } catch (...) {
         log_msg("[crash] unknown exception\n");
+        log_flush();
     }
 
     startupStage("app-owned teardown complete");

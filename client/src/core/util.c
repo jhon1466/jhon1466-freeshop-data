@@ -65,7 +65,7 @@ void log_init(const char *path) {
     g_logfile = fopen(path, "a+");
     if (g_logfile) {
         setvbuf(g_logfile, NULL, _IOFBF, 64 * 1024);
-        fprintf(g_logfile, "=== pipensx log started ===\n");
+        fprintf(g_logfile, "=== FreeShop log started ===\n");
         fflush(g_logfile);
         g_log_flush_ms = now_ms();
     }
@@ -88,6 +88,17 @@ void log_flush(void) {
 
 FILE *log_file(void) {
     return g_logfile;
+}
+
+void log_emergency(const char *text) {
+    if (!text || !text[0] || !g_logfile)
+        return;
+    int fd = fileno(g_logfile);
+    if (fd < 0)
+        return;
+    size_t n = strlen(text);
+    (void)write(fd, text, n);
+    (void)fsync(fd);
 }
 
 size_t log_read_tail(char *buf, size_t max) {
@@ -118,7 +129,7 @@ int log_clear(void) {
     int ok = fflush(g_logfile) == 0 && fd >= 0 && ftruncate(fd, 0) == 0;
     if (ok) {
         rewind(g_logfile);
-        ok = fprintf(g_logfile, "=== pipensx log cleared ===\n") > 0 &&
+        ok = fprintf(g_logfile, "=== FreeShop log cleared ===\n") > 0 &&
              fflush(g_logfile) == 0;
         g_log_flush_ms = now_ms();
     }
