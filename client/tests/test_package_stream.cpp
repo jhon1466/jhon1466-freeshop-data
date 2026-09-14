@@ -784,19 +784,20 @@ void testResumeSolidNsz() {
     }
 }
 
-void testSolidMidEntryNotCheckpointable() {
+void testSolidMidEntryCheckpointsViaRollback() {
+    // F-B/replay replaced the old refuse-mid-frame behaviour: a solid NCZ
+    // entry mid-frame checkpoints by rolling back to the entry start, and a
+    // fresh decoder replays from there. Interrupted mid-frame must resume to
+    // byte-identical output, not fail the checkpoint.
     std::vector<uint8_t> nca(0x4000 + 200000);
     for (size_t i = 0; i < nca.size(); ++i)
         nca[i] = static_cast<uint8_t>((i * 29) ^ (i >> 8));
     auto package = makePfs0({{"00112233445566778899aabbccddeeff.ncz",
                               makeSolidNcz(nca)}});
-    Capture capture;
-    PackageStream stream(true, capture.callbacks());
-    // Feed enough that the solid Zstandard stream has consumed input but the
-    // entry has not finished: no safe point exists there.
-    assert(stream.write(package.data(), package.size() / 2));
-    pipensx::install::PackageStreamState state;
-    assert(!stream.checkpoint(state));
+    Capture resumed = runResume(true, package, package.size() / 2);
+    assert(resumed.names.size() == 1);
+    assert(resumed.names[0] == "00112233445566778899aabbccddeeff.nca");
+    assert(resumed.files[0] == nca);
 }
 
 void testRestoreRejectsInconsistentState() {
@@ -878,7 +879,7 @@ int main() {
     testResumeBlockNsz(false);
     testResumeBlockNsz(true);
     testResumeSolidNsz();
-    testSolidMidEntryNotCheckpointable();
+    testSolidMidEntryCheckpointsViaRollback();
     testRestoreRejectsInconsistentState();
     testNszSmallWorkerStack();
     std::cout << "package stream tests passed\n";
