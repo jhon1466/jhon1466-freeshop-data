@@ -47,7 +47,10 @@ Thumbs.db
 #   cd client && git init -q && git submodule add https://github.com/XITRIX/borealis.git vendor/borealis && ...
 # Simplest in practice: clone pipensx fresh with --recurse-submodules and
 # copy its vendor/ directory in - see client/BUILD.md.
-client/vendor/
+client/vendor/*
+# Exception: TweetNaCl (public domain, ~30KB) is plain vendored files, not a
+# submodule, so it would never arrive via the flow above — track it.
+!client/vendor/tweetnacl/
 
 # Bundled catalog snapshot for offline first launch (see
 # client/CMakeLists.txt's PIPENSX_CATALOG_SNAPSHOT) - large (~35MB) and
