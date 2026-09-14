@@ -1060,15 +1060,21 @@ int main(int argc, char** argv) {
                 }
             } else if (!saverOpen &&
                        now_ms() - lastInputMs >= burnInIdleMs) {
+                const bool showClock = settings.get().burnInShowClock;
                 brls::Application::pushActivity(
-                    new pipensx::ui::BurnInSaverActivity(
-                        settings.get().burnInShowClock),
+                    new pipensx::ui::BurnInSaverActivity(showClock),
                     brls::TransitionAnimation::NONE);
-                log_msg("[saver] idle %llums, screen off (transfers keep "
-                        "running)\n",
-                        (unsigned long long)burnInIdleMs);
-                if (backlightGuard.turnOff())
-                    backlightOff = true;
+                if (!showClock) {
+                    log_msg("[saver] idle %llums, screen off (transfers keep "
+                            "running)\n",
+                            (unsigned long long)burnInIdleMs);
+                    if (backlightGuard.turnOff())
+                        backlightOff = true;
+                } else {
+                    log_msg("[saver] idle %llums, screen saver with clock active (transfers keep "
+                            "running)\n",
+                            (unsigned long long)burnInIdleMs);
+                }
                 lastInputMs = now_ms();
             }
             uiHeartbeat.store(now_ms(), std::memory_order_relaxed);

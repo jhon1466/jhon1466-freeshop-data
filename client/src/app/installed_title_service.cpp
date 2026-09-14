@@ -38,12 +38,6 @@ std::string upperAscii(std::string value) {
     return value;
 }
 
-// titleId is the 16-hex-char string formatTitleId() produces; rejects
-// anything else rather than feeding a partial/garbage id to ns.
-bool parseTitleId(const std::string& titleId, uint64_t& applicationId) {
-    return InstalledTitleService::parseTitleId(titleId, applicationId);
-}
-
 bool writeIconIfMissing(const std::string& path, const uint8_t* bytes,
                         size_t size) {
     struct stat st {};
