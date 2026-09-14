@@ -78,6 +78,10 @@
 #define HEDGE_LATENCY_MULT      4
 #define HEDGE_ADAPTIVE_MIN_MS   500
 #define HEDGE_MIN_LATENCY_PEERS 2
+#define KEEPALIVE_INTERVAL_MS   60000
+#define PEX_INTERVAL_MS         60000
+#define PEX_SEND_MAX            32
+#define LISTEN_BACKLOG          16
 #define MAX_PEER_TELEMETRY    8
 #define PEER_BLOCKLIST_SIZE   64
 #define PEER_BLOCKLIST_MS     60000
@@ -181,9 +185,12 @@ struct torrent {
     uint32_t hedge_effective_ms; /* last adaptive threshold, for telemetry */
     uint32_t schedule_cursor;
     uint64_t last_hedge_ms;
+    uint64_t last_pex_ms;
 
     uint64_t last_tracker_ms;
     uint64_t last_connect_ms;
+
+    socket_t listen_fd;
 
     /* Async tracker announce: tracker_announce() blocks on tracker/network
        timeouts, so it runs on a worker thread instead of freezing the event
@@ -432,6 +439,8 @@ static void cancel_duplicate_requests(torrent_t *t, uint32_t piece,
 }
 
 /* ---- callbacks ---- */
+/* Forward: defined after fill_ctx below (try_accept needs it). */
+static void broadcast_have(torrent_t *t, uint32_t idx);
 static void cb_block(void *ud, uint32_t idx, uint32_t off,
                      const uint8_t *data, uint32_t len) {
     torrent_t *t = (torrent_t*)ud;
@@ -446,6 +455,8 @@ static void cb_block(void *ud, uint32_t idx, uint32_t off,
         t->last_payload_ms = now_ms();
     if (result >= 1 && duplicated)
         cancel_duplicate_requests(t, idx, off, len);
+    if (result == 2)
+        broadcast_have(t, idx);
     if (started_us) {
         uint64_t elapsed_us = now_us() - started_us;
         t->telemetry_cb_bytes += len;
@@ -470,8 +481,11 @@ static void cb_block(void *ud, uint32_t idx, uint32_t off,
    and reset. Mirrors cb_block's result==2 / result<0 handling. */
 static void cb_hash_result(void *ud, uint32_t idx, int status) {
     torrent_t *t = (torrent_t*)ud;
-    if (status == 2 && telemetry_enabled())
-        t->telemetry_verified_bytes += (uint64_t)piece_len(t->pm, idx);
+    if (status == 2) {
+        broadcast_have(t, idx);
+        if (telemetry_enabled())
+            t->telemetry_verified_bytes += (uint64_t)piece_len(t->pm, idx);
+    }
     if (status < 0) {
         t->fatal_error = 1;
         snprintf(t->error, sizeof(t->error), "%s",
@@ -527,6 +541,8 @@ int torrent_submit_web_piece(torrent_t *t, uint32_t piece,
     }
     if (received)
         t->last_payload_ms = now_ms();
+    if (result == 2)
+        broadcast_have(t, piece);
     return result;
 }
 
@@ -733,6 +749,111 @@ static void fill_ctx(torrent_t *t, peer_ctx_t *ctx) {
     ctx->use_mse     = 1; /* try MSE/PE first to reach encryption-required peers */
 }
 
+static void broadcast_have(torrent_t *t, uint32_t idx) {
+    for (int i = 0; i < MAX_ACTIVE_PEERS; i++) {
+        peer_t *p = t->peers[i];
+        if (p && p->state == PS_ACTIVE)
+            peer_send_have(p, idx);
+    }
+}
+
+static int peer_slot_taken(const torrent_t *t, uint32_t ip, uint16_t port) {
+    for (int i = 0; i < MAX_ACTIVE_PEERS; i++) {
+        const peer_t *p = t->peers[i];
+        if (p && p->addr.sin_addr.s_addr == ip && p->addr.sin_port == port)
+            return 1;
+    }
+    return 0;
+}
+
+static int try_accept(torrent_t *t) {
+    if (t->listen_fd == INVALID_SOCK)
+        return 0;
+    int accepted = 0;
+    while (t->num_peers < MAX_ACTIVE_PEERS) {
+        struct sockaddr_in addr;
+        socket_t fd = net_accept(t->listen_fd, &addr);
+        if (fd == INVALID_SOCK)
+            break;
+        uint32_t ip = addr.sin_addr.s_addr;
+        uint16_t port = addr.sin_port;
+        if (blocklist_blocked(t, ip, port, now_ms()) ||
+            peer_slot_taken(t, ip, port)) {
+            net_close(fd);
+            continue;
+        }
+        peer_ctx_t ctx;
+        fill_ctx(t, &ctx);
+        ctx.use_mse = 0;
+        peer_t *p = peer_create(fd, addr, &ctx);
+        if (!p) {
+            net_close(fd);
+            continue;
+        }
+        p->incoming = 1;
+        p->mse_enabled = 0;
+        if (!peer_connected(p, &ctx)) {
+            peer_destroy(p);
+            continue;
+        }
+        int slotted = 0;
+        for (int i = 0; i < MAX_ACTIVE_PEERS; i++) {
+            if (!t->peers[i]) {
+                t->peers[i] = p;
+                t->num_peers++;
+                slotted = 1;
+                accepted++;
+                break;
+            }
+        }
+        if (!slotted)
+            peer_destroy(p);
+    }
+    return accepted;
+}
+
+static void flush_pex(torrent_t *t, uint64_t now) {
+    if (t->last_pex_ms && now - t->last_pex_ms < PEX_INTERVAL_MS)
+        return;
+    t->last_pex_ms = now;
+    uint8_t compact[PEX_SEND_MAX * 6];
+    uint32_t count = 0;
+    for (int i = 0; i < MAX_ACTIVE_PEERS && count < PEX_SEND_MAX; i++) {
+        peer_t *p = t->peers[i];
+        if (!p || p->state != PS_ACTIVE)
+            continue;
+        memcpy(compact + count * 6, &p->addr.sin_addr.s_addr, 4);
+        memcpy(compact + count * 6 + 4, &p->addr.sin_port, 2);
+        count++;
+    }
+    if (count == 0)
+        return;
+    for (int i = 0; i < MAX_ACTIVE_PEERS; i++) {
+        peer_t *p = t->peers[i];
+        if (!p || p->state != PS_ACTIVE || !p->peer_ext_pex)
+            continue;
+        peer_send_pex(p, compact, count);
+    }
+}
+
+static void send_keepalives(torrent_t *t, uint64_t now) {
+    for (int i = 0; i < MAX_ACTIVE_PEERS; i++) {
+        peer_t *p = t->peers[i];
+        if (!p || p->state != PS_ACTIVE)
+            continue;
+        uint64_t last = p->last_send_ms ? p->last_send_ms : p->connect_time_ms;
+        if (last <= now && now - last >= KEEPALIVE_INTERVAL_MS)
+            peer_send_keepalive(p);
+    }
+}
+
+/* Forward: defined after fill_ctx (try_accept needs it). */
+static void broadcast_have(torrent_t *t, uint32_t idx);
+static int peer_slot_taken(const torrent_t *t, uint32_t ip, uint16_t port);
+static int try_accept(torrent_t *t);
+static void flush_pex(torrent_t *t, uint64_t now);
+static void send_keepalives(torrent_t *t, uint64_t now);
+
 /* Count peers that have not reached PS_ACTIVE yet — the in-flight dials the
    burst connector is allowed to top up. */
 static int count_connecting(const torrent_t *t) {
@@ -914,7 +1035,7 @@ static int requeue_utp(torrent_t *t, uint32_t ip, uint16_t port) {
 /* True when a failed peer is a TCP dial that never reached PS_ACTIVE — the only
    case worth retrying over μTP. Must be read before the peer is destroyed. */
 static int should_retry_utp(const torrent_t *t, const peer_t *p) {
-    return t->utp && p->transport == TRANSPORT_TCP &&
+    return t->utp && !p->incoming && p->transport == TRANSPORT_TCP &&
            (p->state == PS_CONNECTING || p->state == PS_HANDSHAKE);
 }
 
@@ -1052,9 +1173,11 @@ static void schedule_requests(torrent_t *t, peer_t *p, uint64_t now) {
         p->request_cooldown_until_ms > now)
         return;
     uint32_t limit = peer_pipeline_limit(t, p);
+    uint32_t stalled = (uint32_t)-1;
     while ((uint32_t)p->pipeline_len < limit) {
         uint32_t pidx = piece_mgr_pick(t->pm, p->bitfield, p->bf_bytes);
         if (pidx == (uint32_t)-1) break;
+        if (pidx == stalled) break;
         piece_mgr_mark_pending(t->pm, pidx);
 
         piece_slot_t *sl = &t->pm->slots[pidx];
@@ -1082,7 +1205,11 @@ static void schedule_requests(torrent_t *t, peer_t *p, uint64_t now) {
                 queued++;
             }
         }
-        if (!queued) break; /* nothing left to request for this piece */
+        if (!queued) {
+            stalled = pidx;
+            continue;
+        }
+        stalled = (uint32_t)-1;
     }
 }
 
@@ -1156,7 +1283,7 @@ static uint32_t adaptive_hedge_after_ms(const torrent_t *t) {
 }
 
 static void schedule_hedged_requests(torrent_t *t, uint64_t now) {
-    if (!t->hedge_after_ms || !t->pm->strict_order)
+    if (!t->hedge_after_ms)
         return;
     if (t->last_hedge_ms <= now &&
         now - t->last_hedge_ms < HEDGE_INTERVAL_MS)
@@ -1440,6 +1567,8 @@ torrent_t *torrent_create_ex(const metainfo_t *mi,
                              const torrent_options_t *options) {
     torrent_t *t = (torrent_t*)calloc(1, sizeof(*t));
     if (!t) return NULL;
+    t->listen_fd = INVALID_SOCK;
+    t->utp_fd = INVALID_SOCK;
     memcpy(&t->mi, mi, sizeof(*mi));
     t->listen_port = listen_port;
     t->startup_verifying = 1;
@@ -1501,9 +1630,20 @@ torrent_t *torrent_create_ex(const metainfo_t *mi,
 
     refresh_skipped_bytes(t);
 
+    t->listen_fd = net_tcp_listen(listen_port, LISTEN_BACKLOG);
+    if (t->listen_fd == INVALID_SOCK) {
+        t->listen_port = 0;
+        log_msg("[torrent] TCP listen on %u failed; incoming disabled\n",
+                (unsigned)listen_port);
+    } else {
+        if (listen_port == 0)
+            t->listen_port = net_local_port(t->listen_fd);
+        log_msg("[torrent] listening on TCP %u\n", (unsigned)t->listen_port);
+    }
+
     /* DHT: attach to the shared engine; the announce carries this
        torrent's TCP listen port even though the DHT UDP port is shared. */
-    t->dht = dht_attach(mi->info_hash, listen_port);
+    t->dht = dht_attach(mi->info_hash, t->listen_port);
 
     /* Shared μTP transport for the TCP→μTP dial fallback. */
     t->utp_fd = INVALID_SOCK;
@@ -1608,6 +1748,10 @@ void torrent_destroy(torrent_t *t) {
     if (t->utp_fd != INVALID_SOCK) {
         net_close(t->utp_fd);
         t->utp_fd = INVALID_SOCK;
+    }
+    if (t->listen_fd != INVALID_SOCK) {
+        net_close(t->listen_fd);
+        t->listen_fd = INVALID_SOCK;
     }
     piece_mgr_destroy(t->pm);
     t->pm = NULL;
@@ -1809,8 +1953,8 @@ int torrent_tick(torrent_t *t) {
 
     /* Build poll set. The shared DHT engine polls its own socket on its
        own thread — no DHT fd here. */
-    struct pollfd pfds[MAX_ACTIVE_PEERS + 1];
-    int           pfd_peer[MAX_ACTIVE_PEERS + 1];
+    struct pollfd pfds[MAX_ACTIVE_PEERS + 2];
+    int           pfd_peer[MAX_ACTIVE_PEERS + 2];
     int npfd = 0;
 
     /* μTP fd — one shared UDP socket for the whole libutp context. */
@@ -1820,6 +1964,15 @@ int torrent_tick(torrent_t *t) {
         pfds[npfd].events  = POLLIN;
         pfds[npfd].revents = 0;
         utp_pfd_idx = npfd++;
+    }
+
+    /* Listen fd — polled for incoming plaintext peers. */
+    int listen_pfd_idx = -1;
+    if (t->listen_fd != INVALID_SOCK) {
+        pfds[npfd].fd      = t->listen_fd;
+        pfds[npfd].events  = POLLIN;
+        pfds[npfd].revents = 0;
+        listen_pfd_idx = npfd++;
     }
 
     /* Peer fds — TCP only. μTP peers carry no pollable fd; libutp drives them
@@ -1843,12 +1996,14 @@ int torrent_tick(torrent_t *t) {
     /* μTP readable: feed datagrams to libutp, which fires the peer callbacks. */
     if (utp_pfd_idx >= 0 && (pfds[utp_pfd_idx].revents & POLLIN))
         utp_drain_socket(t);
+    if (listen_pfd_idx >= 0 && (pfds[listen_pfd_idx].revents & POLLIN))
+        try_accept(t);
 
     peer_ctx_t ctx; fill_ctx(t, &ctx);
 
     /* Peer events (TCP peers only; the non-peer prefix fds are handled above) */
     for (int pi = 0; pi < npfd; pi++) {
-        if (pi == utp_pfd_idx) continue;
+        if (pi == utp_pfd_idx || pi == listen_pfd_idx) continue;
         if (!(pfds[pi].revents & (POLLIN|POLLOUT|POLLERR|POLLHUP))) continue;
         int slot = pfd_peer[pi];
         peer_t *p = t->peers[slot];
@@ -2001,6 +2156,8 @@ int torrent_tick(torrent_t *t) {
     if (!t->startup_verifying) {
         schedule_hedged_requests(t, now2);
         schedule_all_peers(t, now2);
+        send_keepalives(t, now2);
+        flush_pex(t, now2);
     }
 
     return check_completion(t);

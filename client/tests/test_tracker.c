@@ -184,10 +184,42 @@ static void test_udp_retries_dropped_datagrams(void) {
     assert(s.announce_requests == 2);
 }
 
+static void test_tcp_listen_accept_roundtrip(void) {
+    socket_t listener = net_tcp_listen(0, 16);
+    assert(listener != INVALID_SOCK);
+    const uint16_t port = net_local_port(listener);
+    assert(port != 0);
+
+    socket_t dialer = socket(AF_INET, SOCK_STREAM, 0);
+    assert(dialer >= 0);
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = htons(port);
+    assert(connect(dialer, (struct sockaddr*)&addr, sizeof(addr)) == 0);
+
+    struct sockaddr_in peer;
+    memset(&peer, 0, sizeof(peer));
+    socket_t accepted = INVALID_SOCK;
+    for (int i = 0; i < 50 && accepted == INVALID_SOCK; ++i) {
+        accepted = net_accept(listener, &peer);
+        if (accepted == INVALID_SOCK)
+            usleep(10000);
+    }
+    assert(accepted != INVALID_SOCK);
+    assert(peer.sin_addr.s_addr == htonl(INADDR_LOOPBACK));
+
+    net_close(accepted);
+    net_close(dialer);
+    net_close(listener);
+}
+
 int main(void) {
     test_http_started_event_only_when_requested();
     test_udp_started_event_only_when_requested();
     test_udp_retries_dropped_datagrams();
+    test_tcp_listen_accept_roundtrip();
     puts("tracker tests passed");
     return 0;
 }
