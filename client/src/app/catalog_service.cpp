@@ -4,6 +4,7 @@
 #include "snapshot_zstd.hpp"
 
 extern "C" {
+#include "../core/catalog_sig.h"
 #include "../core/sha1.h"
 #include "../core/util.h"
 }
@@ -77,6 +78,48 @@ bool decodeBase64(const std::string& text, std::vector<uint8_t>& out) {
             out.push_back(static_cast<uint8_t>(block >> 8));
         if (padding < 1)
             out.push_back(static_cast<uint8_t>(block));
+    }
+    return true;
+}
+
+/* ed25519 public key that signs the network catalog. All-zero = signing not
+   provisioned yet: the network refresh runs unverified, preserving the
+   pre-signing behaviour. Replace with the real 32-byte key
+   (tools/sign_catalog.py --gen-key emits both halves) to enforce a valid
+   detached signature on every refresh; a missing or invalid signature then
+   aborts the refresh so a MITM cannot strip it. Cached and bundled catalogs
+   are local — trusted at build time or already verified when cached — and are
+   not re-checked here. */
+constexpr uint8_t kCatalogPublicKey[32] = {0};
+
+bool catalogSigningEnabled() {
+    for (uint8_t byte : kCatalogPublicKey)
+        if (byte)
+            return true;
+    return false;
+}
+
+/* Verify a detached base64 ed25519 signature (the "<catalog-url>.sig"
+   sibling) over the raw catalog bytes. Tolerates surrounding
+   whitespace/newlines in the signature file. */
+bool verifyCatalogSignature(const std::string& catalog,
+                            const std::string& signatureText,
+                            std::string& error) {
+    std::string trimmed;
+    trimmed.reserve(signatureText.size());
+    for (char c : signatureText)
+        if (!std::isspace(static_cast<unsigned char>(c)))
+            trimmed.push_back(c);
+    std::vector<uint8_t> signature;
+    if (!decodeBase64(trimmed, signature) || signature.size() != 64) {
+        error = "Catalog signature is malformed.";
+        return false;
+    }
+    const uint8_t* body = reinterpret_cast<const uint8_t*>(catalog.data());
+    if (!catalog_sig_verify(kCatalogPublicKey, body, catalog.size(),
+                            signature.data())) {
+        error = "Catalog signature does not match the trusted key.";
+        return false;
     }
     return true;
 }
@@ -606,6 +649,17 @@ bool CatalogService::fetchLatest(std::vector<CatalogEntry>& parsed,
     std::string catalogBody;
     if (!httpGet(sourceUrl, catalogBody, error, sourceUrl))
         return false;
+    // Signature enforcement: only once a real public key is baked in.
+    // Fail closed — a stripped or forged signature aborts the refresh
+    // before the catalog is parsed or cached.
+    if (catalogSigningEnabled()) {
+        std::string signatureBody;
+        if (!httpGet(sourceUrl + ".sig", signatureBody, error, sourceUrl))
+            return false;
+        if (!verifyCatalogSignature(catalogBody, signatureBody, error))
+            return false;
+        log_msg("[catalog] signature verified\n");
+    }
     if (!parseJson(catalogBody, parsed, error))
         return false;
     if (!writeAtomic(cachePath_, catalogBody, error))
