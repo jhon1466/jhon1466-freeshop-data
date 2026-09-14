@@ -56,6 +56,16 @@ public:
              SwitchDeployService* deploy = nullptr)
         : brls::Box(brls::Axis::COLUMN), manager_(manager), catalog_(catalog),
           metadata_(metadata), settings_(settings), deploy_(deploy) {
+        summary_ = new brls::Label();
+        summary_->setFontSize(15);
+        summary_->setMarginTop(10);
+        summary_->setMarginBottom(4);
+        summary_->setMarginLeft(32);
+        summary_->setMarginRight(32);
+        summary_->setTextColor(theme::textTertiary());
+        summary_->setVisibility(brls::Visibility::GONE);
+        addView(summary_);
+
         recycler_ = new brls::RecyclerFrame();
         recycler_->setGrow(1);
         recycler_->setPadding(6, 32, 6, 32);
@@ -64,7 +74,8 @@ public:
         recycler_->registerCell("Message", [] { return new MessageCell(); });
         dataSource_ = new DownloadDataSource(this);
         recycler_->setDataSource(dataSource_);
-        addView(recycler_);
+        recyclerHost_ = recyclerHost(recycler_);
+        addView(recyclerHost_);
         refresh();
         timer_.setCallback([this] {
             refresh();
@@ -78,7 +89,22 @@ public:
             openFilePicker();
             return true;
         });
+        registerAction(tr("pipensx/downloads/pause_all"), brls::BUTTON_Y,
+                       [this](brls::View*) {
+            pauseResumeAll();
+            return true;
+        });
         startRefreshing();
+    }
+
+    void willAppear(bool resetState) override {
+        brls::Box::willAppear(resetState);
+        startRefreshing();
+    }
+
+    void willDisappear(bool resetState) override {
+        timer_.stop();
+        brls::Box::willDisappear(resetState);
     }
 
     ~MainView() override {
@@ -178,7 +204,11 @@ public:
         }
         if (!leased && task.status == DownloadStatus::Completed)
             add(tr("pipensx/common/verify"), [this, taskId] {
-                manager_->verify(taskId);
+                if (manager_->verify(taskId)) {
+                    brls::Application::notify(tr("pipensx/downloads/verify_started"));
+                } else {
+                    brls::Application::notify(tr("pipensx/downloads/verify_unavailable"));
+                }
                 startRefreshing(true);
             });
         // Queue reordering: only offered when it would change something —
@@ -300,6 +330,49 @@ private:
         return emptyState_;
     }
 
+    bool isPausable(DownloadStatus status) const {
+        return status == DownloadStatus::Queued ||
+               status == DownloadStatus::Checking ||
+               status == DownloadStatus::Fetching ||
+               status == DownloadStatus::Downloading ||
+               status == DownloadStatus::Installing ||
+               status == DownloadStatus::Verifying;
+    }
+
+    bool hasPausableTask(const std::vector<DownloadTask>& tasks) const {
+        for (const DownloadTask& task : tasks)
+            if (isPausable(task.status))
+                return true;
+        return false;
+    }
+
+    void pauseResumeAll() {
+        if (hasPausableTask(manager_->snapshotUi()))
+            pauseAll();
+        else
+            resumeAll();
+    }
+
+    std::string summaryText(const std::vector<DownloadTask>& tasks) const {
+        if (tasks.empty())
+            return {};
+        const pipensx::QueueSummary s = summarizeQueue(tasks, now_ms());
+        std::string text = tr("pipensx/downloads/summary_counts",
+                              s.downloading, s.queued, s.installing);
+        if (s.paused)
+            text += "   " + tr("pipensx/downloads/summary_paused", s.paused);
+        if (s.errors)
+            text += "   " + tr("pipensx/downloads/summary_errors", s.errors);
+        const uint64_t speed = s.downloadSpeedBps + s.installSpeedBps;
+        if (speed)
+            text += "\n" +
+                    tr("pipensx/downloads/summary_speed", formatSpeed(speed));
+        if (s.etaSeconds)
+            text += "   " + tr("pipensx/downloads/summary_eta",
+                               formatEtaSeconds(s.etaSeconds));
+        return text;
+    }
+
     void refresh() {
         auto next = manager_->snapshotUi();
         const SwitchDeploySnapshot deployState = deploy_ ? deploy_->snapshot()
@@ -314,11 +387,17 @@ private:
                             task.status == DownloadStatus::Installed);
                 }), next.end());
         }
+        setTextIfChanged(summary_, summaryText(next));
+        updateActionHint(brls::BUTTON_Y,
+                         hasPausableTask(next)
+                             ? tr("pipensx/downloads/pause_all")
+                             : tr("pipensx/downloads/resume_all"));
         uint64_t settingsGeneration = settings_ ? settings_->generation() : 0;
         bool settingsChanged = settingsGeneration != settingsGeneration_;
-        bool structureChanged = !initialized_ || settingsChanged ||
-                                next.size() != tasks_.size() ||
-                                activeDeployTask != activeDeployTask_;
+        bool structureChanged = pendingReload_ || !initialized_ ||
+                                 settingsChanged ||
+                                 next.size() != tasks_.size() ||
+                                 activeDeployTask != activeDeployTask_;
         bool progressChanged = deployState.generation != deployGeneration_;
         if (!structureChanged) {
             // Scan every task: bailing out on the first progress delta used to
@@ -362,16 +441,10 @@ private:
         }
         brls::View* focused = brls::Application::getCurrentFocus();
         bool ownsFocus = containsFocus(focused);
-        // Overlay (deploy offer dialog, details, …) pushed our cell onto
+        // Overlay (deploy offer dialog, details, ...) pushed our cell onto
         // focusStack. reloadData() would free it and crash on dismiss/Accept.
         if (activityStackHasOverlay() && !ownsFocus) {
-            tasks_ = std::move(next);
-            deploySnapshot_ = deployState;
-            deployGeneration_ = deployState.generation;
-            activeDeployTask_ = activeDeployTask;
-            settingsGeneration_ = settingsGeneration;
-            initialized_ = true;
-            dataSource_->setTasks(tasks_, activeDeployTask);
+            pendingReload_ = true;
             return;
         }
         auto* focusedCell = ownsFocus
@@ -387,6 +460,7 @@ private:
         activeDeployTask_ = activeDeployTask;
         settingsGeneration_ = settingsGeneration;
         initialized_ = true;
+        pendingReload_ = false;
         dataSource_->setTasks(tasks_, activeDeployTask);
         recycler_->setDefaultCellFocus(
             dataSource_->indexForTask(focusedTaskId));
@@ -396,8 +470,8 @@ private:
             ensureEmptyState()->setVisibility(brls::Visibility::VISIBLE);
         else if (emptyState_)
             emptyState_->setVisibility(brls::Visibility::GONE);
-        recycler_->setVisibility(empty ? brls::Visibility::GONE
-                                       : brls::Visibility::VISIBLE);
+        recyclerHost_->setVisibility(empty ? brls::Visibility::GONE
+                                           : brls::Visibility::VISIBLE);
         if (ownsFocus) {
             if (empty) {
                 brls::Application::giveFocus(ensureEmptyState());
@@ -455,11 +529,14 @@ private:
     AppSettings* settings_;
     SwitchDeployService* deploy_;
     EmptyStateView* emptyState_ = nullptr;
+    brls::Label* summary_ = nullptr;
     brls::RecyclerFrame* recycler_;
+    brls::Box* recyclerHost_ = nullptr;
     DownloadDataSource* dataSource_;
     brls::RepeatingTimer timer_;
     std::vector<DownloadTask> tasks_;
     bool initialized_ = false;
+    bool pendingReload_ = false;
     bool fastRefresh_ = false;
     uint64_t settingsGeneration_ = 0;
     SwitchDeploySnapshot deploySnapshot_;

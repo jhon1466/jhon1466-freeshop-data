@@ -14,6 +14,7 @@ void DownloadDataSource::setTasks(std::vector<DownloadTask> tasks,
     } groups[] = {
         {tr("pipensx/downloads/section_active"), [](DownloadStatus s) {
             return s == DownloadStatus::Checking ||
+                   s == DownloadStatus::Fetching ||
                    s == DownloadStatus::Downloading ||
                    s == DownloadStatus::Installing ||
                    s == DownloadStatus::Committing ||

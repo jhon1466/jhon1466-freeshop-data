@@ -1534,6 +1534,70 @@ std::optional<uint64_t> taskEtaSeconds(const DownloadTask& task,
     return remaining / speed + (remaining % speed != 0);
 }
 
+QueueSummary summarizeQueue(const std::vector<DownloadTask>& tasks,
+                            uint64_t nowMs) {
+    QueueSummary summary;
+    for (const DownloadTask& task : tasks) {
+        switch (task.status) {
+        case DownloadStatus::Checking:
+        case DownloadStatus::Fetching:
+        case DownloadStatus::Downloading:
+            ++summary.downloading;
+            break;
+        case DownloadStatus::Installing:
+        case DownloadStatus::Committing:
+        case DownloadStatus::Verifying:
+            ++summary.installing;
+            break;
+        case DownloadStatus::Queued:
+            ++summary.queued;
+            break;
+        case DownloadStatus::Paused:
+            ++summary.paused;
+            break;
+        case DownloadStatus::Completed:
+        case DownloadStatus::Installed:
+            ++summary.completed;
+            break;
+        case DownloadStatus::Error:
+            ++summary.errors;
+            break;
+        default:
+            break;
+        }
+        const bool outstanding =
+            task.status == DownloadStatus::Queued ||
+            task.status == DownloadStatus::Checking ||
+            task.status == DownloadStatus::Fetching ||
+            task.status == DownloadStatus::Downloading ||
+            task.status == DownloadStatus::Installing ||
+            task.status == DownloadStatus::Committing ||
+            task.status == DownloadStatus::Verifying;
+        if (outstanding) {
+            const auto progress = downloadProgressBytes(task);
+            uint64_t remaining = progress.second > progress.first
+                ? progress.second - progress.first : 0;
+            if (task.status == DownloadStatus::Installing ||
+                task.status == DownloadStatus::Committing) {
+                const uint64_t installRemaining =
+                    task.installTotalBytes > task.installedBytes
+                        ? task.installTotalBytes - task.installedBytes : 0;
+                remaining = std::max(remaining, installRemaining);
+            }
+            summary.totalRemainingBytes += remaining;
+        }
+        summary.downloadSpeedBps += task.speedBytesPerSecond;
+        summary.installSpeedBps += currentInstallSpeed(task, nowMs);
+    }
+    const uint64_t throughput =
+        summary.downloadSpeedBps + summary.installSpeedBps;
+    if (throughput > 0 && summary.totalRemainingBytes > 0)
+        summary.etaSeconds =
+            summary.totalRemainingBytes / throughput +
+            (summary.totalRemainingBytes % throughput != 0);
+    return summary;
+}
+
 const char* statusName(DownloadStatus status) {
     switch (status) {
         case DownloadStatus::Queued: return "Queued";

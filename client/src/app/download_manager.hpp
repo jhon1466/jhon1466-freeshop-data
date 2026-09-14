@@ -418,6 +418,23 @@ uint64_t currentInstallSpeed(const DownloadTask& task, uint64_t nowMs);
 std::optional<uint64_t> taskEtaSeconds(const DownloadTask& task,
                                         uint64_t nowMs);
 
+// Aggregate view of the queue for the Downloads summary header
+struct QueueSummary {
+    uint32_t downloading = 0;
+    uint32_t queued = 0;
+    uint32_t installing = 0;
+    uint32_t paused = 0;
+    uint32_t completed = 0;
+    uint32_t errors = 0;
+    uint64_t downloadSpeedBps = 0;
+    uint64_t installSpeedBps = 0;
+    uint64_t totalRemainingBytes = 0;
+    uint64_t etaSeconds = 0;
+};
+
+QueueSummary summarizeQueue(const std::vector<DownloadTask>& tasks,
+                            uint64_t nowMs);
+
 // User-facing download health for an active transfer. NotActive when the
 // task is not downloading. Stall uses the same 3s window as ETA.
 TorrentHealth torrentHealth(const DownloadTask& task, uint64_t nowMs);
