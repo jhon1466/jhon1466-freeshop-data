@@ -408,6 +408,11 @@ bool restoreSaveData(uint64_t applicationId, const std::string& titleId,
 
 bool saveDataAccountAvailable() { return false; }
 
+bool listUserProfiles(std::vector<UserProfile>& users, std::string&) {
+    users.clear();
+    return true; /* golden/PC: no console profiles exist off-device */
+}
+
 bool backupSaveData(uint64_t, const std::string&, const std::string&,
                     std::string&, std::string& error, const AccountUserId&) {
     error = "El acceso a los datos de guardado solo está disponible en la consola.";

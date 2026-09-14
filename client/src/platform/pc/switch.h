@@ -32,6 +32,14 @@ typedef u32 Result;
 #define R_SUCCEEDED(res) ((res) == 0)
 #define R_FAILED(res) ((res) != 0)
 
+/* ---- console colors (libnx defines these only for Switch builds) ---- */
+/* Empty on PC: golden captures pixels, not terminal output. */
+#define CONSOLE_RED ""
+#define CONSOLE_GREEN ""
+#define CONSOLE_YELLOW ""
+#define CONSOLE_CYAN ""
+#define CONSOLE_RESET ""
+
 /* ---- applet ---- */
 
 typedef enum {
@@ -160,6 +168,11 @@ static inline Result nsListApplicationRecord(NsApplicationRecord* records,
     if (out_count)
         *out_count = 0;
     return 0; /* success, empty library */
+}
+
+static inline Result nsDeleteApplicationCompletely(u64 application_id) {
+    (void)application_id;
+    return 0; /* success; golden never exercises uninstall */
 }
 
 static inline Result nsGetApplicationControlData(

@@ -54,6 +54,7 @@
 #include "app/catalog_service.hpp"
 #include "app/download_manager.hpp"
 #include "app/game_metadata_service.hpp"
+#include "app/game_update_service.hpp"
 #include "app/install_space.hpp"
 #include "app/installed_title_service.hpp"
 #include "ui/catalog/catalog_view.hpp"
@@ -84,7 +85,6 @@ using pipensx::DownloadManager;
 using pipensx::GameMetadataService;
 using pipensx::InstalledTitle;
 using pipensx::InstalledTitleService;
-using pipensx::ModIndexService;
 using namespace pipensx::ui;
 
 namespace {
@@ -358,6 +358,8 @@ int main(int argc, char** argv) {
     // resolves relative to the CWD on PC ("sdmc:" is a plain directory).
     fs::remove_all(sandbox, ec);
     fs::create_directories(sandbox / "sdmc:" / "switch" / "pipensx", ec);
+    fs::create_directories(sandbox / "sdmc:" / "switch" / "freeshop-client",
+                           ec);
     if (chdir(sandbox.c_str()) != 0)
         return fail("cannot chdir into sandbox");
 
@@ -396,13 +398,7 @@ int main(int argc, char** argv) {
     metadata.setImageNetwork(
         GameMetadataService::ImageNetwork::Off); // placeholders, no network
 
-    // Fixture mod index: no network, the table lists the fixture title so the
-    // ModCD chip and fact row are covered by the golden screens.
-    ModIndexService mods("sdmc:/switch/pipensx",
-                         (fixtures / "modcd_table.md").string());
-    if (!mods.load(error))
-        std::fprintf(stderr, "golden_runner: mod index fixture: %s\n",
-                     error.c_str());
+    pipensx::GameUpdateService gameUpdates(&metadata, "sdmc:/switch/pipensx");
 
     // Seeded with one favourite so the baselines cover the starred card badge,
     // the active ★ chip and the game page's "in wishlist" button, not just the
@@ -456,7 +452,7 @@ int main(int argc, char** argv) {
     if (screen == "catalog") {
         activity = new GoldenActivity(new CatalogView(
             &manager, &catalog, &metadata, &installed, &settings, [] {},
-            &mods, &favorites));
+            &favorites));
     } else if (screen == "shelf-scroll") {
         auto* content = new brls::Box(brls::Axis::COLUMN);
         content->setPadding(32, 32, 32, 32);
@@ -518,7 +514,7 @@ int main(int argc, char** argv) {
             return fail("detail screen needs a non-empty catalog fixture");
         activity = new GameDetailActivity(
             entries.front(), "", &manager, &metadata, &installed, &settings,
-            &mods, [](const std::string&, const std::string&) {}, [] {},
+            [](const std::string&, const std::string&) {}, [] {},
             nullptr, &favorites);
         // Behaviour check, not a baseline: the screenshot rail is the only
         // focusable view in the right column, so nothing forces UP out of it.
@@ -632,11 +628,11 @@ int main(int argc, char** argv) {
         auto* tabs = new MainFrame();
         tabs->addNavTab(tr("pipensx/nav/games"), NavIconType::Catalog, [&] {
             return new CatalogView(&manager, &catalog, &metadata, &installed,
-                                   &settings, [] {}, &mods, &favorites);
+                                   &settings, [] {}, &favorites);
         });
         tabs->addNavTab(tr("pipensx/nav/ports"), NavIconType::Ports, [&] {
             return new CatalogView(&manager, &catalog, &metadata, &installed,
-                                   &settings, [] {}, &mods, &favorites,
+                                   &settings, [] {}, &favorites,
                                    pipensx::CatalogSection::Ports);
         });
         tabs->addSeparator();
@@ -649,19 +645,18 @@ int main(int argc, char** argv) {
             // checkOnEntry=false: the installed-populated screens pin a
             // planted fixture state, an auto-check would overwrite it.
             return new InstalledView(&installed, &manager, &metadata,
-                                     &settings, &catalog, false);
+                                     &settings, &catalog, &gameUpdates, false);
         });
         tabs->addNavTab(tr("pipensx/nav/settings"), NavIconType::Settings,
                         [&] {
             return new SettingsView(&settings, &manager, &catalog, &metadata,
-                                    &installed, nullptr, &mods);
+                                    &installed, nullptr);
         });
         tabs->addNavTab(tr("pipensx/nav/help"), NavIconType::Help, [&] {
             return new HelpView(&manager, &catalog, &metadata, &installed);
         });
         tabs->addNavTab(tr("pipensx/nav/about"), NavIconType::About,
                         [] { return new AboutView(); });
-        tabs->attachStorageFooter(&manager);
         activity = new GoldenActivity(tabs);
     } else if (screen == "sidebar-touch") {
         // Behaviour check, not a baseline: the storage dock is pinned over the
@@ -672,13 +667,12 @@ int main(int argc, char** argv) {
         auto* tabs = new MainFrame();
         tabs->addNavTab(tr("pipensx/nav/catalog"), NavIconType::Catalog, [&] {
             return new CatalogView(&manager, &catalog, &metadata, &installed,
-                                   &settings, [] {}, &mods, &favorites);
+                                   &settings, [] {}, &favorites);
         });
         tabs->addNavTab(tr("pipensx/nav/downloads"), NavIconType::Downloads,
                         [&] {
             return new MainView(&manager, &catalog, &metadata, &settings);
         });
-        tabs->attachStorageFooter(&manager);
         activity = new GoldenActivity(tabs);
     } else if (screen == "catalog-header-clearance") {
         // Regression check: the catalog's first shelf must remain below the
@@ -688,7 +682,7 @@ int main(int argc, char** argv) {
         tabs->addNavTab(tr("pipensx/nav/catalog"), NavIconType::Catalog, [&] {
             collapsedCatalog = new CatalogView(
                 &manager, &catalog, &metadata, &installed, &settings, [] {},
-                &mods, &favorites);
+                &favorites);
             return collapsedCatalog;
         });
         activity = new GoldenActivity(tabs);
@@ -703,7 +697,7 @@ int main(int argc, char** argv) {
         // readable from inside the frame loop below.
         tabs->addNavTab(tr("pipensx/nav/catalog"), NavIconType::Catalog, [&] {
             hintsCatalog = new CatalogView(&manager, &catalog, &metadata,
-                                           &installed, &settings, [] {}, &mods,
+                                           &installed, &settings, [] {},
                                            &favorites);
             return hintsCatalog;
         });
@@ -711,21 +705,20 @@ int main(int argc, char** argv) {
                         [&] {
             return new MainView(&manager, &catalog, &metadata, &settings);
         });
-        tabs->attachStorageFooter(&manager);
         activity = new GoldenActivity(tabs, /*withExitAction=*/true);
     } else if (screen == "installed" || screen == "installed-populated" ||
                screen == "installed-bundles") {
         if (screen == "installed-populated" || screen == "installed-bundles")
             seedInstalledFixture(installed);
         auto* view = new InstalledView(&installed, &manager, &metadata,
-                                       &settings, &catalog, false);
+                                       &settings, &catalog, &gameUpdates,
+                                       false);
         activity = new GoldenActivity(view);
         if (screen == "installed-bundles")
             installedBundles = view;
     } else if (screen == "settings") {
         activity = new GoldenActivity(new SettingsView(
-            &settings, &manager, &catalog, &metadata, &installed, nullptr,
-            &mods));
+            &settings, &manager, &catalog, &metadata, &installed, nullptr));
     } else if (screen == "settings-debrid") {
         // The debrid section is well below the fold on the settings screen,
         // so it needs a shot of its own. A key is planted first: "linked" is
@@ -737,8 +730,7 @@ int main(int argc, char** argv) {
         if (!settings.update(values, error))
             return fail("settings-debrid could not plant a linked key");
         activity = new GoldenActivity(new SettingsView(
-            &settings, &manager, &catalog, &metadata, &installed, nullptr,
-            &mods));
+            &settings, &manager, &catalog, &metadata, &installed, nullptr));
         settingsDebrid = true;
     } else if (screen == "help") {
         activity = new GoldenActivity(
