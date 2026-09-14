@@ -97,7 +97,7 @@ inline const Token kTokens[] = {
     // OLED burn-in saver: pure black backdrop + a dim drifting clock (dim
     // enough to be gentle on the panel, bright enough to read at a glance).
     {"pipensx/burn_in_backdrop", nvgRGB(0, 0, 0), nvgRGB(0, 0, 0)},
-    {"pipensx/burn_in_clock", nvgRGB(70, 70, 76), nvgRGB(70, 70, 76)},
+    {"pipensx/burn_in_clock", nvgRGB(120, 120, 130), nvgRGB(120, 120, 130)},
 };
 
 // Indices into kTokens — keep in the same order as the table above.

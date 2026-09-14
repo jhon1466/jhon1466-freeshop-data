@@ -41,6 +41,24 @@ public:
             clock_->setTextColor(theme::burnInClock());
             clock_->setSingleLine(true);
             clock_->setFocusable(false);
+            // Seed the label with an initial time so Yoga gives it a non-zero
+            // width on the very first frame.  Without this the measure func
+            // returns 0×0 (empty text), Label::draw() bails early, and the
+            // clock is invisible until the next layout pass.
+            {
+                const time_t t = time(nullptr);
+                struct tm lt {};
+#if defined(_WIN32)
+                localtime_s(&lt, &t);
+#else
+                localtime_r(&t, &lt);
+#endif
+                char buf[8];
+                std::snprintf(buf, sizeof(buf), "%02d:%02d", lt.tm_hour,
+                              lt.tm_min);
+                clock_->setText(buf);
+                lastText_ = buf;
+            }
             drifter_->addView(clock_);
 
             if (brls::Application::getPlatform()->canShowBatteryLevel()) {
@@ -50,6 +68,7 @@ public:
                 battery_->setSingleLine(true);
                 battery_->setFocusable(false);
                 battery_->setMarginTop(6.f);
+                battery_->setText("--%");
                 drifter_->addView(battery_);
             }
 
