@@ -189,7 +189,7 @@ public:
     explicit GoldenActivity(brls::View* content, bool withExitAction = false)
         : withExitAction_(withExitAction) {
         frame_ = new brls::AppletFrame(content);
-        frame_->setTitle("pipensx");
+        frame_->setTitle("FreeShop");
     }
 
     brls::View* createContentView() override {
@@ -373,7 +373,7 @@ int main(int argc, char** argv) {
     pipensx::ui::theme::registerColors();
     // Must run before the first Sidebar is inflated, exactly as in main_switch.
     pipensx::ui::installSidebarStyle();
-    brls::Application::createWindow("pipensx-golden");
+    brls::Application::createWindow("FreeShop-golden");
     brls::Application::setGlobalQuit(false);
 
     // Same wiring order as src/main_switch.cpp, minus network bring-up.

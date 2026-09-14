@@ -34,9 +34,9 @@ std::string htmlEscape(const std::string& text) {
 std::string formPage(const std::string& message, const std::string& hint) {
     return "<!doctype html><html><head><meta name=\"viewport\" "
         "content=\"width=device-width,initial-scale=1\">"
-        "<title>Link pipensx</title></head>"
+        "<title>Link FreeShop</title></head>"
         "<body style=\"font-family:sans-serif;max-width:26em;margin:3em "
-        "auto;padding:0 1em\"><h2>Link pipensx</h2>"
+        "auto;padding:0 1em\"><h2>Link FreeShop</h2>"
         "<p>" + htmlEscape(hint) + "</p>" +
         (message.empty() ? std::string()
                          : "<p style=\"color:#b00\">" + htmlEscape(message) +
