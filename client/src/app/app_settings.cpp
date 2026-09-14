@@ -191,6 +191,9 @@ bool parseSettings(const std::string& text, AppSettingsData& values,
     values.burnInIdleSec = clampBurnInIdleSec(burnInIdle);
     if (!readBool(root, "burn_in_show_clock", values.burnInShowClock, error))
         return false;
+    readBool(root, "confirm_exit", values.confirmExit, error);
+    readBool(root, "warn_active_download", values.warnOnActiveDownload, error);
+    readBool(root, "show_home_tab", values.showHomeTab, error);
     // v2 -> v3: debrid arrived and the struct default flipped torrenting off,
     // but a pre-v3 file was written by a build where torrenting was the only
     // way to download anything. Migrate it back on rather than silently
@@ -275,6 +278,9 @@ std::string serializeSettings(const AppSettingsData& values) {
     root["catalog_source_url"] = values.catalogSourceUrl;
     root["burn_in_idle_sec"] = values.burnInIdleSec;
     root["burn_in_show_clock"] = values.burnInShowClock;
+    root["confirm_exit"] = values.confirmExit;
+    root["warn_active_download"] = values.warnOnActiveDownload;
+    root["show_home_tab"] = values.showHomeTab;
     return root.dump(2) + "\n";
 }
 
@@ -440,7 +446,10 @@ bool AppSettingsData::operator==(const AppSettingsData& other) const {
            firstRunCompleted == other.firstRunCompleted &&
            proxyUrl == other.proxyUrl &&
            burnInIdleSec == other.burnInIdleSec &&
-           burnInShowClock == other.burnInShowClock;
+            burnInShowClock == other.burnInShowClock &&
+            confirmExit == other.confirmExit &&
+            warnOnActiveDownload == other.warnOnActiveDownload &&
+            showHomeTab == other.showHomeTab;
 }
 
 bool dailyRefreshDue(uint64_t nowMs, uint64_t lastRefreshMs) {

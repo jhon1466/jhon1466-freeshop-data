@@ -459,8 +459,10 @@ protected:
 
 class GeneralPanel : public SettingsPanel {
 public:
-    GeneralPanel(AppSettings* settings, WebServer* webServer)
-        : settings_(settings), webServer_(webServer) {
+    GeneralPanel(AppSettings* settings, WebServer* webServer,
+                 std::function<void(bool)> onShowHomeTab = {})
+        : settings_(settings), webServer_(webServer),
+          onShowHomeTab_(std::move(onShowHomeTab)) {
         addSection(content_, tr("pipensx/settings/section_general"));
         language_ = new brls::SelectorCell();
         language_->init(tr("pipensx/settings/language"),
@@ -567,6 +569,57 @@ public:
                     checkForUpdates_->setOn(previous, false);
             });
         content_->addView(checkForUpdates_);
+
+        showHomeTab_ = new brls::BooleanCell();
+        showHomeTab_->init(tr("pipensx/settings/show_home"),
+            settings_->get().showHomeTab,
+            [this](bool enabled) {
+                AppSettingsData values = settings_->get();
+                bool previous = values.showHomeTab;
+                values.showHomeTab = enabled;
+                if (!persistSettings(settings_, values, "show_home_tab", webServer_)) {
+                    showHomeTab_->setOn(previous, false);
+                    return;
+                }
+                if (onShowHomeTab_)
+                    onShowHomeTab_(enabled);
+            });
+        content_->addView(showHomeTab_);
+
+        addSection(content_, tr("pipensx/settings/section_exit"));
+        confirmExit_ = new brls::BooleanCell();
+        confirmExit_->init(tr("pipensx/settings/confirm_exit"),
+            settings_->get().confirmExit,
+            [this](bool enabled) {
+                AppSettingsData values = settings_->get();
+                bool previousConfirm = values.confirmExit;
+                bool previousWarn = values.warnOnActiveDownload;
+                values.confirmExit = enabled;
+                if (!enabled)
+                    values.warnOnActiveDownload = false;
+                if (!persistSettings(settings_, values, "confirm_exit", webServer_)) {
+                    confirmExit_->setOn(previousConfirm, false);
+                    return;
+                }
+                if (!enabled) {
+                    warnActiveDownload_->setOn(false, false);
+                }
+                warnActiveDownload_->setEnabled(enabled);
+            });
+        content_->addView(confirmExit_);
+
+        warnActiveDownload_ = new brls::BooleanCell();
+        warnActiveDownload_->init(tr("pipensx/settings/warn_active_download"),
+            settings_->get().warnOnActiveDownload,
+            [this](bool enabled) {
+                AppSettingsData values = settings_->get();
+                bool previous = values.warnOnActiveDownload;
+                values.warnOnActiveDownload = enabled;
+                if (!persistSettings(settings_, values, "warn_active_download", webServer_))
+                    warnActiveDownload_->setOn(previous, false);
+            });
+        warnActiveDownload_->setEnabled(settings_->get().confirmExit);
+        content_->addView(warnActiveDownload_);
     }
 
     void applyValues() override {
@@ -577,6 +630,10 @@ public:
         burnInShowClock_->setOn(values.burnInShowClock, false);
         soundEffects_->setOn(values.soundEffectsEnabled, false);
         checkForUpdates_->setOn(values.checkForUpdatesOnLaunch, false);
+        showHomeTab_->setOn(values.showHomeTab, false);
+        confirmExit_->setOn(values.confirmExit, false);
+        warnActiveDownload_->setOn(values.warnOnActiveDownload, false);
+        warnActiveDownload_->setEnabled(values.confirmExit);
     }
 
 private:
@@ -608,12 +665,16 @@ private:
 
     AppSettings* settings_;
     WebServer* webServer_;
+    std::function<void(bool)> onShowHomeTab_;
     brls::SelectorCell* language_ = nullptr;
     brls::SelectorCell* theme_ = nullptr;
     brls::SelectorCell* burnInIdle_ = nullptr;
     brls::BooleanCell* burnInShowClock_ = nullptr;
     brls::BooleanCell* checkForUpdates_ = nullptr;
     brls::BooleanCell* soundEffects_ = nullptr;
+    brls::BooleanCell* showHomeTab_ = nullptr;
+    brls::BooleanCell* confirmExit_ = nullptr;
+    brls::BooleanCell* warnActiveDownload_ = nullptr;
 };
 
 // --- Downloads: queue behaviour + install target ---------------------------
@@ -704,6 +765,21 @@ public:
                     showCompleted_->setOn(previous, false);
             });
         content_->addView(showCompleted_);
+
+        // Screen-off guard (B5): idle minutes show a warning, then switch the
+        // panel off through lbl while the engine keeps running.
+        screenSaver_ = new brls::BooleanCell();
+        screenSaver_->init(tr("pipensx/settings/screen_saver"),
+            settings_->get().screenSaverEnabled,
+            [this](bool enabled) {
+                AppSettingsData values = settings_->get();
+                bool previous = values.screenSaverEnabled;
+                values.screenSaverEnabled = enabled;
+                if (!persistSettings(settings_, values, "screen_saver", webServer_))
+                    screenSaver_->setOn(previous, false);
+            });
+        content_->addView(screenSaver_);
+        addNote(content_, tr("pipensx/settings/screen_saver_note"));
     }
 
     void applyValues() override {
@@ -717,6 +793,7 @@ public:
         maxActiveDownloads_->setSelection(
             static_cast<int>(values.maxActiveDownloads) - 1, true);
         showCompleted_->setOn(values.showCompletedDownloads, false);
+        screenSaver_->setOn(values.screenSaverEnabled, false);
         if (manager_)
             manager_->setInstallTarget(
                 installTargetFor(values.installLocation));
@@ -730,6 +807,7 @@ private:
     brls::SelectorCell* installLocation_ = nullptr;
     brls::SelectorCell* maxActiveDownloads_ = nullptr;
     brls::BooleanCell* showCompleted_ = nullptr;
+    brls::BooleanCell* screenSaver_ = nullptr;
 };
 
 // --- Source: the debrid/torrenting fetch method ----------------------------

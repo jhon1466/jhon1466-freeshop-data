@@ -111,6 +111,13 @@ struct AppSettingsData {
     // Whether the OLED burn-in saver shows a dim drifting clock. Off keeps
     // the screen fully black (nothing at all) while the saver is up.
     bool burnInShowClock = true;
+    // Exit confirmation: when on, pressing B/Start from the home screen
+    // shows a dialog instead of quitting immediately. warnOnActiveDownload
+    // adds an extra warning when transfers are running.
+    bool confirmExit = false;
+    bool warnOnActiveDownload = false;
+    // Show the Home tab in the sidebar. Off hides it for a leaner sidebar.
+    bool showHomeTab = true;
 
     bool operator==(const AppSettingsData& other) const;
     bool operator!=(const AppSettingsData& other) const {

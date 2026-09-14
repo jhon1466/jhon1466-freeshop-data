@@ -246,12 +246,70 @@ public:
                     dialog->addButton(tr("pipensx/deploy/cancel_and_exit"),
                                       [this] {
                         deploy_->cancel();
+                        if (manager_ && manager_->hasActiveTransfer())
+                            manager_->pauseAll();
                         brls::Application::quit();
                     });
                     dialog->open();
                     return true;
                 }
+                if (settings_ && settings_->get().warnOnActiveDownload &&
+                    manager_ && manager_->hasActiveTransfer()) {
+                    auto* dialog = new brls::Dialog(
+                        tr("pipensx/app/exit_active_download_body"));
+                    dialog->addButton(tr("pipensx/common/cancel"), [] {});
+                    dialog->addButton(tr("pipensx/app/exit"), [this] {
+                        if (manager_ && manager_->hasActiveTransfer())
+                            manager_->pauseAll();
+                        brls::Application::quit();
+                    });
+                    dialog->open();
+                    return true;
+                }
+                if (manager_ && manager_->hasActiveTransfer())
+                    manager_->pauseAll();
                 brls::Application::quit();
+                return true;
+            }, /*hidden=*/true);
+        // B-button from the home screen: respects confirmExit and
+        // warnOnActiveDownload settings.
+        registerAction("", brls::BUTTON_B,
+            [this](brls::View*) {
+                if (brls::Application::getActivitiesStack().size() != 1)
+                    return false;
+                if (deploy_ && deploy_->snapshot().active()) {
+                    auto* dialog = new brls::Dialog(
+                        tr("pipensx/deploy/exit_question"));
+                    dialog->addButton(tr("pipensx/common/cancel"), [] {});
+                    dialog->addButton(tr("pipensx/deploy/cancel_and_exit"),
+                                      [this] {
+                        deploy_->cancel();
+                        if (manager_ && manager_->hasActiveTransfer())
+                            manager_->pauseAll();
+                        brls::Application::quit();
+                    });
+                    dialog->open();
+                    return true;
+                }
+                if (!settings_ || !settings_->get().confirmExit) {
+                    if (manager_ && manager_->hasActiveTransfer())
+                        manager_->pauseAll();
+                    brls::Application::quit();
+                    return true;
+                }
+                const bool warnDownload =
+                    settings_->get().warnOnActiveDownload && manager_ &&
+                    manager_->hasActiveTransfer();
+                auto* dialog = new brls::Dialog(tr(warnDownload
+                        ? "pipensx/app/exit_active_download_body"
+                        : "pipensx/app/exit_confirm_body"));
+                dialog->addButton(tr("pipensx/common/cancel"), [] {});
+                dialog->addButton(tr("pipensx/app/exit"), [this] {
+                    if (manager_ && manager_->hasActiveTransfer())
+                        manager_->pauseAll();
+                    brls::Application::quit();
+                });
+                dialog->open();
                 return true;
             }, /*hidden=*/true);
         // Visible on every screen: the web companion QR is the whole pairing
