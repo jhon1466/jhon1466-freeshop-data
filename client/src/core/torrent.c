@@ -2200,7 +2200,11 @@ uint32_t torrent_copy_have_bitfield(torrent_t *t, uint8_t *out,
            almost never armed, so every pause made the next resume redo the
            whole disk verify scan from piece 0, which reads as the download
            restarting. Finish the remaining pieces synchronously instead:
-           this only runs once at teardown, not per frame. */
+           this only runs once at teardown, not per frame. A manager without
+           storage/metainfo/slots (unit-test mock) cannot verify: refuse
+           like the pre-teardown-verify code did instead of crashing. */
+        if (!t->pm->mi || !t->pm->store || !t->pm->slots)
+            return 0;
         while (t->startup_verify_index < t->pm->num_pieces) {
             piece_mgr_check_existing(t->pm, t->startup_verify_index);
             t->startup_verify_index++;
